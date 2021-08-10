@@ -4,6 +4,8 @@
 #include <GL/gl3w.h>
 #include <GLFW/glfw3.h>
 
+#include "cfgpath.h"
+
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -30,11 +32,18 @@ bool MyApp::OnWindowCreated()
 
     // set filename to null to disable auto-save/load of ImGui layouts
     // and use ImGui::SaveIniSettingsToDisk() instead.
-#ifndef NDEBUG
     ImGuiIO& io = ImGui::GetIO();
+#if !defined(NDEBUG)
     io.IniFilename = nullptr;
+#else
+    char cfgdir[MAX_PATH];
+    get_user_config_folder(cfgdir, sizeof(cfgdir), "myapp");
+    std::string config_dir(cfgdir);
+    layout_file = config_dir + PATH_SEPARATOR_STRING + "myapp.ini";
+    io.IniFilename = layout_file.c_str();
 #endif
 
+    // position the window in a consistent location
     SetWindowPos(800, 200);
 
     return true;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "application.h"
 
 class MyApp : public Application {
@@ -19,4 +21,6 @@ private:
 
     bool request_exit;
     bool show_imgui_demo;
+
+    std::string layout_file;
 };
