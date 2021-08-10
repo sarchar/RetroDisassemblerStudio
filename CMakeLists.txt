@@ -5,6 +5,8 @@ find_package(OpenGL REQUIRED)
 
 project(GuiTemplate VERSION 0.0.1)
 
+configure_file(src/config.h.in "${PROJECT_BINARY_DIR}/config.h")
+
 add_subdirectory(glfw)
 add_subdirectory(gl3w)
 
@@ -23,6 +25,7 @@ add_executable(${PROJECT_NAME}
                )
 
 target_include_directories(${PROJECT_NAME} PRIVATE "src/")
+target_include_directories(${PROJECT_NAME} PRIVATE "${PROJECT_BINARY_DIR}")
 target_include_directories(${PROJECT_NAME} PRIVATE "imgui/")
 target_include_directories(${PROJECT_NAME} PRIVATE "imgui/backends")
 

@@ -1,3 +1,4 @@
+#include "config.h"
 
 #include <iostream>
 
@@ -33,7 +34,7 @@ bool MyApp::OnWindowCreated()
     // set filename to null to disable auto-save/load of ImGui layouts
     // and use ImGui::SaveIniSettingsToDisk() instead.
     ImGuiIO& io = ImGui::GetIO();
-#if !defined(NDEBUG)
+#if defined(DISABLE_IMGUI_SAVE_LOAD_LAYOUT)
     io.IniFilename = nullptr;
 #else
     char cfgdir[MAX_PATH];

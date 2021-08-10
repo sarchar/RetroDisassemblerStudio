@@ -1,0 +1,15 @@
+
+#define VERSION_MAJOR @GuiTemplate_VERSION_MAJOR@
+#define VERSION_MINOR @GuiTemplate_VERSION_MINOR@
+
+#ifdef NDEBUG
+#   define PROJECT_NAME "@PROJECT_NAME@"
+#else
+#   define PROJECT_NAME "@PROJECT_NAME@-debug"
+#endif
+
+// comment this out to enable saving and loading of layouts in debug builds
+#ifndef NDEBUG
+#   define DISABLE_IMGUI_SAVE_LOAD_LAYOUT
+#endif
+
