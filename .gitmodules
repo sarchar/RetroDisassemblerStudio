@@ -7,3 +7,6 @@
 [submodule "gl3w"]
 	path = gl3w
 	url = https://github.com/skaslev/gl3w
+[submodule "libs/ImGuiFileDialog"]
+	path = libs/ImGuiFileDialog
+	url = https://github.com/aiekick/ImGuiFileDialog

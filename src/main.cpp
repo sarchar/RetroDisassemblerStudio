@@ -13,7 +13,7 @@
 #include "main.h"
 
 MyApp::MyApp(int argc, char* argv[])
-    : Application("ImGUI Docking Template", 1000, 800),
+    : Application("Retro Disassembler Studio", 1000, 800),
       request_exit(false), show_imgui_demo(false)
 {
     ((void)argc);
