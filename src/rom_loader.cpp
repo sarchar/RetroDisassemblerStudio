@@ -1,3 +1,4 @@
+#include <iostream>
 #include <memory>
 #include <string>
 
@@ -5,20 +6,22 @@
 #include "imgui_internal.h"
 
 #include "rom_loader.h"
+#include "signals.h"
 #include "systems/system.h"
 
 using namespace std;
 
-ROMLoader* ROMLoader::CreateWindow(string const& _file_path_name)
+shared_ptr<ROMLoader> ROMLoader::CreateWindow(string const& _file_path_name)
 {
-    return new ROMLoader(_file_path_name);
+    return make_shared<ROMLoader>(_file_path_name);
 }
 
 ROMLoader::ROMLoader(string const& _file_path_name)
     : BaseWindow("ROM Loader"),
       file_path_name(_file_path_name)
 {
-    //SetHidden(true);
+    SetHidden(true);
+    system_loaded = make_shared<system_loaded_t>();
 }
 
 ROMLoader::~ROMLoader()
@@ -27,6 +30,12 @@ ROMLoader::~ROMLoader()
 
 void ROMLoader::UpdateContent(double deltaTime) 
 {
+    static double timer = 0;
+    timer += deltaTime;
+    if(timer >= 3.0) {
+        system_loaded->emit(shared_from_this(), nullptr);
+        CloseWindow();
+    }
 }
 
 void ROMLoader::RenderContent() 

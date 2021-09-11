@@ -7,6 +7,8 @@
 #include "application.h"
 #include "base_window.h"
 
+class System;
+
 class MyApp : public Application {
 public:
     static MyApp* Instance(int argc = 0, char** argv = nullptr) {
@@ -23,10 +25,11 @@ public:
 
     virtual ~MyApp();
 
-    void AddWindow(BaseWindow* window);
+    void AddWindow(std::shared_ptr<BaseWindow>);
 
 protected:
     MyApp(int argc, char* argv[]);
+
 
     virtual bool Update(double deltaTime) override;
     virtual void RenderGUI() override;
@@ -36,8 +39,11 @@ protected:
     virtual void OnKeyPress(int glfw_key, int scancode, int action, int mods) override;
 
 private:
+    void ProcessQueuedWindowsForDelete();
+    void ManagedWindowClosedHandler(std::shared_ptr<BaseWindow>);
 
     void CreateROMLoader(std::string const&);
+    void SystemLoadedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<System>);
 
     void OpenROMInfosPane();
 
@@ -51,5 +57,6 @@ private:
     void* main_font_bold;
 
     // Managed child windows
-    std::vector<std::unique_ptr<BaseWindow>> managed_windows;
+    std::vector<std::shared_ptr<BaseWindow>> managed_windows;
+    std::vector<std::shared_ptr<BaseWindow>> queued_windows_for_delete;
 };

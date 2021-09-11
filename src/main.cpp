@@ -19,6 +19,9 @@
 
 #include "main.h"
 #include "rom_loader.h"
+#include "systems/system.h"
+
+#undef DISABLE_IMGUI_SAVE_LOAD_LAYOUT
 
 using namespace std;
 
@@ -60,6 +63,7 @@ bool MyApp::OnWindowCreated()
 #endif
 
     // load some fonts
+    // TODO everything will one day be user customizable
     ImFont* default_font = io.Fonts->AddFontDefault();
 
     main_font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\iosevka-regular.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
@@ -88,11 +92,29 @@ bool MyApp::OnWindowCreated()
     return true;
 }
 
-void MyApp::AddWindow(BaseWindow* window)
+void MyApp::AddWindow(shared_ptr<BaseWindow> window)
 {
-    unique_ptr<BaseWindow> ptr(window);
-    managed_windows.push_back(std::move(ptr));
+    // bind to window_closed which is available on all BaseWindows
+    *window->window_closed += std::bind(&MyApp::ManagedWindowClosedHandler, this, placeholders::_1);
+
+    managed_windows.push_back(window);
     cout << "managed window count = " << managed_windows.size() << endl;
+}
+
+void MyApp::ProcessQueuedWindowsForDelete()
+{
+    for(auto& window : queued_windows_for_delete) {
+        auto it = find(managed_windows.begin(), managed_windows.end(), window);
+        if(it != managed_windows.end()) managed_windows.erase(it);
+    }
+
+    queued_windows_for_delete.resize(0);
+}
+
+void MyApp::ManagedWindowClosedHandler(std::shared_ptr<BaseWindow> window)
+{
+    cout << "got window closed handler for window " << window->GetTitle() << endl;
+    queued_windows_for_delete.push_back(window);
 }
 
 bool MyApp::Update(double deltaTime)
@@ -101,6 +123,9 @@ bool MyApp::Update(double deltaTime)
     for(auto &window : managed_windows) {
         window->Update(deltaTime);
     }
+
+    // Remove any windows queued for deletion
+    ProcessQueuedWindowsForDelete();
 
     return !request_exit;
 }
@@ -281,6 +306,9 @@ void MyApp::RenderGUI()
     for(auto &window : managed_windows) {
         window->RenderGUI();
     }
+
+    // Remove any windows queued for deletion
+    ProcessQueuedWindowsForDelete();
 }
 
 void MyApp::OnKeyPress(int glfw_key, int scancode, int action, int mods)
@@ -310,7 +338,14 @@ void MyApp::OnKeyPress(int glfw_key, int scancode, int action, int mods)
 void MyApp::CreateROMLoader(string const& file_path_name)
 {
     cout << "CreateROMLoader(" << file_path_name << ")" << endl;
-    AddWindow(ROMLoader::CreateWindow(file_path_name));
+    auto loader = ROMLoader::CreateWindow(file_path_name);
+    *loader->system_loaded += std::bind(&MyApp::SystemLoadedHandler, this, placeholders::_1, placeholders::_2);
+    AddWindow(loader);
+}
+
+void MyApp::SystemLoadedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<System>)
+{
+    cout << "system loaded" << endl;
 }
 
 int main(int argc, char* argv[])
