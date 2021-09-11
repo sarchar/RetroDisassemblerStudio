@@ -20,6 +20,7 @@
 #include "main.h"
 #include "rom_loader.h"
 #include "systems/system.h"
+#include "systems/snes/snes_system.h"
 
 #undef DISABLE_IMGUI_SAVE_LOAD_LAYOUT
 
@@ -31,6 +32,8 @@ MyApp::MyApp(int argc, char* argv[])
 {
     ((void)argc);
     ((void)argv);
+    ROMLoader::RegisterSystemInformation(SNESSystem::GetInformationStatic());
+    current_system_changed = make_shared<current_system_changed_t>();
 }
 
 MyApp::~MyApp()
@@ -51,9 +54,10 @@ bool MyApp::OnWindowCreated()
     io.IniFilename = nullptr;
 #else
     char cfgdir[MAX_PATH];
-    get_user_config_folder(cfgdir, sizeof(cfgdir), "myapp");
+    get_user_config_folder(cfgdir, sizeof(cfgdir), PROJECT_NAME);
     string config_dir(cfgdir);
-    layout_file = config_dir + PATH_SEPARATOR_STRING + "myapp.ini";
+    layout_file = config_dir + PATH_SEPARATOR_STRING + "imgui_layout.ini";
+    cout << layout_file << endl;
     io.IniFilename = layout_file.c_str();
 #endif
 
@@ -229,6 +233,9 @@ void MyApp::RenderMainMenuBar()
                     }
                 }
                 closedir(dir);
+
+                // TODO remove me after a while
+                test_roms.push_back("roms/missing file");
             }
 
             for(auto &t : test_roms) {
@@ -311,6 +318,34 @@ void MyApp::RenderGUI()
     ProcessQueuedWindowsForDelete();
 }
 
+bool MyApp::OKPopup(std::string const& title, std::string const& message)
+{
+    ImGui::OpenPopup(title.c_str());
+
+    // center this window
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    bool ret = false;
+    if (ImGui::BeginPopupModal(title.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoResize)) {
+        // TODO get word wrapping working. For now it just seems broken.
+        //ImVec2 size = ImGui::GetMainViewport()->Size;
+        //ImGui::PushTextWrapPos(size.x * 0.67);//ImGui::GetContentRegionAvailWidth());
+        //ImGui::TextUnformatted(message.c_str());
+        ImGui::Text(message.c_str());
+
+        if (ImGui::Button("OK", ImVec2(120, 0))) { 
+            ImGui::CloseCurrentPopup(); 
+            ret = true;
+        }
+
+        //ImGui::PopTextWrapPos();
+        ImGui::EndPopup();
+    }
+
+    return ret;
+}
+
 void MyApp::OnKeyPress(int glfw_key, int scancode, int action, int mods)
 {
     if(action != GLFW_PRESS) return;
@@ -343,9 +378,11 @@ void MyApp::CreateROMLoader(string const& file_path_name)
     AddWindow(loader);
 }
 
-void MyApp::SystemLoadedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<System>)
+void MyApp::SystemLoadedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<System> new_system)
 {
-    cout << "system loaded" << endl;
+    current_system = new_system;
+    cout << "New " << current_system->GetInformation()->full_name << " loaded." << endl;
+    current_system_changed->emit();
 }
 
 int main(int argc, char* argv[])

@@ -12,7 +12,7 @@ using namespace std;
 unsigned int BaseWindow::next_id = 0;
 
 BaseWindow::BaseWindow(string const& title)
-    : hidden(false), open(true)
+    : windowless(false), open(true)
 {
     stringstream ss;
     ss << title << "##" << BaseWindow::next_id++;
@@ -41,11 +41,15 @@ void BaseWindow::Update(double deltaTime)
 
 void BaseWindow::RenderGUI()
 {
+    // 'windowless' windows are essentially background tasks that have no GUI window associated with them
+    // but a GUI callback is called regardless for popups and more
+    if(windowless) {
+        RenderContent();
+        return;
+    }
+
+    // otherwise a window can be opened and its content rendered
     bool local_open = open;
-
-    // 'hidden' windows are essentially background tasks that have no GUI window associated with them
-    if(hidden) return;
-
     if(!local_open) return;
 
     if(ImGui::Begin(window_title.c_str(), &local_open)) {

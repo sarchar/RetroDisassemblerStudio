@@ -11,8 +11,8 @@ public:
     virtual ~BaseWindow();
 
     // Utility
-    void SetHidden(bool _v) { hidden = _v; }
-    bool IsHidden() const { return hidden; }
+    void SetWindowless(bool _v) { windowless = _v; }
+    bool IsWindowless() const { return windowless; }
     std::string const& GetTitle() const { return window_title; }
 
     void CloseWindow(); // emit window_closed and stop rendering
@@ -31,7 +31,7 @@ protected:
 
 private:
     std::string window_title;
-    bool hidden;
+    bool windowless;
     bool open;
 
     static unsigned int next_id;

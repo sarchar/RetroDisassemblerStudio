@@ -6,14 +6,12 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 class ROMLoader : public BaseWindow {
 public:
     ROMLoader(std::string const& _file_path_name);
     virtual ~ROMLoader();
-
-    static std::shared_ptr<ROMLoader> CreateWindow(std::string const& _file_path_name);
-    //std::shared_ptr<System> CreateSystem();
 
     // signals
     typedef signal<std::function<void(std::shared_ptr<BaseWindow>, std::shared_ptr<System>)>> system_loaded_t;
@@ -25,4 +23,21 @@ protected:
 
 private:
     std::string file_path_name;
+    std::vector<System::Information const*> available_systems;
+
+    enum {
+        LOADER_STATE_INIT = 0,
+        LOADER_STATE_FILE_NOT_FOUND,
+        LOADER_STATE_NOT_A_VALID_ROM,
+        LOADER_STATE_SELECT_SYSTEM
+    } loader_state;
+
+    void CreateSystem(System::Information const*);
+
+public:
+    static void RegisterSystemInformation(System::Information const*);
+    static std::shared_ptr<ROMLoader> CreateWindow(std::string const& _file_path_name);
+
+private:
+    static std::vector<System::Information const*> system_informations;
 };

@@ -6,6 +6,8 @@
 
 #include "application.h"
 #include "base_window.h"
+#include "signals.h"
+#include "systems/system.h"
 
 class System;
 
@@ -22,10 +24,19 @@ public:
     // singleton helper
     MyApp(MyApp const& other) = delete;
     void operator=(MyApp const&) = delete;
-
     virtual ~MyApp();
 
     void AddWindow(std::shared_ptr<BaseWindow>);
+
+    // Helper dialog boxes
+    bool OKPopup(std::string const& title, std::string const& message);
+
+    // Signals
+    typedef signal<std::function<void()>> current_system_changed_t;
+    std::shared_ptr<current_system_changed_t> current_system_changed;
+
+    // System related
+    std::shared_ptr<System> GetCurrentSystem() { return current_system; }
 
 protected:
     MyApp(int argc, char* argv[]);
@@ -59,4 +70,7 @@ private:
     // Managed child windows
     std::vector<std::shared_ptr<BaseWindow>> managed_windows;
     std::vector<std::shared_ptr<BaseWindow>> queued_windows_for_delete;
+
+private:
+    std::shared_ptr<System> current_system;
 };
