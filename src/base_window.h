@@ -6,7 +6,7 @@ class MyApp;
 
 class BaseWindow {
 public:
-    BaseWindow(MyApp*, std::string const& title);
+    BaseWindow(std::string const& title);
     virtual ~BaseWindow();
 
     // Utility
@@ -22,7 +22,6 @@ protected:
     virtual void UpdateContent(double deltaTime) {};
     virtual void RenderContent() {};
 
-    MyApp* main_application;
 private:
     std::string window_title;
     bool hidden;

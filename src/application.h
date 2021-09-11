@@ -9,7 +9,6 @@
 
 class Application {
 public:
-    Application(std::string const& _window_title, int _window_width, int _window_height);
     virtual ~Application();
 
     int Run();
@@ -29,6 +28,9 @@ public:
     void SetEnableStatusBar(bool enabled) { enable_statusbar = enabled; }
     void SetEnableToolBar(bool enabled) { enable_toolbar = enabled; }
     void SetWindowPos(int x, int y);
+
+protected:
+    Application(std::string const& _window_title, int _window_width, int _window_height);
 
 protected:
     ImVec4 clear_color;

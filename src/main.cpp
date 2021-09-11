@@ -310,11 +310,10 @@ void MyApp::OnKeyPress(int glfw_key, int scancode, int action, int mods)
 void MyApp::CreateROMLoader(string const& file_path_name)
 {
     cout << "CreateROMLoader(" << file_path_name << ")" << endl;
-    AddWindow(ROMLoader::CreateWindow(this, file_path_name));
+    AddWindow(ROMLoader::CreateWindow(file_path_name));
 }
 
 int main(int argc, char* argv[])
 {
-    MyApp app(argc, argv);
-    return app.Run();
+    return MyApp::Instance(argc, argv)->Run();
 }

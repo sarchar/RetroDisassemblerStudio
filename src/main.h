@@ -9,12 +9,25 @@
 
 class MyApp : public Application {
 public:
-    MyApp(int argc, char* argv[]);
+    static MyApp* Instance(int argc = 0, char** argv = nullptr) {
+        static MyApp* instance = nullptr;
+        if(instance == nullptr) {
+            instance = new MyApp(argc, argv);
+        }
+        return instance;
+    }
+
+    // singleton helper
+    MyApp(MyApp const& other) = delete;
+    void operator=(MyApp const&) = delete;
+
     virtual ~MyApp();
 
     void AddWindow(BaseWindow* window);
 
 protected:
+    MyApp(int argc, char* argv[]);
+
     virtual bool Update(double deltaTime) override;
     virtual void RenderGUI() override;
     virtual void RenderMainMenuBar() override;

@@ -9,13 +9,13 @@
 
 using namespace std;
 
-ROMLoader* ROMLoader::CreateWindow(MyApp* app, string const& _file_path_name)
+ROMLoader* ROMLoader::CreateWindow(string const& _file_path_name)
 {
-    return new ROMLoader(app, _file_path_name);
+    return new ROMLoader(_file_path_name);
 }
 
-ROMLoader::ROMLoader(MyApp* app, string const& _file_path_name)
-    : BaseWindow(app, "ROM Loader"),
+ROMLoader::ROMLoader(string const& _file_path_name)
+    : BaseWindow("ROM Loader"),
       file_path_name(_file_path_name)
 {
     //SetHidden(true);

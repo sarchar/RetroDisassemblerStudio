@@ -6,14 +6,12 @@
 #include <memory>
 #include <string>
 
-class MyApp;
-
 class ROMLoader : public BaseWindow {
 public:
-    ROMLoader(MyApp* app, std::string const& _file_path_name);
+    ROMLoader(std::string const& _file_path_name);
     virtual ~ROMLoader();
 
-    static ROMLoader* CreateWindow(MyApp* app, std::string const& _file_path_name);
+    static ROMLoader* CreateWindow(std::string const& _file_path_name);
     //std::shared_ptr<System> CreateSystem();
 
 protected:

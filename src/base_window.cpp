@@ -11,9 +11,8 @@ using namespace std;
 // not thread safe, all windows need to be created on the main thread
 unsigned int BaseWindow::next_id = 0;
 
-BaseWindow::BaseWindow(MyApp* app, string const& title)
-    : main_application(app),
-      hidden(false)
+BaseWindow::BaseWindow(string const& title)
+    : hidden(false)
 {
     stringstream ss;
     ss << title << "##" << BaseWindow::next_id++;
