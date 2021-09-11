@@ -1,6 +1,9 @@
 #include "config.h"
 
 #include <iostream>
+#include <locale>
+#include <sstream>
+#include <vector>
 
 #include <GL/gl3w.h>
 #include <GLFW/glfw3.h>
@@ -10,7 +13,13 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
+#define USE_IMGUI_TABLES
+#include "ImGuiFileDialog.h"
+#include "dirent/dirent.h"
+
 #include "main.h"
+
+using namespace std;
 
 MyApp::MyApp(int argc, char* argv[])
     : Application("Retro Disassembler Studio", 1000, 800),
@@ -39,13 +48,41 @@ bool MyApp::OnWindowCreated()
 #else
     char cfgdir[MAX_PATH];
     get_user_config_folder(cfgdir, sizeof(cfgdir), "myapp");
-    std::string config_dir(cfgdir);
+    string config_dir(cfgdir);
     layout_file = config_dir + PATH_SEPARATOR_STRING + "myapp.ini";
     io.IniFilename = layout_file.c_str();
 #endif
 
     // position the window in a consistent location
-    SetWindowPos(800, 200);
+#ifndef NDEBUG
+    SetWindowPos(1600, 200);
+#endif
+
+    // load some fonts
+    ImFont* default_font = io.Fonts->AddFontDefault();
+
+    main_font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\iosevka-regular.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
+    if(main_font == nullptr) {
+        cout << "Warning: unable to load iosevka-regular.ttf. Using default font." << endl;
+        main_font = default_font;
+    }
+
+    main_font_bold = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\iosevka-heavy.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
+    if(main_font_bold == nullptr) { 
+        cout << "Warning: unable to load iosevka-bold.ttf. Using default font." << endl;
+        main_font_bold = default_font;
+    }
+
+    IM_ASSERT(main_font != NULL);
+    IM_ASSERT(main_font_bold != NULL);
+
+    // replace the default font
+    if(main_font != default_font) {
+        io.FontDefault = static_cast<ImFont*>(main_font);
+    }
+
+    // scale up some
+    io.FontGlobalScale = 1.2f;
 
     return true;
 }
@@ -55,20 +92,140 @@ bool MyApp::Update(double deltaTime)
     return !request_exit;
 }
 
+void MyApp::OpenROMInfosPane()
+{
+    static string last_file_selection;
+    static struct {
+        unsigned long rom_size;
+        unsigned long load_address;
+    } rom_info = { 0, };
+
+    ImGui::PushFont(static_cast<ImFont*>(main_font_bold));
+    ImGui::Text("ROM info");
+    ImGui::PopFont();
+
+    auto selection = ImGuiFileDialog::Instance()->GetSelection();
+    if(selection.size() > 0) {
+        // cache the ROM info as long as the filename hasn't changed
+        string file_path_name = (*selection.begin()).second;
+        if(file_path_name != last_file_selection) {
+            ifstream rom_stream(file_path_name, ios::binary);
+
+            unsigned char buf[2];
+            rom_stream.read(reinterpret_cast<char*>(buf), 2);
+            rom_info.load_address = buf[0] | (buf[1] << 8);
+
+            rom_stream.read(reinterpret_cast<char*>(buf), 2);
+            rom_info.rom_size = buf[0] | (buf[1] << 8);
+
+            last_file_selection = file_path_name;
+        }
+
+
+        stringstream ss;
+        ss.imbue(locale(""));
+        ss << fixed;
+
+        string mult;
+        if(rom_info.rom_size >= (1024*1024)) {
+            ss << (rom_info.rom_size / (1024 * 1024));
+            mult = " MiB";
+        } else if(rom_info.rom_size >= 1024) {
+            ss << (rom_info.rom_size / 1024);
+            mult = " KiB";
+        } else {
+            ss << rom_info.rom_size;
+            mult = " B";
+        }
+
+        ImGui::Text("Size: ");
+        ImGui::SameLine();
+        ImGui::Text(ss.str().c_str());
+        ImGui::SameLine();
+        ImGui::Text(mult.c_str());
+
+        ss.str(string());
+        ss.imbue(locale("C")); // don't print commas in hex strings
+        ss << "$" << uppercase << hex << rom_info.load_address;
+        ImGui::Text("Load: ");
+        ImGui::SameLine();
+        ImGui::Text(ss.str().c_str());
+    }
+}
+
 void MyApp::RenderMainMenuBar()
 {
     if(ImGui::BeginMainMenuBar()) {
         if(ImGui::BeginMenu("File")) {
-            if(ImGui::MenuItem("Show ImGui Demo", "ctrl+d")) {
-                show_imgui_demo = true;
+            if(ImGui::MenuItem("Open ROM...", "ctrl+o")) {
+                auto infos_pane_cb = [=, this](char const* vFilter, IGFDUserDatas vUserDatas, bool* cantContinue) {
+                    this->OpenROMInfosPane();
+                };
+
+                ImGuiFileDialog::Instance()->OpenDialog("OpenROMFileDialog", "Choose ROM", ".bin,.smc", ".", "",
+                                                        bind(infos_pane_cb, placeholders::_1, placeholders::_2, placeholders::_3),
+                                                        250, 1, IGFDUserDatas("InfosPane"));
             }
+
             ImGui::Separator();
             if(ImGui::MenuItem("Exit", "ctrl+x")) {
                 request_exit = true;
             }
             ImGui::EndMenu();
         }
+
+        static vector<string> test_roms;
+        if(ImGui::BeginMenu("Test ROMs")) {
+            if(test_roms.size() == 0) { // scan for test roms
+                auto ends_with = [](std::string const& value, std::string const& ending) {
+                    if (ending.size() > value.size()) return false;
+                    return std::equal(ending.rbegin(), ending.rend(), value.rbegin());
+                };
+
+                DIR* dir = opendir("roms");
+                dirent* dirent;
+                while((dirent = readdir(dir)) != nullptr) {
+                    string file_path_name = string("roms/") + string(dirent->d_name);
+                    if(ends_with(file_path_name, ".bin") || ends_with(file_path_name, ".smc")) {
+                        test_roms.push_back(file_path_name);
+                    }
+                }
+                closedir(dir);
+            }
+
+            for(auto &t : test_roms) {
+                if(ImGui::MenuItem(t.c_str())) {
+                    LoadROM(t);
+                }
+            }
+
+            ImGui::EndMenu();
+        } else {
+            if(test_roms.size() > 0) {
+                test_roms.resize(0);
+            }
+        }
+
+        if(ImGui::BeginMenu("Debug")) {
+            if(ImGui::MenuItem("Show ImGui Demo", "ctrl+d")) {
+                show_imgui_demo = true;
+            }
+            ImGui::EndMenu();
+        }
+
         ImGui::EndMainMenuBar();
+
+        if(ImGuiFileDialog::Instance()->Display("OpenROMFileDialog")) {
+            if(ImGuiFileDialog::Instance()->IsOk()) {
+                auto selection = ImGuiFileDialog::Instance()->GetSelection();
+                if(selection.size() >  0) {
+                    string file_path_name = (*selection.begin()).second;
+                    LoadROM(file_path_name);
+                }
+            }
+
+            ImGuiFileDialog::Instance()->Close();
+        }
     }
 }
 
@@ -131,6 +288,11 @@ void MyApp::OnKeyPress(int glfw_key, int scancode, int action, int mods)
             break;
         }
     }
+}
+
+void MyApp::LoadROM(string const& file_path_name)
+{
+    cout << "LoadROM(" << file_path_name << ")" << endl;
 }
 
 int main(int argc, char* argv[])

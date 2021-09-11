@@ -19,8 +19,16 @@ protected:
 
 private:
 
+    void LoadROM(std::string const&);
+
+    void OpenROMInfosPane();
+
     bool request_exit;
     bool show_imgui_demo;
 
     std::string layout_file;
+
+    // ImGui fonts
+    void* main_font;
+    void* main_font_bold;
 };

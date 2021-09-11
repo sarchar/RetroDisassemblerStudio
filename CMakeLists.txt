@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 
 find_package(OpenGL REQUIRED)
 
-project(GuiTemplate VERSION 0.0.1)
+project(RetroDisassemblerStudio VERSION 0.0.1)
 
 configure_file(src/config.h.in "${PROJECT_BINARY_DIR}/config.h")
 
@@ -22,12 +22,15 @@ add_executable(${PROJECT_NAME}
 
                imgui/backends/imgui_impl_glfw.cpp
                imgui/backends/imgui_impl_opengl3.cpp
+
+               libs/ImGuiFileDialog/ImGuiFileDialog.cpp
                )
 
 target_include_directories(${PROJECT_NAME} PRIVATE "src/")
 target_include_directories(${PROJECT_NAME} PRIVATE "${PROJECT_BINARY_DIR}")
 target_include_directories(${PROJECT_NAME} PRIVATE "imgui/")
 target_include_directories(${PROJECT_NAME} PRIVATE "imgui/backends")
+target_include_directories(${PROJECT_NAME} PRIVATE "libs/ImGuiFileDialog")
 
 target_link_libraries(${PROJECT_NAME} glfw gl3w)
 
