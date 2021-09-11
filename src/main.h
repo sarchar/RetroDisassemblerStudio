@@ -1,13 +1,18 @@
 #pragma once
 
+#include <memory>
 #include <string>
+#include <vector>
 
 #include "application.h"
+#include "base_window.h"
 
 class MyApp : public Application {
 public:
     MyApp(int argc, char* argv[]);
     virtual ~MyApp();
+
+    void AddWindow(BaseWindow* window);
 
 protected:
     virtual bool Update(double deltaTime) override;
@@ -19,7 +24,7 @@ protected:
 
 private:
 
-    void LoadROM(std::string const&);
+    void CreateROMLoader(std::string const&);
 
     void OpenROMInfosPane();
 
@@ -31,4 +36,7 @@ private:
     // ImGui fonts
     void* main_font;
     void* main_font_bold;
+
+    // Managed child windows
+    std::vector<std::unique_ptr<BaseWindow>> managed_windows;
 };

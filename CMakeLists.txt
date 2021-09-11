@@ -12,7 +12,11 @@ add_subdirectory(gl3w)
 
 add_executable(${PROJECT_NAME}
                src/application.cpp
+               src/base_window.cpp
                src/main.cpp
+               src/rom_loader.cpp
+               src/systems/system.cpp
+               src/systems/snes/snes_system.cpp
 
                imgui/imgui.cpp
                imgui/imgui_demo.cpp

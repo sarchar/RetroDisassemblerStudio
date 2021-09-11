@@ -18,6 +18,7 @@
 #include "dirent/dirent.h"
 
 #include "main.h"
+#include "rom_loader.h"
 
 using namespace std;
 
@@ -87,8 +88,20 @@ bool MyApp::OnWindowCreated()
     return true;
 }
 
+void MyApp::AddWindow(BaseWindow* window)
+{
+    unique_ptr<BaseWindow> ptr(window);
+    managed_windows.push_back(std::move(ptr));
+    cout << "managed window count = " << managed_windows.size() << endl;
+}
+
 bool MyApp::Update(double deltaTime)
 {
+    // Update all open windows
+    for(auto &window : managed_windows) {
+        window->Update(deltaTime);
+    }
+
     return !request_exit;
 }
 
@@ -157,14 +170,14 @@ void MyApp::RenderMainMenuBar()
 {
     if(ImGui::BeginMainMenuBar()) {
         if(ImGui::BeginMenu("File")) {
-            if(ImGui::MenuItem("Open ROM...", "ctrl+o")) {
+            if(ImGui::MenuItem("New Disassembly...", "ctrl+o")) {
                 auto infos_pane_cb = [=, this](char const* vFilter, IGFDUserDatas vUserDatas, bool* cantContinue) {
                     this->OpenROMInfosPane();
                 };
 
-                ImGuiFileDialog::Instance()->OpenDialog("OpenROMFileDialog", "Choose ROM", ".bin,.smc", ".", "",
-                                                        bind(infos_pane_cb, placeholders::_1, placeholders::_2, placeholders::_3),
-                                                        250, 1, IGFDUserDatas("InfosPane"));
+                ImGuiFileDialog::Instance()->OpenModal("OpenROMFileDialog", "Choose ROM to disassemble", ".bin,.smc,.nes", ".", "",
+                                                       bind(infos_pane_cb, placeholders::_1, placeholders::_2, placeholders::_3),
+                                                       250, 1, IGFDUserDatas("InfosPane"));
             }
 
             ImGui::Separator();
@@ -195,7 +208,7 @@ void MyApp::RenderMainMenuBar()
 
             for(auto &t : test_roms) {
                 if(ImGui::MenuItem(t.c_str())) {
-                    LoadROM(t);
+                    CreateROMLoader(t);
                 }
             }
 
@@ -220,7 +233,7 @@ void MyApp::RenderMainMenuBar()
                 auto selection = ImGuiFileDialog::Instance()->GetSelection();
                 if(selection.size() >  0) {
                     string file_path_name = (*selection.begin()).second;
-                    LoadROM(file_path_name);
+                    CreateROMLoader(file_path_name);
                 }
             }
 
@@ -264,6 +277,10 @@ void MyApp::RenderGUI()
         ImGui::End();
     }
 
+    // Render all open windows
+    for(auto &window : managed_windows) {
+        window->RenderGUI();
+    }
 }
 
 void MyApp::OnKeyPress(int glfw_key, int scancode, int action, int mods)
@@ -290,9 +307,10 @@ void MyApp::OnKeyPress(int glfw_key, int scancode, int action, int mods)
     }
 }
 
-void MyApp::LoadROM(string const& file_path_name)
+void MyApp::CreateROMLoader(string const& file_path_name)
 {
-    cout << "LoadROM(" << file_path_name << ")" << endl;
+    cout << "CreateROMLoader(" << file_path_name << ")" << endl;
+    AddWindow(ROMLoader::CreateWindow(this, file_path_name));
 }
 
 int main(int argc, char* argv[])
