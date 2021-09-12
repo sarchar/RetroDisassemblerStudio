@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cassert>
 
+#include "clock_divider.h"
 #include "systems/snes/cpu65c816.h"
 #include "systems/snes/snes_system.h"
 
@@ -10,10 +11,12 @@ SNESSystem::SNESSystem()
 {
     BuildSystemComponents();  // build the entire system
     CreateSystemThread();     // create the thread (and run it) but wait for start signal
+    IssueReset();             // reset the CPU
 }
 
 SNESSystem::~SNESSystem()
 {
+    IssueExitThread();
     system_thread->join();
     cout << "joined" << endl;
 }
@@ -27,14 +30,27 @@ void SNESSystem::BuildSystemComponents()
     system_clock->Enable();
     system_clock->StepToHigh();
 
+    // the CPU clock gets divided from the master clock
+    // watch for the falling edge, and start the clock high
+    cpu_clock = make_unique<ClockDivider>(SNES_CPU_CLOCK_DIVIDER, 0, 1);
+    cpu_clock->pins.in.Connect(&system_clock->pins.out);
+
     // create the cpu
     cpu = make_unique<CPU65C816>();
 
     // connect CPU to the system
-    cpu->pins.phi2.Connect(&system_clock->pins.out);
+    cpu->pins.phi2.Connect(&cpu_clock->pins.out); // connect the clock
 
-    reset_wire.AssertHigh();
+    reset_wire.AssertHigh();  // default reset to high when everything is attached
     cpu->pins.reset_n.Connect(&reset_wire);
+
+    // TEMP let's monitor some wires
+    *cpu->pins.e.signal_changed    += [](Wire*, tristate new_state) { cout << "E   = " << (int)new_state << endl; };
+    *cpu->pins.vda.signal_changed  += [](Wire*, tristate new_state) { cout << "VDA = " << (int)new_state << endl; };
+    *cpu->pins.vpa.signal_changed  += [](Wire*, tristate new_state) { cout << "VPA = " << (int)new_state << endl; };
+    *cpu->pins.mx.signal_changed   += [](Wire*, tristate new_state) { cout << "MX  = " << (int)new_state << endl; };
+    *cpu->pins.rw_n.signal_changed += [](Wire*, tristate new_state) { cout << "RWn = " << (int)new_state << endl; };
+    *cpu->pins.vp_n.signal_changed += [](Wire*, tristate new_state) { cout << "VPn = " << (int)new_state << endl; };
 
     //system_ram = make_unique<SNESRam>();
     //cpu.pins.address_bus.connect(system_ram.pins.address_bus)
@@ -43,30 +59,68 @@ void SNESSystem::BuildSystemComponents()
 void SNESSystem::CreateSystemThread()
 {
     system_thread = make_unique<std::thread>(std::bind(&SNESSystem::SystemThreadMain, this));
-    for(int i = 0; i < 10000000; i++) {  }
-    cond_start_clock.notify_all();
+}
+
+void SNESSystem::IssueReset()
+{
+    // must be waiting for a command
+    std::mutex mut;
+    std::unique_lock<std::mutex> lock(mut);
+    system_thread_command_done_condition.wait(lock);
+    lock.unlock();
+
+    system_thread_command = CMD_RESET;
+    system_thread_command_start_condition.notify_one();
+}
+
+void SNESSystem::IssueExitThread()
+{
+    // must be waiting for a command
+    std::mutex mut;
+    std::unique_lock<std::mutex> lock(mut);
+    system_thread_command_done_condition.wait(lock);
+    lock.unlock();
+
+    system_thread_command = CMD_EXIT_THREAD;
+    system_thread_command_start_condition.notify_one();
 }
 
 void SNESSystem::SystemThreadMain()
 {
-    cout << "thread started" << endl;
+    bool running = true;
+
+    cout << "system thread started" << endl;
 
     // I'm not knowledgable enough with the STL to avoid the mutex with
     // the wait event/condition variable, but the mutex isn't needed
-    // and ideally the lock wouldn't be needed either. I want cond_start_clock.wait()
+    // and ideally the lock wouldn't be needed either. 
+    // I want system_thread_command_start_condition.wait()
     std::mutex mut;
     std::unique_lock<std::mutex> lock(mut);
 
-    while(true) {
-        cond_start_clock.wait(lock);
+    // start by telling the main thread that we're ready and can accept the next command
+    system_thread_command_done_condition.notify_one();
+
+    for(;running;) {
+        system_thread_command_start_condition.wait(lock);
         lock.unlock();
 
-        // TEMP run the clock some
-        for(int i = 0; i < 10; i++) {
-            system_clock->Step();
+        switch(system_thread_command) {
+        case CMD_RESET:
+            // assert reset low, step the clock, then assert reset high
+            reset_wire.AssertLow();
+            for(int i = 0; i < 1 * SNES_CPU_CLOCK_DIVIDER; i++) {
+                system_clock->Step();
+            }
+            reset_wire.AssertHigh();
+            break;
+
+        case CMD_EXIT_THREAD:
+            running = false;
+            break;
         }
 
-        break;
+        system_thread_command_done_condition.notify_one();
     }
 }
 

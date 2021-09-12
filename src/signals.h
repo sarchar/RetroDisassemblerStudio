@@ -29,6 +29,8 @@
 #include <memory>
 #include <utility>
 
+#include "util.h"
+
 typedef unsigned int _signal_id_t;
 
 template <typename SignalType>

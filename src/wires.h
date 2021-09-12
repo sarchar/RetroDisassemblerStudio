@@ -4,8 +4,7 @@
 #include <string>
 
 #include "signals.h"
-
-typedef s8 tristate; // 0 = low, 1 = high, -1 = highz
+#include "util.h"
 
 class Wire {
 public:

@@ -6,11 +6,13 @@
 #include <string>
 #include <thread>
 
+#include "clock_divider.h"
 #include "system_clock.h"
 #include "systems/system.h"
 #include "systems/snes/cpu65c816.h"
 
 #define SNES_CLOCK_FREQUENCY 22477000
+#define SNES_CPU_CLOCK_DIVIDER 6
 
 class SNESSystem : public System {
 public:
@@ -30,13 +32,22 @@ private:
     void CreateSystemThread();
     void SystemThreadMain();
 
+    void IssueReset();
+    void IssueExitThread();
+
     // System components
     Wire reset_wire { "reset" };
     std::unique_ptr<SystemClock> system_clock;
+    std::unique_ptr<ClockDivider> cpu_clock;
     std::unique_ptr<CPU65C816> cpu;
     //std::unique_ptr<SNESRam> system_ram;
 
     std::unique_ptr<std::thread> system_thread;
-    std::condition_variable cond_start_clock;
-    int system_thread_command;
+    std::condition_variable system_thread_command_start_condition;
+    std::condition_variable system_thread_command_done_condition;
+
+    enum {
+        CMD_RESET,
+        CMD_EXIT_THREAD
+    } system_thread_command;
 };
