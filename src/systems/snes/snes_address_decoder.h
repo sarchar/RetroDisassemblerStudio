@@ -2,14 +2,34 @@
 
 #include "wires.h"
 
+// Most 65C816 designs include a transparent latch for the data bank
+// and a bi-directional data transceiver.  In addition to the address
+// decoding that has to be done to select peripherals, we're building in the 
+// latch and transceiver into this module.
+
 class SNESAddressDecoder {
 public:
     SNESAddressDecoder();
     
     struct {
-        Wire vda      { "SNESAddressDecoder.vda" };
-        Wire vpa      { "SNESAddressDecoder.vpa" };
-        Bus<u16> a    { "SNESAddressDecoder.a" };
-        Wire ram_cs_n { "SNESAddressDecoder.ram_cs_n" };
+        // CPU clock and reset
+        Wire phi2      { "SNESAddressDecoder.phi2" };
+        Wire reset_n   { "SNESAddressDecoder.reset_n" };
+
+        // connected to the CPU
+        Wire     vda   { "SNESAddressDecoder.vda" };
+        Wire     vpa   { "SNESAddressDecoder.vpa" };
+        Wire     rw_n  { "SNESAddressDecoder.rw_n" };
+        Bus<u8>  db    { "SNESAddressDecoder.db" };
+        Bus<u16> a_in  { "SNESAddressDecoder.a_in" };
+
+        // connected to the system
+        Bus<u8>  d     { "SNESAddressDecoder.d" };
+        Bus<u32> a_out { "SNESAddressDecoder.a_out" };
+        Wire ram_cs_n  { "SNESAddressDecoder.ram_cs_n" };
     } pins;
+
+private:
+    void SelectPeripheral(u32 address);
+    void DeselectPeripherals();
 };

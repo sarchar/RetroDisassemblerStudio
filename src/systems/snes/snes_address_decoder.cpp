@@ -2,23 +2,77 @@
 
 SNESAddressDecoder::SNESAddressDecoder()
 {
-    pins.ram_cs_n.AssertHigh();
+    DeselectPeripherals();
 
-    *pins.a.signal_changed += [=, this](Bus<u16>*, std::optional<u16> const& new_state) {
-        bool address_valid = this->pins.vda.Sample() || this->pins.vpa.Sample();
-        if(address_valid) {
-            this->pins.ram_cs_n.AssertLow();
-        } else {
-            this->pins.ram_cs_n.AssertHigh();
+    // Handle falling edge of reset
+    *pins.reset_n.signal_changed += [=, this](Wire*, std::optional<bool> const& new_state) {
+        if(!*new_state) {
+            this->pins.db.HighZ();
+            this->pins.d.HighZ();
+            this->DeselectPeripherals();
         }
     };
 
-    //*pins.vda.signal_changed += [=, this](Bus<u16>*, std::optional<u16> const& new_state) {
-    //    // if neither VDA nor VPA are asserted, return CSn high
-    //    if(!*new_state) {
-    //        if(!pins.vpa.Sample()) {
-    //            this->pins.ram_cs_n.AssertHigh();
-    //        }
-    //    }
-    //}
+    // Latch the bank on the rising edge of phi2 
+    *pins.phi2.signal_changed += [=, this](Wire*, std::optional<bool> const& new_state) {
+        // only interested in rising phi2 when not in reset
+        if(!*new_state || !this->pins.reset_n.Sample()) return;
+
+        // assert the output address lines
+        u8 bank = pins.db.Sample();
+        u32 address = (u32)bank << 16 | (u32)pins.a_in.Sample();
+        pins.a_out.Assert(address);
+
+        // on a read request, set the system data line to high z
+        // and on a write request, transmit the data/bank bus to the system data line
+        if(pins.rw_n.Sample()) {
+            pins.d.HighZ();
+        } else {
+            pins.d.Assert(pins.db.Get());
+        }
+
+        // determine if the address is valid
+        bool address_valid = this->pins.vda.Sample() || this->pins.vpa.Sample();
+
+        // return with no device activated on invalid addresses
+        if(!address_valid) {
+            this->pins.ram_cs_n.AssertLow();
+            return;
+        }
+
+        // valid address, set up the device to respond
+        this->SelectPeripheral(address);
+    };
+
+    // whenever the CPU goes to write, deassert db
+    *pins.rw_n.signal_changed += [=, this](Wire*, std::optional<bool> const& new_state ) {
+        pins.db.HighZ();
+    };
+
+    // always transmit the state of the system d line to the cpu db line and vice versa
+    *pins.d.signal_changed += [=, this](Bus<u8>*, std::optional<u8> const& new_state) {
+        pins.db.Assert(new_state);
+    };
+
+    // when the VDA and VPA pins change immediately respond to valid addresses going invalid
+    auto deselect_peripherals = [=, this](Wire*, std::optional<bool> const& new_state) {
+        if(!this->pins.vda.Sample() && !this->pins.vpa.Sample()) {
+            this->DeselectPeripherals();
+        }
+    };
+
+    *pins.vda.signal_changed += deselect_peripherals;
+    *pins.vpa.signal_changed += deselect_peripherals;
 }
+
+void SNESAddressDecoder::SelectPeripheral(u32 address)
+{
+    // TODO determine which device to select
+    pins.ram_cs_n.AssertLow();
+}
+
+void SNESAddressDecoder::DeselectPeripherals()
+{
+    pins.ram_cs_n.AssertHigh();
+}
+

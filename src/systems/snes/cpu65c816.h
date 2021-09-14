@@ -42,6 +42,20 @@ public:
         Wire     signal_setup { "cpu65c816.signal_setup" };
     } pins;
 
+    // Debugging interface
+public:
+    bool GetE() const { return registers.e; }
+    u8   GetFlags() const { return registers.flags; }
+
+    u16  GetPC() const { return registers.pc; }
+    u8   GetA()  const { return registers.a; }
+    u8   GetB()  const { return registers.b; }
+    u16  GetC()  const { return registers.c; }
+    u16  GetX()  const { return registers.x; }
+    u8   GetXL() const { return registers.xl; }
+    u16  GetY()  const { return registers.y; }
+    u8   GetYL() const { return registers.yl; }
+
 private:
     void StartReset();
     void Reset();
@@ -91,14 +105,13 @@ private:
     } registers;
 
     enum {
-        IC_OPCODE_FETCH,
         IC_VECTOR_PULL_LOW,
         IC_VECTOR_PULL_HIGH,
+        IC_VECTOR_FETCH_OPCODE,
+        IC_OPCODE_FETCH,
+        IC_DECODE,
         IC_DEAD
-    } instruction_cycle;
+    } instruction_cycle, next_instruction_cycle;
 
-    enum {
-        STATE_RESET,
-        STATE_RUNNING
-    } current_state;
+    u16 data_fetch_address;
 };

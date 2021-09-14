@@ -18,11 +18,11 @@ public:
     ~RAM();
 
     struct {
-        Wire   clk  { "RAM.clock" };
-        Wire   cs_n { "RAM.cs_n"  };
-        Wire   rw_n { "RAM.rw_n"  };
-        Bus<A> a    { "RAM.a"     };
-        Bus<D> d    { "RAM.d"     };
+        Wire   clk  { "RAM.clk"  };
+        Wire   cs_n { "RAM.cs_n" };
+        Wire   rw_n { "RAM.rw_n" };
+        Bus<A> a    { "RAM.a"    };
+        Bus<D> d    { "RAM.d"    };
     } pins;
 
 private:
@@ -40,6 +40,13 @@ RAM<A, D>::RAM(u8 _po2_size, bool _edge)
 {
     memory = new D[1 << _po2_size];
     mask   = (1 << _po2_size) - 1;
+
+    // TEMP
+    memory[0xFFFC] = 0x00;
+    memory[0xFFFD] = 0xF0;
+    memory[0xF000] = 0x4C;
+    memory[0xF001] = 0x00;
+    memory[0xF002] = 0xF0;
 
     // default output pins
     pins.d.HighZ();

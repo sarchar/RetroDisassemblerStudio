@@ -17,8 +17,17 @@ public:
 
             if(c == this->delay) {
                 this->Transfer();
-            } else if(c == (this->total_clocks - 1)) {
+            } 
+
+            if(c == (this->total_clocks - 1)) {
                 counter = 0;
+            }
+        };
+
+        *pins.reset_n.signal_changed += [=, this](Wire*, std::optional<bool> const& new_state) {
+            if(!*new_state) {
+                this->counter = 0;
+                this->Transfer(); // TODO not sure if this is necessary
             }
         };
     }
@@ -30,9 +39,10 @@ public:
     }
 
     struct {
-        Wire clk   { "SignalDelay.clk" };
-        Bus<T> in  { "SignalDelay.in" };
-        Bus<T> out { "SignalDelay.out" };
+        Wire clk     { "SignalDelay.clk" };
+        Wire reset_n { "SignalDelay.reset_n" };
+        Bus<T> in    { "SignalDelay.in" };
+        Bus<T> out   { "SignalDelay.out" };
     } pins;
 
 private:

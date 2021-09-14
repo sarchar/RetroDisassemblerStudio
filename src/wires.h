@@ -45,11 +45,14 @@ public:
     inline void Assert(std::optional<T> const& new_state) {
         // changing the signal on our line when its being driven by something else is a problem
         assert(!(state.has_value() && new_state.has_value() && (driver != this)));
-        //if(new_state.has_value()) std::cout << name << " asserted " << std::hex << *new_state << std::endl;
+        //if(new_state.has_value()) std::cout << name << " asserted $" << std::hex << (unsigned int)*new_state << std::endl;
         //else                      std::cout << name << " set high-z" << std::endl;
 
         // if state doesn't change we don't do anything
         if(new_state == state) return;
+
+        // if someone else is driving the line when we go high-z, don't care
+        if(!new_state.has_value() && driver != this) return;
 
         // update state
         driver = new_state.has_value() ? this : nullptr;
@@ -63,22 +66,23 @@ public:
 
     // helper to get a high/low values and a mask for randomness that will never be used...
     template <typename S> struct type_helpers { 
-        static int const MASK = (1 << 8*sizeof(S)) - 1; 
-        static S   const LOW  = 0;
-        static S   const HIGH = ~(S)0;
+        static unsigned long long const MASK = (1ULL << 8*sizeof(S)) - 1; 
+        static S                  const LOW  = 0;
+        static S                  const HIGH = ~(S)0;
     };
 
     template <>           struct type_helpers<bool> {  // specialize bool to use true and false and 1 bit
-        static int  const MASK = 0x01; 
-        static bool const LOW  = false;
-        static bool const HIGH = true;
+        static unsigned long long  const MASK = 0x01; 
+        static bool                const LOW  = false;
+        static bool                const HIGH = true;
     };
 
-    inline void     AssertLow()  { Assert(std::optional<T>(type_helpers<T>::LOW)); }
-    inline void     AssertHigh() { Assert(std::optional<T>(type_helpers<T>::HIGH)); }
-    inline void     HighZ()      { Assert(std::optional<T>()); }
-    inline T        Sample()     { return state.value_or((uintptr_t)this & type_helpers<T>::MASK); } // in highz you get random results
-    inline bool     IsHighZ()    { return !state.has_value(); }
+    inline void                    AssertLow()     { Assert(std::optional<T>(type_helpers<T>::LOW)); }
+    inline void                    AssertHigh()    { Assert(std::optional<T>(type_helpers<T>::HIGH)); }
+    inline void                    HighZ()         { Assert(std::optional<T>()); }
+    inline T                       Sample()  const { return state.value_or((uintptr_t)this & type_helpers<T>::MASK); } // in highz you get random results
+    inline bool                    IsHighZ() const { return !state.has_value(); }
+    inline std::optional<T> const& Get()     const { return state; }
 
     // all connections to other wires are simply in the signal that are connected
     // signal_changed(Wire* driver, std::optional<T> const& new_state)

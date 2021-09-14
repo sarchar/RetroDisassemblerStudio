@@ -5,9 +5,9 @@
 #include <vector>
 
 #include "application.h"
-#include "base_window.h"
 #include "signals.h"
 #include "systems/system.h"
+#include "windows/base_window.h"
 
 class System;
 

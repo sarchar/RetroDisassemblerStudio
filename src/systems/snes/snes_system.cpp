@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <iomanip>
 
 #include "clock_divider.h"
 #include "systems/snes/cpu65c816.h"
@@ -12,11 +13,6 @@ SNESSystem::SNESSystem()
     BuildSystemComponents();  // build the entire system
     CreateSystemThread();     // create the thread (and run it) but wait for start signal
     IssueReset();             // reset the CPU
-
-    // TEMP
-    IssueStep();
-    IssueStep();
-    IssueStep();
 }
 
 SNESSystem::~SNESSystem()
@@ -29,7 +25,6 @@ SNESSystem::~SNESSystem()
 #include "wires.h"
 void SNESSystem::BuildSystemComponents()
 {
-
     // the system clock needs to be 180 out of phase (idle = high, as the falling edge starts a clock cycle)
     system_clock = make_unique<SystemClock>(SNES_CLOCK_FREQUENCY);
     system_clock->Enable();
@@ -40,17 +35,19 @@ void SNESSystem::BuildSystemComponents()
     cpu_clock = make_unique<ClockDivider>(SNES_CPU_CLOCK_DIVIDER, 0, 1);
     cpu_clock->pins.in.Connect(&system_clock->pins.out);
 
-    // we'll need a clock delay so that data signals can be held long enough to be sampled
-    cpu_clock_delay = make_unique<SignalDelay<bool>>(false, 1, SNES_CPU_CLOCK_DIVIDER/2); // on the falling edge, delay the signal by 1, and reset the counter every half cpu clock cycle
-    cpu_clock_delay->pins.clk.Connect(&system_clock->pins.out);
-    cpu_clock_delay->pins.in.Connect(&cpu_clock->pins.out);
-    cpu_clock_delay->Transfer(); // transfer the dead state of the clock right now
-
-    // and another clock delay for CPU signal line setup
-    cpu_signal_setup_delay = make_unique<SignalDelay<bool>>(false, 2, SNES_CPU_CLOCK_DIVIDER/2); // on the falling edge, delay the signal by 2, and reset the counter every half cpu clock cycle
+    // the cpu will latch data from the data bus on the non-delayed phi2 clock
+    // and so we need to wait to set up the new address signals
+    cpu_signal_setup_delay = make_unique<SignalDelay<bool>>(false, 1, SNES_CPU_CLOCK_DIVIDER/2); // on the falling edge, delay the signal by 1, and reset the counter every half cpu clock cycle
     cpu_signal_setup_delay->pins.clk.Connect(&system_clock->pins.out);
     cpu_signal_setup_delay->pins.in.Connect(&cpu_clock->pins.out);
     cpu_signal_setup_delay->Transfer(); // transfer the dead state of the clock right now
+
+    // and we'll also need a delay for RAM and peripherals to set up the data bus before
+    // the CPU latches, so that's one system clock before phi2 falls
+    peripheral_clock = make_unique<SignalDelay<bool>>(false, 2, SNES_CPU_CLOCK_DIVIDER/2); // on the falling edge, delay the signal by 2, and reset the counter every half cpu clock cycle
+    peripheral_clock->pins.clk.Connect(&system_clock->pins.out);
+    peripheral_clock->pins.in.Connect(&cpu_clock->pins.out);
+    peripheral_clock->Transfer(); // transfer the dead state of the clock right now
 
     // create the cpu
     cpu = make_unique<CPU65C816>();
@@ -59,22 +56,31 @@ void SNESSystem::BuildSystemComponents()
     cpu->pins.phi2.Connect(&cpu_clock->pins.out); // connect the clock
     cpu->pins.signal_setup.Connect(&cpu_signal_setup_delay->pins.out); // connect the signal setup lines
 
-    reset_wire.AssertHigh();  // default reset to high when everything is attached
-    cpu->pins.reset_n.Connect(&reset_wire);
-
-    // create the address decoder
+    // create the address decoder, which also contains the data bank latch and data transceiver
     address_decoder = make_unique<SNESAddressDecoder>();
+    address_decoder->pins.phi2.Connect(&cpu_clock->pins.out);
+    address_decoder->pins.rw_n.Connect(&cpu->pins.rw_n);
     address_decoder->pins.vda.Connect(&cpu->pins.vda);
     address_decoder->pins.vpa.Connect(&cpu->pins.vpa);
-    address_decoder->pins.a.Connect(&cpu->pins.a);
+    address_decoder->pins.db.Connect(&cpu->pins.db);
+    address_decoder->pins.a_in.Connect(&cpu->pins.a);
 
     // create the main ram
-    main_ram = make_unique<RAM<u16, u8>>(16, 1); // 2^16 bytes, latch on high clock signal
-    main_ram->pins.clk.Connect(&cpu_clock_delay->pins.out); // delay this clock signal for setup and hold times to be correct
+    main_ram = make_unique<RAM<u32, u8>>(16, true);               // 2^16 bytes, 32 (technically 24-) bit address space, latch on high clock signal
+    main_ram->pins.clk.Connect(&peripheral_clock->pins.out);      // get the peripherals clocking at the end of phi2 high
     main_ram->pins.cs_n.Connect(&address_decoder->pins.ram_cs_n); // connect the CS line to the address decoder logic
-    main_ram->pins.rw_n.Connect(&cpu->pins.rw_n); // connect the read/write line from the cpu
-    main_ram->pins.a.Connect(&cpu->pins.a); // put main ram on the address bus
-    main_ram->pins.d.Connect(&cpu->pins.db); // put main ram on the data bus
+    main_ram->pins.a.Connect(&address_decoder->pins.a_out);       // connect the address lines to the address decoder
+    main_ram->pins.d.Connect(&address_decoder->pins.d);           // connect the data bus to the data transceiver
+    main_ram->pins.rw_n.Connect(&cpu->pins.rw_n);                 // connect the read/write line from the cpu
+
+    // connect the reset line to the system
+    reset_wire.AssertHigh();  // default reset to high when everything is attached
+    cpu->pins.reset_n.Connect(&reset_wire);                       // CPU reset is synchronous and needs clock cycles
+    address_decoder->pins.reset_n.Connect(&reset_wire);           // address decoder reset immediately so that all the CSn lines get 
+                                                                  // deasserted before all the clocks reset
+    cpu_clock->pins.reset_n.Connect(&reset_wire);                 // now reset all the clocks and delay signals
+    peripheral_clock->pins.reset_n.Connect(&reset_wire);
+    cpu_signal_setup_delay->pins.reset_n.Connect(&reset_wire);
 
     // TEMP let's monitor some wires
     *cpu->pins.e.signal_changed    += [](Wire*, std::optional<bool> const& new_state) { cout << "E   = " << *new_state << endl; };
@@ -85,10 +91,7 @@ void SNESSystem::BuildSystemComponents()
     *cpu->pins.vp_n.signal_changed += [](Wire*, std::optional<bool> const& new_state) { cout << "VPn = " << *new_state << endl; };
     *main_ram->pins.cs_n.signal_changed += [](Wire*, std::optional<bool> const& new_state) { cout << "ram CSn = " << *new_state << endl; };
     *main_ram->pins.rw_n.signal_changed += [](Wire*, std::optional<bool> const& new_state) { cout << "ram RWn = " << *new_state << endl; };
-    *main_ram->pins.d.signal_changed += [](Bus<u8>*, std::optional<u8> const& new_state) { cout << "ram D = " << *new_state << endl; };
-
-    //system_ram = make_unique<SNESRam>();
-    //cpu.pins.address_bus.connect(system_ram.pins.address_bus)
+    *main_ram->pins.d.signal_changed += [](Bus<u8>*, std::optional<u8> const& new_state) { cout << "ram D = $" << hex << setw(2) << (u16)*new_state << endl; };
 }
 
 void SNESSystem::WaitForLastThreadCommand()
@@ -122,15 +125,26 @@ void SNESSystem::IssueExitThread()
     system_thread_command_condition.notify_one();
 }
 
-void SNESSystem::IssueStep()
+void SNESSystem::IssueStepSystem()
 {
     WaitForLastThreadCommand();
     {
         std::lock_guard<std::mutex> lock(system_thread_command_mutex); // wait for previous command to complete
-        system_thread_command = CMD_STEP;
+        system_thread_command = CMD_STEP_SYSTEM;
     }
     system_thread_command_condition.notify_one();
 }
+
+void SNESSystem::IssueStepCPU()
+{
+    WaitForLastThreadCommand();
+    {
+        std::lock_guard<std::mutex> lock(system_thread_command_mutex); // wait for previous command to complete
+        system_thread_command = CMD_STEP_CPU;
+    }
+    system_thread_command_condition.notify_one();
+}
+
 
 void SNESSystem::SystemThreadMain()
 {
@@ -162,20 +176,25 @@ void SNESSystem::SystemThreadMain()
             // assert reset low, step the clock, then assert reset high
             cout << "[SNESSystem] ==RESET START==" << endl;
             reset_wire.AssertLow();
+            reset_wire.AssertHigh();
             for(int i = 0; i < 1 * SNES_CPU_CLOCK_DIVIDER; i++) {
                 system_clock->Step();
             }
-            reset_wire.AssertHigh();
             cout << "[SNESSystem] ==RESET DONE==" << endl;
             break;
 
-        case CMD_STEP:
-            // TODO step system clock or cpu with different commands?
-            cout << "[SNESSystem] ==STEP START==" << endl;
+        case CMD_STEP_SYSTEM:
+            cout << "[SNESSystem] ==STEP SYSTEM START==" << endl;
+            system_clock->Step();
+            cout << "[SNESSystem] ==STEP SYSTEM END==" << endl;
+            break;
+
+        case CMD_STEP_CPU:
+            cout << "[SNESSystem] ==STEP CPU START==" << endl;
             for(int i = 0; i < 1 * SNES_CPU_CLOCK_DIVIDER; i++) {
                 system_clock->Step();
             }
-            cout << "[SNESSystem] ==STEP END==" << endl;
+            cout << "[SNESSystem] ==STEP CPU END==" << endl;
             break;
         }
 
@@ -187,6 +206,7 @@ void SNESSystem::SystemThreadMain()
 
 bool SNESSystem::LoadROM(string const& file_path_name)
 {
+    rom_file_path_name = file_path_name;
     return false;
 }
 

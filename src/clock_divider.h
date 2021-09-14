@@ -5,8 +5,8 @@
 
 class ClockDivider {
 public:
-    ClockDivider(unsigned int _divider, bool _edge, bool start_high)
-        : half_divider(_divider >> 1), edge(_edge), counter(0)
+    ClockDivider(unsigned int _divider, bool _edge, bool _start_high)
+        : half_divider(_divider >> 1), edge(_edge), start_high(_start_high), counter(0)
     {
         assert((_divider % 2) == 0);
     
@@ -27,15 +27,25 @@ public:
                 }
             }
         };
+
+        *pins.reset_n.signal_changed += [=, this](Wire*, std::optional<bool> const& new_state) {
+            if(!*new_state) {
+                counter = 0;
+                if(this->start_high) pins.out.AssertHigh();
+                else                 pins.out.AssertLow();
+            }
+        };
     }
 
     struct {
-        Wire in  { "ClockDivider.in" };
-        Wire out { "ClockDivider.out" };
+        Wire reset_n { "ClockDivider.reset_n" };
+        Wire in      { "ClockDivider.in" };
+        Wire out     { "ClockDivider.out" };
     } pins;
 
 private:
     bool edge;
+    bool start_high;
     unsigned int half_divider;
     unsigned int counter;
 };

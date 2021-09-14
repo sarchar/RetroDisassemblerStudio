@@ -18,9 +18,10 @@
 #include "dirent/dirent.h"
 
 #include "main.h"
-#include "rom_loader.h"
 #include "systems/system.h"
 #include "systems/snes/snes_system.h"
+#include "windows/debugger.h"
+#include "windows/rom_loader.h"
 
 #undef DISABLE_IMGUI_SAVE_LOAD_LAYOUT
 
@@ -251,6 +252,14 @@ void MyApp::RenderMainMenuBar()
             if(test_roms.size() > 0) {
                 test_roms.resize(0);
             }
+        }
+
+        if(ImGui::BeginMenu("Windows")) {
+            if(ImGui::MenuItem("Debugger")) {
+                auto wnd = SNESDebugger::CreateWindow();
+                AddWindow(wnd);
+            }
+            ImGui::EndMenu();
         }
 
         if(ImGui::BeginMenu("Debug")) {

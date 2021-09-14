@@ -14,6 +14,7 @@ public:
     void SetWindowless(bool _v) { windowless = _v; }
     bool IsWindowless() const { return windowless; }
     std::string const& GetTitle() const { return window_title; }
+    void SetTitle(std::string const& t);
 
     void CloseWindow(); // emit window_closed and stop rendering
 
@@ -33,6 +34,7 @@ private:
     std::string window_title;
     bool windowless;
     bool open;
+    unsigned int window_id;
 
     static unsigned int next_id;
 };

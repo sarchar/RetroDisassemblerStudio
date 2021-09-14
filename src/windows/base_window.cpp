@@ -4,7 +4,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include "base_window.h"
+#include "windows/base_window.h"
 
 using namespace std;
 
@@ -14,9 +14,11 @@ unsigned int BaseWindow::next_id = 0;
 BaseWindow::BaseWindow(string const& title)
     : windowless(false), open(true)
 {
-    stringstream ss;
-    ss << title << "##" << BaseWindow::next_id++;
-    window_title = ss.str();
+    // give the window an id
+    window_id = BaseWindow::next_id++;
+
+    // set the window title
+    SetTitle(title);
 
     // create the signals
     window_closed = make_shared<window_closed_t>();
@@ -24,6 +26,13 @@ BaseWindow::BaseWindow(string const& title)
 
 BaseWindow::~BaseWindow()
 {
+}
+
+void BaseWindow::SetTitle(std::string const& t)
+{
+    stringstream ss;
+    ss << t << "##" << BaseWindow::next_id++;
+    window_title = ss.str();
 }
 
 void BaseWindow::CloseWindow()
