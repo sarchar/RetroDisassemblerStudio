@@ -20,23 +20,33 @@ public:
     ~CPU65C816();
 
     struct {
-        Wire phi2    { "cpu65c816.phi2" };
-        Wire reset_n { "cpu65c816.reset_n" };
-        Wire e       { "cpu65c816.e" };
-        Wire rw_n    { "cpu65c816.rw_n" };
-        Wire vda     { "cpu65c816.vda" };
-        Wire vpa     { "cpu65c816.vpa" };
-        Wire vp_n    { "cpu65c816.vp_n" };
-        Wire mx      { "cpu65c816.mx" };
-//        Bus<u8>  a;
-//        Bus<u16> db;
+        Wire     phi2    { "cpu65c816.phi2" };
+        Wire     reset_n { "cpu65c816.reset_n" };
+        Wire     e       { "cpu65c816.e" };
+        Wire     rw_n    { "cpu65c816.rw_n" };
+        Wire     vda     { "cpu65c816.vda" };
+        Wire     vpa     { "cpu65c816.vpa" };
+        Wire     vp_n    { "cpu65c816.vp_n" };
+        Wire     mx      { "cpu65c816.mx" };
+        Bus<u16> a       { "cpu65c816.a" };
+        Bus<u8>  db      { "cpu65c816.db" };
+
+        // phi2_setup isn't a true 65c816 pin, but its use is to simulate the setup time
+        // on the DB/VPA/VDA/VPn/RWn lines. I.e., We can't assert DB immediately when the clock
+        // falls because something else, like RAM, might be asserting DATA that we're going to
+        // latch on the falling edge.  On the falling clock edge, we set VDA and VPA to 0 so the 
+        // data address is considered invalid and all devices release the data bus (which
+        // happens one master clock later -- that was for simulating HOLD times). One master clock
+        // after that, we can set up the R/W lines, which I guess technically is later than 
+        // an actual CPU but still happens before the rising PHI2 clock.
+        Wire     signal_setup { "cpu65c816.signal_setup" };
     } pins;
 
 private:
     void StartReset();
     void Reset();
-    void ClockLow();
-    void ClockHigh();
+    void ClockFallingEdge();
+    void ClockRisingEdge();
 
     void SetupPinsLowCycle();
     void SetupPinsHighCycle();
@@ -48,8 +58,8 @@ private:
         u16 pc;
         u8 ir;
         u16 d;
-        u16 pbr;
-        u16 dbr;
+        u8 pbr;
+        u8 dbr;
         union {
             struct {
                 u8 a;
@@ -80,11 +90,11 @@ private:
         };
     } registers;
 
-    bool vector_pull;
-
     enum {
         IC_OPCODE_FETCH,
-        IC_VECTOR_PULL
+        IC_VECTOR_PULL_LOW,
+        IC_VECTOR_PULL_HIGH,
+        IC_DEAD
     } instruction_cycle;
 
     enum {

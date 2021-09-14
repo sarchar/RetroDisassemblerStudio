@@ -72,13 +72,13 @@ bool MyApp::OnWindowCreated()
 
     main_font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\iosevka-regular.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
     if(main_font == nullptr) {
-        cout << "Warning: unable to load iosevka-regular.ttf. Using default font." << endl;
+        cout << "[MyApp] Warning: unable to load iosevka-regular.ttf. Using default font." << endl;
         main_font = default_font;
     }
 
     main_font_bold = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\iosevka-heavy.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
     if(main_font_bold == nullptr) { 
-        cout << "Warning: unable to load iosevka-bold.ttf. Using default font." << endl;
+        cout << "[MyApp] Warning: unable to load iosevka-bold.ttf. Using default font." << endl;
         main_font_bold = default_font;
     }
 
@@ -102,7 +102,7 @@ void MyApp::AddWindow(shared_ptr<BaseWindow> window)
     *window->window_closed += std::bind(&MyApp::ManagedWindowClosedHandler, this, placeholders::_1);
 
     managed_windows.push_back(window);
-    cout << "managed window count = " << managed_windows.size() << endl;
+    cout << "[MyApp] managed window count = " << managed_windows.size() << endl;
 }
 
 void MyApp::ProcessQueuedWindowsForDelete()
@@ -117,7 +117,7 @@ void MyApp::ProcessQueuedWindowsForDelete()
 
 void MyApp::ManagedWindowClosedHandler(std::shared_ptr<BaseWindow> window)
 {
-    cout << "got window closed handler for window " << window->GetTitle() << endl;
+    cout << "[MyApp] got window closed handler for window " << window->GetTitle() << endl;
     queued_windows_for_delete.push_back(window);
 }
 
@@ -225,14 +225,16 @@ void MyApp::RenderMainMenuBar()
                 };
 
                 DIR* dir = opendir("roms");
-                dirent* dirent;
-                while((dirent = readdir(dir)) != nullptr) {
-                    string file_path_name = string("roms/") + string(dirent->d_name);
-                    if(ends_with(file_path_name, ".bin") || ends_with(file_path_name, ".smc")) {
-                        test_roms.push_back(file_path_name);
+                if(dir != nullptr) {
+                    dirent* dirent;
+                    while((dirent = readdir(dir)) != nullptr) {
+                        string file_path_name = string("roms/") + string(dirent->d_name);
+                        if(ends_with(file_path_name, ".bin") || ends_with(file_path_name, ".smc")) {
+                            test_roms.push_back(file_path_name);
+                        }
                     }
+                    closedir(dir);
                 }
-                closedir(dir);
 
                 // TODO remove me after a while
                 test_roms.push_back("roms/missing file");
@@ -372,7 +374,7 @@ void MyApp::OnKeyPress(int glfw_key, int scancode, int action, int mods)
 
 void MyApp::CreateROMLoader(string const& file_path_name)
 {
-    cout << "CreateROMLoader(" << file_path_name << ")" << endl;
+    cout << "[MyApp] CreateROMLoader(" << file_path_name << ")" << endl;
     auto loader = ROMLoader::CreateWindow(file_path_name);
     *loader->system_loaded += std::bind(&MyApp::SystemLoadedHandler, this, placeholders::_1, placeholders::_2);
     AddWindow(loader);
@@ -381,7 +383,7 @@ void MyApp::CreateROMLoader(string const& file_path_name)
 void MyApp::SystemLoadedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<System> new_system)
 {
     current_system = new_system;
-    cout << "New " << current_system->GetInformation()->full_name << " loaded." << endl;
+    cout << "[MyApp] New " << current_system->GetInformation()->full_name << " loaded." << endl;
     current_system_changed->emit();
 }
 

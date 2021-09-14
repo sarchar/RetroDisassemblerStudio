@@ -7,9 +7,12 @@
 #include <thread>
 
 #include "clock_divider.h"
+#include "ram.h"
+#include "signal_delay.h"
 #include "system_clock.h"
 #include "systems/system.h"
 #include "systems/snes/cpu65c816.h"
+#include "systems/snes/snes_address_decoder.h"
 
 #define SNES_CLOCK_FREQUENCY 22477000
 #define SNES_CPU_CLOCK_DIVIDER 6
@@ -32,22 +35,31 @@ private:
     void CreateSystemThread();
     void SystemThreadMain();
 
+    void WaitForLastThreadCommand();
     void IssueReset();
     void IssueExitThread();
+    void IssueStep();
 
     // System components
-    Wire reset_wire { "reset" };
+    Wire reset_wire { "SNESSytem.reset" };
     std::unique_ptr<SystemClock> system_clock;
     std::unique_ptr<ClockDivider> cpu_clock;
+    std::unique_ptr<SignalDelay<bool>> cpu_clock_delay;
+    std::unique_ptr<SignalDelay<bool>> cpu_signal_setup_delay;
     std::unique_ptr<CPU65C816> cpu;
     //std::unique_ptr<SNESRam> system_ram;
+    std::unique_ptr<SNESAddressDecoder> address_decoder;
+    std::unique_ptr<RAM<u16,u8>> main_ram;
 
+    // Threaded system 
     std::unique_ptr<std::thread> system_thread;
-    std::condition_variable system_thread_command_start_condition;
-    std::condition_variable system_thread_command_done_condition;
+    std::mutex system_thread_command_mutex;
+    std::condition_variable system_thread_command_condition;
 
     enum {
+        CMD_NONE,
         CMD_RESET,
-        CMD_EXIT_THREAD
+        CMD_EXIT_THREAD,
+        CMD_STEP
     } system_thread_command;
 };

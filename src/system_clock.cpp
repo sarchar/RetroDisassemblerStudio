@@ -5,14 +5,14 @@ SystemClock::SystemClock(u64 _frequency)
 {
     // when enable line changes from high to low, make the clock pin go high-z -- this would 
     // allow something else to control the clock
-    *pins.enable_n.signal_changed += [=, this](Wire* driver, tristate new_state) {
-        if(this->enabled && new_state != 0) { // enable pin going high-z is same as disabled since we want a clear enable signal
+    *pins.enable_n.signal_changed += [=, this](Wire* driver, std::optional<bool> const& new_state) {
+        if(this->enabled && *new_state) { // enable pin going high-z is same as disabled since we want a clear enable signal
             this->last_state = this->pins.out.Sample();
             this->pins.out.HighZ();
             this->enabled = false;
-        } else if(!this->enabled && new_state == 0) {
+        } else if(!this->enabled && !*new_state) {
             this->enabled = true;
-            this->pins.out.Assert((tristate)this->last_state);
+            this->pins.out.Assert(this->last_state);
         }
     };
 

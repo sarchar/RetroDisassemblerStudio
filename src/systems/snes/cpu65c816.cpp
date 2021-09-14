@@ -1,5 +1,6 @@
 #include <functional>
 #include <iostream>
+#include <iomanip>
 
 #include "systems/snes/cpu65c816.h"
 
@@ -10,20 +11,23 @@ CPU65C816::CPU65C816()
     : current_state(STATE_RUNNING)
 {
     // reset the CPU on the falling edge
-    *pins.reset_n.signal_changed += [=, this](Wire* driver, tristate new_state) {
-        if(new_state == 0) this->StartReset();
-        else if(new_state == 1) current_state = STATE_RUNNING;
+    *pins.reset_n.signal_changed += [=, this](Wire* driver, std::optional<bool> const& new_state) {
+        if(!*new_state) this->StartReset();
+        else            current_state = STATE_RUNNING;
     };
 
     // capture both rising and falling edges of the PHI2 signal
-    static std::function<void()> clock_handlers[] = {
-        [](){},
-        std::bind(&CPU65C816::ClockLow, this),
-        std::bind(&CPU65C816::ClockHigh, this),
+    *pins.phi2.signal_changed += [=, this](Wire* driver, std::optional<bool> const& new_state) {
+        assert(new_state.has_value());
+        if(*new_state) this->ClockRisingEdge();
+        else           this->ClockFallingEdge();
     };
 
-    *pins.phi2.signal_changed += [=, this](Wire* driver, tristate new_state) {
-        clock_handlers[new_state + 1]();
+    // capture both rising and falling edges of the PHI2 setup signal
+    *pins.signal_setup.signal_changed += [=, this](Wire* driver, std::optional<bool> const& new_state) {
+        assert(new_state.has_value());
+        if(*new_state) this->SetupPinsLowCycle();
+        else           this->SetupPinsHighCycle();
     };
 }
 
@@ -40,7 +44,7 @@ void CPU65C816::StartReset()
 
 void CPU65C816::Reset()
 {
-    cout << "CPU65C816 reset" << endl;
+    cout << "[cpu65c816] cpu reset" << endl;
 
     registers.pc     = 0xFFFC;
     registers.d      = 0;
@@ -60,51 +64,73 @@ void CPU65C816::Reset()
     pins.vda.AssertLow();
     pins.vpa.AssertLow();
     pins.vp_n.AssertHigh();
-    //pins.db.HighZ();
-
-    // next instruction is a vector fetch
-    vector_pull = true;
+    pins.db.HighZ();
 }
 
-void CPU65C816::ClockLow()
+void CPU65C816::ClockFallingEdge()
 {
-    static auto step_reset = [=, this]() {
+    // TODO latch data line
+    switch(current_state) {
+    case STATE_RESET:
         Reset();
 
         // set the next instruction cycle to fetch
-        instruction_cycle = IC_VECTOR_PULL;
-        SetupPinsLowCycle();
-    };
+        instruction_cycle = IC_VECTOR_PULL_LOW;
+        break;
 
-    static auto step_running = [=, this]() {
-        cout << "running low" << endl;
-    };
+    case STATE_RUNNING:
+        cout << "[cpu65c816] CPU step LOW -- data line = $" << setfill('0') << setw(2) << right << hex << pins.db.Sample() << endl;
 
-    static std::function<void()> step[] = {
-        step_reset,
-        step_running,
-    };
+        switch(instruction_cycle) {
+        case IC_VECTOR_PULL_LOW:
+            // next instruction cycle after reset will be high byte vector
+            registers.pc += 1;
+            instruction_cycle = IC_VECTOR_PULL_HIGH;
+            break;
 
-    step[current_state]();
+        case IC_VECTOR_PULL_HIGH:
+            instruction_cycle = IC_DEAD;
+            break;
+
+        case IC_DEAD:
+            break;
+        }
+
+        break;
+    }
+
+    // finally, de-assert necessary pins so all devices release the data bus
+    pins.vda.AssertLow();
+    pins.vpa.AssertLow();
+    pins.vp_n.AssertHigh();
+    pins.rw_n.AssertHigh();
 }
 
-void CPU65C816::ClockHigh()
+void CPU65C816::ClockRisingEdge()
 {
-    static auto step_reset = [=, this]() {
-        // set up the opcode fetch cycle
-        SetupPinsHighCycle();
-    };
+    switch(current_state) {
+    case STATE_RESET:
+        break;
 
-    static auto step_running = [=, this]() {
-        cout << "running high" << endl;
-    };
+    case STATE_RUNNING:
+        cout << "[cpu65c816] CPU step HIGH -- data line = " << setfill('0') << setw(2) << right << hex << pins.db.Sample() << endl;
 
-    static std::function<void()> step[] = {
-        step_reset,
-        step_running,
-    };
+        // on a read cycle, we need to de-assert the db bus
+        // on a write cycel, we need to change the data on the db bus
+        // TODO IsReadCycle() ?
+        switch(instruction_cycle) {
+        case IC_OPCODE_FETCH:
+        case IC_VECTOR_PULL_LOW:
+        case IC_VECTOR_PULL_HIGH:
+            pins.db.HighZ();
+            break;
 
-    step[current_state]();
+        case IC_DEAD:
+            break;
+        }
+        break;
+    }
+
 }
 
 void CPU65C816::SetupPinsLowCycle()
@@ -112,17 +138,19 @@ void CPU65C816::SetupPinsLowCycle()
     switch(instruction_cycle) {
     case IC_OPCODE_FETCH:
         break;
-    case IC_VECTOR_PULL:
-        //pins.db.Assert(registers.pbr);   // put program bank on the data lines
-        //pins.a.Assert(registers.pc);     // put the pc register on the address lines 
-        pins.rw_n.AssertHigh();          // assert read
+
+    case IC_VECTOR_PULL_LOW:
+    case IC_VECTOR_PULL_HIGH:
         pins.vda.AssertHigh();           // vda and vpa high means op-code fetch
         pins.vpa.AssertHigh();           // ..
-        if(vector_pull) {                // for vector pull assert VP low
-            pins.vp_n.AssertLow();
-            vector_pull = false;
-        }
+        pins.rw_n.AssertHigh();          // assert read
+        pins.vp_n.AssertLow();           // for vector pull assert VP low
+
+        // do data and address after VDA/VPA/RWn
+        pins.db.Assert(registers.pbr);   // put program bank on the data lines
+        pins.a.Assert(registers.pc);     // put the pc register on the address lines 
         break;
+
     default:
         break;
     }
@@ -132,9 +160,11 @@ void CPU65C816::SetupPinsHighCycle()
 {
     switch(instruction_cycle) {
     case IC_OPCODE_FETCH:
-    case IC_VECTOR_PULL:
-        //pins.db.HighZ();  // put data bus into high Z for reading
+    case IC_VECTOR_PULL_LOW:
+    case IC_VECTOR_PULL_HIGH:
+        pins.db.HighZ();  // put data bus into high Z for reading
         break;
+
     default:
         break;
     }

@@ -16,8 +16,8 @@ public:
     void Disable();
 
     struct {
-        Wire out      { "SystemClock::out" };
-        Wire enable_n { "SystemClock::enable_n" };
+        Wire out      { "SystemClock.out" };
+        Wire enable_n { "SystemClock.enable_n" };
     } pins;
 
 private:
