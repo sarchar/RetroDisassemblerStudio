@@ -38,6 +38,9 @@ struct signal_connection {
     signal_connection(std::shared_ptr<SignalType> _signal, _signal_id_t _id)
         : signal(_signal), id(_id) { }
 
+    signal_connection()
+        : id(-1) { }
+
     ~signal_connection() {
         disconnect();
     }
