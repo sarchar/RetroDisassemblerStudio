@@ -117,6 +117,7 @@ private:
         IC_WORD_IMM_LOW,
         IC_WORD_IMM_HIGH,
         IC_STORE_PC_OPCODE_FETCH,
+        IC_DUMMY,
         IC_DEAD
     };
     INSTRUCTION_CYCLE const* current_instruction_cycle_set;
@@ -128,6 +129,7 @@ private:
 
 private:
     static INSTRUCTION_CYCLE const VECTOR_PULL_UC[];
+    static INSTRUCTION_CYCLE const NOP_UC[];
     static INSTRUCTION_CYCLE const JMP_UC[];
     static INSTRUCTION_CYCLE const DEAD_INSTRUCTION[];
     static INSTRUCTION_CYCLE const * const INSTRUCTION_UCs[256];

@@ -44,9 +44,10 @@ RAM<A, D>::RAM(u8 _po2_size, bool _edge)
     // TEMP
     memory[0xFFFC] = 0x00;
     memory[0xFFFD] = 0xF0;
-    memory[0xF000] = 0x4C;
-    memory[0xF001] = 0x00;
-    memory[0xF002] = 0xF0;
+    memory[0xF000] = 0xEA;
+    memory[0xF001] = 0x4C;
+    memory[0xF002] = 0x00;
+    memory[0xF003] = 0xF0;
 
     // default output pins
     pins.d.HighZ();

@@ -12,6 +12,9 @@ CPU65C816::INSTRUCTION_CYCLE const
 CPU65C816::INSTRUCTION_CYCLE const
     CPU65C816::JMP_UC[] = { IC_WORD_IMM_LOW, IC_WORD_IMM_HIGH, IC_STORE_PC_OPCODE_FETCH };
 
+CPU65C816::INSTRUCTION_CYCLE const
+    CPU65C816::NOP_UC[] = { IC_DUMMY, IC_OPCODE_FETCH };
+
 CPU65C816::INSTRUCTION_CYCLE const CPU65C816::DEAD_INSTRUCTION[] = { IC_DEAD };
 
 CPU65C816::INSTRUCTION_CYCLE const * const CPU65C816::INSTRUCTION_UCs[256] = {
@@ -73,7 +76,7 @@ CPU65C816::INSTRUCTION_CYCLE const * const CPU65C816::INSTRUCTION_UCs[256] = {
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
-    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, NOP_UC          , DEAD_INSTRUCTION, 
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
@@ -212,6 +215,7 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
         registers.pc += 1;
         break;
 
+    case IC_DUMMY:
     case IC_DEAD:
         break;
     }
@@ -238,6 +242,7 @@ void CPU65C816::StartInstructionCycle()
         registers.pc = word_immediate;
         break;
 
+    case IC_DUMMY:
     case IC_DEAD:
         break;
     }
@@ -294,6 +299,14 @@ void CPU65C816::SetupPinsLowCycle()
         pins.a.Assert(registers.pc);
         break;
 
+    case IC_DUMMY:
+        // in the dummy I/O cycle we still put PC address on the wire
+        // and the default state of the other pins is what we want
+        // VPA=VDA=0, VPn=1, RWn=1
+        pins.db.Assert(registers.pbr);
+        pins.a.Assert(registers.pc);
+        break;
+
     case IC_DEAD:
         break;
 
@@ -304,10 +317,10 @@ void CPU65C816::SetupPinsLowCycle()
 
 void CPU65C816::SetupPinsHighCycle()
 {
-    // on a read cycle, we need to de-assert the db bus
-    if(IsReadCycle()) {
+    // on a write cycle, we need to change the data bus to output the value
+    if(IsWriteCycle()) {
+    } else { // on every other cycle, even if it's not a read/write operation, we high-z the data bus
         pins.db.HighZ();
-    } else if(IsWriteCycle()) { // on a write cycle, we need to change the data on the db bus
     }
 }
 
