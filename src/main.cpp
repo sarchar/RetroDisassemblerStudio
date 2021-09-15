@@ -394,6 +394,20 @@ void MyApp::SystemLoadedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<Sys
     current_system = new_system;
     cout << "[MyApp] New " << current_system->GetInformation()->full_name << " loaded." << endl;
     current_system_changed->emit();
+
+    // if there's no debugger in the list of windows, open one
+    for(auto& window : managed_windows) {
+        if(dynamic_pointer_cast<SNESDebugger>(window) != nullptr) goto skip_debug_window;
+    }
+
+    // if we get here, create the SNESDebugger window
+    {
+        auto wnd = SNESDebugger::CreateWindow();
+        AddWindow(wnd);
+    }
+
+skip_debug_window:
+    ;
 }
 
 int main(int argc, char* argv[])
