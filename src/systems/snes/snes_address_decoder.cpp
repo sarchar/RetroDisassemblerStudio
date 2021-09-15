@@ -36,7 +36,7 @@ SNESAddressDecoder::SNESAddressDecoder()
 
         // return with no device activated on invalid addresses
         if(!address_valid) {
-            this->pins.ram_cs_n.AssertLow();
+            DeselectPeripherals();
             return;
         }
 
