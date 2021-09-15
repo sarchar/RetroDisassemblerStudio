@@ -6,6 +6,81 @@
 
 using namespace std;
 
+CPU65C816::INSTRUCTION_CYCLE const
+    CPU65C816::VECTOR_PULL_UC[] = { IC_VECTOR_PULL_LOW, IC_VECTOR_PULL_HIGH, IC_OPCODE_FETCH };
+
+CPU65C816::INSTRUCTION_CYCLE const
+    CPU65C816::JMP_UC[] = { IC_WORD_IMM_LOW, IC_WORD_IMM_HIGH, IC_STORE_PC_OPCODE_FETCH };
+
+CPU65C816::INSTRUCTION_CYCLE const CPU65C816::DEAD_INSTRUCTION[] = { IC_DEAD };
+
+CPU65C816::INSTRUCTION_CYCLE const * const CPU65C816::INSTRUCTION_UCs[256] = {
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    JMP_UC          , DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+};
+
 // The CPU defaults to running state until you pull reset low
 CPU65C816::CPU65C816()
 {
@@ -58,61 +133,114 @@ void CPU65C816::Reset()
     pins.vp_n.AssertHigh();
     pins.db.HighZ();
 
-    // set the next instruction cycle to fetch the reset vector
-    next_instruction_cycle = IC_VECTOR_PULL_LOW;
+    // set the next instruction cycle to fetch the reset vector and execute
+    current_instruction_cycle_set = &CPU65C816::VECTOR_PULL_UC[0];
+    current_instruction_cycle_set_pc = 0;
     data_fetch_address = 0xFFFC;
 }
+
 
 void CPU65C816::ClockFallingEdge()
 {
     // sample the data line, always
     u8 data_line = pins.db.Sample();
-
-    // move the instruction cycle to the next one
-    instruction_cycle = next_instruction_cycle;
-
     cout << "[cpu65c816] CPU step LOW -- data line = $" << setfill('0') << setw(2) << right << hex << (u16)data_line << endl;
 
-    switch(instruction_cycle) {
-    case IC_VECTOR_PULL_LOW:
-        // nothing to do in this cycle but set up signals. next cycle will be the high byte
-        next_instruction_cycle = IC_VECTOR_PULL_HIGH;
-        break;
+    // finish the previous cycle
+    FinishInstructionCycle(data_line);
 
-    case IC_VECTOR_PULL_HIGH:
-        // latch the low vector address
-        registers.pc = (registers.pc & 0xFF00) | data_line;
+    // move the instruction cycle to the next one
+    instruction_cycle = current_instruction_cycle_set[current_instruction_cycle_set_pc++];
 
-        // move to fetch the high byte
-        next_instruction_cycle = IC_VECTOR_FETCH_OPCODE;
-        break;
-
-    case IC_VECTOR_FETCH_OPCODE:
-        // latch the high vector address
-        registers.pc = (registers.pc & 0x00FF) | (data_line << 8);
-
-        // TEMP -- should set the next opcode, but this one switches to dead
-        next_instruction_cycle = IC_DECODE;
-        break;
-
-    case IC_DECODE:
-        // latch the IR
-        registers.ir = data_line;
-
-        // TEMP -- should pick the microcode to execute
-        instruction_cycle = IC_DEAD;
-        break;
-
-    case IC_DEAD:
-        break;
-    }
+    // start the next cycle
+    StartInstructionCycle();
 
     // finally, de-assert necessary pins so all devices release the data bus
     // this will cause the address decoder to make all CSn lines high
     pins.vda.AssertLow();
     pins.vpa.AssertLow();
-    pins.vp_n.AssertHigh();
     pins.rw_n.AssertHigh();
+}
+
+// called at the beginning of the new clock cycle (phi2 falling edge)
+// and generally just latches data
+void CPU65C816::FinishInstructionCycle(u8 data_line)
+{
+    switch(instruction_cycle) {
+    case IC_VECTOR_PULL_LOW:
+        // latch the low vector address
+        registers.pc = (registers.pc & 0xFF00) | data_line;
+        break;
+
+    case IC_VECTOR_PULL_HIGH:
+        // latch the high vector address
+        registers.pc = (registers.pc & 0x00FF) | (data_line << 8);
+
+        // de-assert VPn after we fetch the high byte of the vector
+        pins.vp_n.AssertHigh();
+        break;
+
+    case IC_OPCODE_FETCH:
+    case IC_STORE_PC_OPCODE_FETCH:
+        // latch the instruction register
+        registers.ir = data_line;
+
+        // increment program counter
+        registers.pc += 1;
+
+        // pick the microcode to run
+        current_instruction_cycle_set = &CPU65C816::INSTRUCTION_UCs[registers.ir][0];
+        current_instruction_cycle_set_pc = 0;
+        break;
+
+    case IC_WORD_IMM_LOW:
+        // latch the word immediate low byte
+        cout << "data_line = " << hex << setw(2) << data_line << endl;
+        word_immediate = (word_immediate & 0xFF00) | data_line;
+        cout << "word_immediate = " << hex << setw(4) << word_immediate << endl;
+
+        // increment PC
+        registers.pc += 1;
+        break;
+
+    case IC_WORD_IMM_HIGH:
+        // latch the word immediate high byte
+        word_immediate = (word_immediate & 0x00FF) | (data_line << 8);
+        cout << "word_immediate = " << hex << setw(4) << word_immediate << endl;
+
+        // increment PC
+        registers.pc += 1;
+        break;
+
+    case IC_DEAD:
+        break;
+    }
+}
+
+void CPU65C816::StartInstructionCycle()
+{
+    switch(instruction_cycle) {
+    case IC_VECTOR_PULL_LOW:
+    case IC_VECTOR_PULL_HIGH:
+    case IC_WORD_IMM_LOW:
+    case IC_WORD_IMM_HIGH:
+        // nothing to do to start this cycle but set up signals, which happens in SetupPinsLowCycle()
+        break;
+
+    case IC_OPCODE_FETCH:
+        // nothing to do to start this cycle but set up signals, which happens in SetupPinsLowCycle()
+        break;
+
+    case IC_STORE_PC_OPCODE_FETCH:
+        // at the beginning of the store-pc-opcode-fetch cycle, 
+        // store the memory value in PC. PC is 16-bit, so take word_immediate
+        // and then fetch the opcode at that address
+        registers.pc = word_immediate;
+        break;
+
+    case IC_DEAD:
+        break;
+    }
 }
 
 void CPU65C816::ClockRisingEdge()
@@ -123,8 +251,8 @@ void CPU65C816::ClockRisingEdge()
 void CPU65C816::SetupPinsLowCycle()
 {
     switch(instruction_cycle) {
-    case IC_VECTOR_FETCH_OPCODE:
     case IC_OPCODE_FETCH:
+    case IC_STORE_PC_OPCODE_FETCH:
         cout << "asserting opcode fetch lines" << endl;
         pins.vda.AssertHigh();           // vda and vpa high means op-code fetch
         pins.vpa.AssertHigh();           // ..
@@ -152,6 +280,20 @@ void CPU65C816::SetupPinsLowCycle()
         pins.a.Assert(data_fetch_address + ((instruction_cycle == IC_VECTOR_PULL_HIGH) ? 1 : 0));
         break;
 
+    case IC_WORD_IMM_LOW:
+    case IC_WORD_IMM_HIGH:
+        cout << "asserting word immediate pull lines" << endl;
+        pins.vda.AssertLow();            // assert only program data high
+        pins.vpa.AssertHigh();           // ..
+        pins.rw_n.AssertHigh();          // assert read
+
+        // do data and address after VDA/VPA/RWn
+        pins.db.Assert(registers.pbr);   // operands are in program storage
+
+        // put the PC address on the address lines 
+        pins.a.Assert(registers.pc);
+        break;
+
     case IC_DEAD:
         break;
 
@@ -163,18 +305,9 @@ void CPU65C816::SetupPinsLowCycle()
 void CPU65C816::SetupPinsHighCycle()
 {
     // on a read cycle, we need to de-assert the db bus
-    // on a write cycle, we need to change the data on the db bus
-    // TODO IsReadCycle() ?
-    switch(instruction_cycle) {
-    case IC_OPCODE_FETCH:
-    case IC_VECTOR_FETCH_OPCODE:
-    case IC_VECTOR_PULL_LOW:
-    case IC_VECTOR_PULL_HIGH:
+    if(IsReadCycle()) {
         pins.db.HighZ();
-        break;
-
-    case IC_DEAD:
-        break;
+    } else if(IsWriteCycle()) { // on a write cycle, we need to change the data on the db bus
     }
 }
 

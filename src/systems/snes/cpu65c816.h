@@ -57,12 +57,18 @@ public:
     u8   GetYL() const { return registers.yl; }
 
 private:
+    inline bool IsReadCycle()  const { return (pins.rw_n.Sample() && (pins.vda.Sample() || pins.vpa.Sample())); }
+    inline bool IsWriteCycle() const { return (!pins.rw_n.Sample() && (pins.vda.Sample() || pins.vpa.Sample())); }
+
     void StartReset();
     void Reset();
-    void ClockFallingEdge();
-    void ClockRisingEdge();
 
+    void ClockFallingEdge();
+    void FinishInstructionCycle(u8);
+    void StartInstructionCycle();
     void SetupPinsLowCycle();
+
+    void ClockRisingEdge();
     void SetupPinsHighCycle();
 
     struct { 
@@ -104,14 +110,25 @@ private:
         };
     } registers;
 
-    enum {
+    enum INSTRUCTION_CYCLE {
         IC_VECTOR_PULL_LOW,
         IC_VECTOR_PULL_HIGH,
-        IC_VECTOR_FETCH_OPCODE,
         IC_OPCODE_FETCH,
-        IC_DECODE,
+        IC_WORD_IMM_LOW,
+        IC_WORD_IMM_HIGH,
+        IC_STORE_PC_OPCODE_FETCH,
         IC_DEAD
-    } instruction_cycle, next_instruction_cycle;
+    };
+    INSTRUCTION_CYCLE const* current_instruction_cycle_set;
+    u8                       current_instruction_cycle_set_pc;
+    INSTRUCTION_CYCLE        instruction_cycle;
 
     u16 data_fetch_address;
+    u16 word_immediate;
+
+private:
+    static INSTRUCTION_CYCLE const VECTOR_PULL_UC[];
+    static INSTRUCTION_CYCLE const JMP_UC[];
+    static INSTRUCTION_CYCLE const DEAD_INSTRUCTION[];
+    static INSTRUCTION_CYCLE const * const INSTRUCTION_UCs[256];
 };
