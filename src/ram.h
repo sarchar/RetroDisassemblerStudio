@@ -41,23 +41,6 @@ RAM<A, D>::RAM(u8 _po2_size, bool _edge)
     memory = new D[1 << _po2_size];
     mask   = (1 << _po2_size) - 1;
 
-    // TEMP
-    u16 addr = 0xF000;
-    memory[0xFFFC] = addr & 0x00FF;
-    memory[0xFFFD] = (addr & 0xFF00) >> 8;
-    memory[addr++] = 0x0B;  // PHD
-    memory[addr++] = 0xA9;  // LDA #$42
-    memory[addr++] = 0x42;
-    memory[addr++] = 0xE6;  // INC $05
-    memory[addr++] = 0x05;
-    memory[addr++] = 0xA5;  // LDA $05
-    memory[addr++] = 0x05;
-    memory[addr++] = 0xEA;  // NOP
-    memory[addr++] = 0x1A;  // INC A
-    memory[addr++] = 0x4C;  // JMP $F007
-    memory[addr++] = 0x07;
-    memory[addr++] = 0xF0;
-
     // default output pins
     pins.d.HighZ();
 
