@@ -119,21 +119,25 @@ void SNESDebugger::RenderContent()
 
         INSPECT_SIGNAL(v_bool, "RWn=", system->GetSignalRWn, 1, "z");
         ImGui::SameLine();
-        INSPECT_SIGNAL(v_u8, "VPA=", system->GetSignalVPA, 1, "z");
+        INSPECT_SIGNAL(v_bool, "VPA=", system->GetSignalVPA, 1, "z");
         ImGui::SameLine();
-        INSPECT_SIGNAL(v_u8, "VDA=", system->GetSignalVDA, 1, "z");
+        INSPECT_SIGNAL(v_bool, "VDA=", system->GetSignalVDA, 1, "z");
         ImGui::SameLine();
-        INSPECT_SIGNAL(v_u8, "VPn=", system->GetSignalVPn, 1, "z");
+        INSPECT_SIGNAL(v_bool, "VPn=", system->GetSignalVPn, 1, "z");
         ImGui::SameLine();
-        INSPECT_SIGNAL(v_u8, "E=", system->GetSignalE, 1, "z");
+        INSPECT_SIGNAL(v_bool, "E=", system->GetSignalE, 1, "z");
         ImGui::SameLine();
-        INSPECT_SIGNAL(v_u8, "MX=", system->GetSignalMX, 1, "z");
+        INSPECT_SIGNAL(v_bool, "MX=", system->GetSignalMX, 1, "z");
 
         INSPECT_SIGNAL(v_u8, "DB=$", system->GetSignalDB, 2, "zz");
         ImGui::SameLine();
         INSPECT_SIGNAL(v_u16, "A=$", system->GetSignalA, 4, "zzzz");
 
-        INSPECT_SIGNAL(v_u8, "RAM_CSn=", system->GetSignalRAMCSn, 1, "z");
+        ImGui::Separator();
+        ImGui::Text("SNESAddressDecoder");
+        INSPECT_SIGNAL(v_u8, "D=", system->GetADSignalD, 1, "zz");
+        ImGui::SameLine();
+        INSPECT_SIGNAL(v_bool, "RAM_CSn=", system->GetADSignalRAMCSn, 1, "z");
 #   undef INSPECT_SIGNAL
     }
 

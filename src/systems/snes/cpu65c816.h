@@ -113,12 +113,12 @@ private:
     typedef u64 UC_OPCODE;
 
     // bits 0-2
-    static int const UC_FETCH_OPCODE  = 0 << 0;
-    static int const UC_FETCH_MEMORY  = 1 << 0;
-    static int const UC_FETCH_PC      = 2 << 0;
-    static int const UC_FETCH_A       = 3 << 0;
-    static int const UC_FETCH_X       = 4 << 0;
-    static int const UC_FETCH_Y       = 5 << 0;
+    static int const UC_FETCH_OPCODE  = 1 << 0;
+    static int const UC_FETCH_MEMORY  = 2 << 0;
+    static int const UC_FETCH_PC      = 3 << 0;
+    static int const UC_FETCH_A       = 4 << 0;
+    static int const UC_FETCH_X       = 5 << 0;
+    static int const UC_FETCH_Y       = 6 << 0;
 
     // bits 3-5
     // TODO could have a store/load bit and this selects the register dest/src
@@ -144,6 +144,7 @@ private:
         // AM_IMMEDIATE_M / AM_IMMEDIATE_X ? byte or word depending on M and X bits
         AM_IMMEDIATE_WORD,
         AM_VECTOR,
+        AM_DIRECT_PAGE,
         AM_ABSOLUTE
     };
 
@@ -156,9 +157,12 @@ private:
         MS_FETCH_OPERAND_BANK,
         MS_FETCH_VECTOR_LOW,
         MS_FETCH_VECTOR_HIGH,
+        MS_FETCH_MEMORY_LOW,
         // TODO indexed adds, etc
         // TODO stores, etc
-        MS_DONE
+        MS_ADD_D_REGISTER,
+        MS_MODIFY,
+        MS_WRITE_MEMORY_LOW
     };
 
     MEMORY_STEP current_memory_step;

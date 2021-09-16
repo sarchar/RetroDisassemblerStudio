@@ -64,7 +64,8 @@ public:
     inline std::optional<u8>   const& GetSignalDB()  const { return cpu->pins.db.Get(); }
     inline std::optional<u16>  const& GetSignalA()   const { return cpu->pins.a.Get(); }
 
-    inline std::optional<bool> const& GetSignalRAMCSn() const { return main_ram->pins.cs_n.Get(); }
+    inline std::optional<bool> const& GetADSignalRAMCSn() const { return address_decoder->pins.ram_cs_n.Get(); }
+    inline std::optional<u8>   const& GetADSignalD()      const { return address_decoder->pins.d.Get(); }
 private:
     void BuildSystemComponents();
     void CreateSystemThread();

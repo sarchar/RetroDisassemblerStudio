@@ -24,11 +24,9 @@ SNESAddressDecoder::SNESAddressDecoder()
         pins.a_out.Assert(address);
 
         // on a read request, set the system data line to high z
-        // and on a write request, transmit the data/bank bus to the system data line
+        // for write requests, wait for the db line to change
         if(pins.rw_n.Sample()) {
             pins.d.HighZ();
-        } else {
-            pins.d.Assert(pins.db.Get());
         }
 
         // determine if the address is valid
@@ -49,9 +47,18 @@ SNESAddressDecoder::SNESAddressDecoder()
         pins.db.HighZ();
     };
 
-    // always transmit the state of the system d line to the cpu db line and vice versa
+    // on reads transmit the state of the system d line to the cpu db line
     *pins.d.signal_changed += [=, this](Bus<u8>*, std::optional<u8> const& new_state) {
-        pins.db.Assert(new_state);
+        if(pins.rw_n.Sample()) {
+            pins.db.Assert(new_state);
+        }
+    };
+
+    // on writes transmit the state of the cpu db line to the system
+    *pins.db.signal_changed += [=, this](Bus<u8>*, std::optional<u8> const& new_state) {
+        if(!pins.rw_n.Sample()) {
+            pins.d.Assert(pins.db.Get());
+        }
     };
 
     // when the VDA and VPA pins change immediately respond to valid addresses going invalid

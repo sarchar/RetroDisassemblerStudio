@@ -47,6 +47,10 @@ RAM<A, D>::RAM(u8 _po2_size, bool _edge)
     u16 addr = 0xF000;
     memory[addr++] = 0xA9;  // LDA #$42
     memory[addr++] = 0x42;
+    memory[addr++] = 0xE6;  // INC $05
+    memory[addr++] = 0x05;
+    memory[addr++] = 0xA5;  // LDA $05
+    memory[addr++] = 0x05;
     memory[addr++] = 0xEA;  // NOP
     memory[addr++] = 0x1A;  // INC A
     memory[addr++] = 0x4C;  // JMP $F002
