@@ -26,10 +26,13 @@ public:
         // connected to the system
         Bus<u8>  d     { "SNESAddressDecoder.d" };
         Bus<u32> a_out { "SNESAddressDecoder.a_out" };
+
+        // various peripheral select lines
         Wire ram_cs_n  { "SNESAddressDecoder.ram_cs_n" };
+        Wire rom_cs_n  { "SNESAddressDecoder.rom_cs_n" };
     } pins;
 
 private:
-    void SelectPeripheral(u32 address);
+    void SelectPeripheral(u32 address, bool rw_n);
     void DeselectPeripherals();
 };

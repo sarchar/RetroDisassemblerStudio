@@ -8,6 +8,7 @@
 
 #include "clock_divider.h"
 #include "ram.h"
+#include "rom.h"
 #include "signal_delay.h"
 #include "system_clock.h"
 #include "systems/system.h"
@@ -70,7 +71,9 @@ public:
 
 
     inline std::optional<bool> const& GetADSignalRAMCSn() const { return address_decoder->pins.ram_cs_n.Get(); }
+    inline std::optional<bool> const& GetADSignalROMCSn() const { return address_decoder->pins.rom_cs_n.Get(); }
     inline std::optional<u8>   const& GetADSignalD()      const { return address_decoder->pins.d.Get(); }
+    inline std::optional<u32>  const& GetADSignalA()      const { return address_decoder->pins.a_out.Get(); }
 private:
     void BuildSystemComponents();
     void CreateSystemThread();
@@ -89,6 +92,7 @@ private:
     std::unique_ptr<CPU65C816> cpu;
     std::unique_ptr<SNESAddressDecoder> address_decoder;
     std::unique_ptr<RAM<u32,u8>> main_ram;
+    std::unique_ptr<ROM<u32,u8>> main_rom;
 
     // Threaded system 
     std::unique_ptr<std::thread> system_thread;

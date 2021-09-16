@@ -126,6 +126,7 @@ void SNESDebugger::RenderContent()
         std::optional<bool> v_bool;
         std::optional<u8> v_u8;
         std::optional<u16> v_u16;
+        std::optional<u32> v_u32;
 
         INSPECT_SIGNAL(v_bool, "RWn=", system->GetSignalRWn, 1, "z");
         ImGui::SameLine();
@@ -147,7 +148,11 @@ void SNESDebugger::RenderContent()
         ImGui::Text("SNESAddressDecoder");
         INSPECT_SIGNAL(v_u8, "D=$", system->GetADSignalD, 2, "zz");
         ImGui::SameLine();
+        INSPECT_SIGNAL(v_u32, "A=$", system->GetADSignalA, 6, "zzzzzz");
+        ImGui::SameLine();
         INSPECT_SIGNAL(v_bool, "RAM_CSn=", system->GetADSignalRAMCSn, 1, "z");
+        ImGui::SameLine();
+        INSPECT_SIGNAL(v_bool, "ROM_CSn=", system->GetADSignalROMCSn, 1, "z");
 #   undef INSPECT_SIGNAL
     }
 

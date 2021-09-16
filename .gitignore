@@ -1,3 +1,4 @@
 ﻿imgui.ini
 build
 roms/*.bin
+roms/*.lst

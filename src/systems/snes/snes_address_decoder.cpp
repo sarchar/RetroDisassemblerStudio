@@ -25,7 +25,8 @@ SNESAddressDecoder::SNESAddressDecoder()
 
         // on a read request, set the system data line to high z
         // for write requests, wait for the db line to change
-        if(pins.rw_n.Sample()) {
+        bool rw_n = pins.rw_n.Sample();
+        if(rw_n) {
             pins.d.HighZ();
         }
 
@@ -39,7 +40,7 @@ SNESAddressDecoder::SNESAddressDecoder()
         }
 
         // valid address, set up the device to respond
-        this->SelectPeripheral(address);
+        this->SelectPeripheral(address, rw_n);
     };
 
     // whenever the CPU goes to write, deassert db
@@ -72,14 +73,27 @@ SNESAddressDecoder::SNESAddressDecoder()
     *pins.vpa.signal_changed += deselect_peripherals;
 }
 
-void SNESAddressDecoder::SelectPeripheral(u32 address)
+void SNESAddressDecoder::SelectPeripheral(u32 address, bool rw_n)
 {
     // TODO determine which device to select
-    pins.ram_cs_n.AssertLow();
+    if((address & 0xFFFF0000) != 0) {
+        DeselectPeripherals();
+        return;
+    }
+
+    if(address & 0x8000) {
+        // ROM only gets READ signals
+        if(rw_n) {
+            pins.rom_cs_n.AssertLow();
+        }
+    } else {
+        pins.ram_cs_n.AssertLow();
+    }
 }
 
 void SNESAddressDecoder::DeselectPeripherals()
 {
     pins.ram_cs_n.AssertHigh();
+    pins.rom_cs_n.AssertHigh();
 }
 

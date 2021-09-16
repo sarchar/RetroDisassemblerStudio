@@ -1,7 +1,7 @@
-#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <iomanip>
+#include <fstream>
 
 #include "clock_divider.h"
 #include "systems/snes/cpu65c816.h"
@@ -67,12 +67,19 @@ void SNESSystem::BuildSystemComponents()
     address_decoder->pins.a_in.Connect(&cpu->pins.a);
 
     // create the main ram
-    main_ram = make_unique<RAM<u32, u8>>(16, true);               // 2^16 bytes, 32 (technically 24-) bit address space, latch on high clock signal
+    main_ram = make_unique<RAM<u32, u8>>(13, true);               // 2^13 bytes (8K), 32 (technically 24-) bit address space, latch on high clock signal
     main_ram->pins.clk.Connect(&peripheral_clock->pins.out);      // get the peripherals clocking at the end of phi2 high
     main_ram->pins.cs_n.Connect(&address_decoder->pins.ram_cs_n); // connect the CS line to the address decoder logic
     main_ram->pins.a.Connect(&address_decoder->pins.a_out);       // connect the address lines to the address decoder
     main_ram->pins.d.Connect(&address_decoder->pins.d);           // connect the data bus to the data transceiver
     main_ram->pins.rw_n.Connect(&cpu->pins.rw_n);                 // connect the read/write line from the cpu
+
+    // connect the main rom, which was created in LoadROM
+    main_rom = make_unique<ROM<u32, u8>>(15, true);               // 2^15 bits, 24-bit address space, latch on high clock signal
+    main_rom->pins.clk.Connect(&peripheral_clock->pins.out);      // get the peripherals clocking at the end of phi2 high
+    main_rom->pins.cs_n.Connect(&address_decoder->pins.rom_cs_n); // connect the CS line to the address decoder logic
+    main_rom->pins.a.Connect(&address_decoder->pins.a_out);       // connect the address lines to the address decoder
+    main_rom->pins.d.Connect(&address_decoder->pins.d);           // connect the data bus to the data transceiver
 
     // connect the reset line to the system
     reset_wire.AssertHigh();  // default reset to high when everything is attached
@@ -242,25 +249,37 @@ void SNESSystem::SystemThreadMain()
 
 bool SNESSystem::LoadROM(string const& file_path_name)
 {
+    // TODO move the loader into its own class once it becomes complex enough
+    // for now this basic image loader is fine
+    string lcase_file_path_name = StringLower(file_path_name);
+    assert(StringEndsWith(lcase_file_path_name, ".bin")); // other formats not yet supported
+
     rom_file_path_name = file_path_name;
-    return false;
+    ifstream is(rom_file_path_name, ios::binary);
+
+    u16 rom_size;
+    u16 load_address;
+    is.read((char *)&load_address, sizeof(load_address));
+    is.read((char *)&rom_size, sizeof(rom_size));
+    cout << "loading rom size $" << hex << rom_size << " bytes to address $" << load_address << endl;
+
+    u8* rom_image = new u8[rom_size];
+    is.read((char *)rom_image, rom_size);
+
+    // load the image
+    main_rom->LoadImage(rom_image, load_address, rom_size);
+
+    delete [] rom_image;
+    return true;
 }
 
 bool SNESSystem::IsROMValid(std::string const& file_path_name, std::istream& is)
 {
-    // TODO this is duplicated, make it a utility function somewhere
-    auto ends_with = [](std::string const& value, std::string const& ending) {
-        if (ending.size() > value.size()) return false;
-        return std::equal(ending.rbegin(), ending.rend(), value.rbegin());
-    };
+    string lcase_file_path_name = StringLower(file_path_name);
 
-    string lcase_file_path_name = file_path_name;
-    std::transform(lcase_file_path_name.begin(), lcase_file_path_name.end(), 
-                   lcase_file_path_name.begin(), [](unsigned char c){ return std::tolower(c); });
-
-    if(ends_with(lcase_file_path_name, ".bin")) {
+    if(StringEndsWith(lcase_file_path_name, ".bin")) {
         return true;
-    } else if(ends_with(lcase_file_path_name, ".smc")) {
+    } else if(StringEndsWith(lcase_file_path_name, ".smc")) {
         assert(false); // TODO
     }
 
