@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <iomanip>
 
 #include "clock_divider.h"
@@ -83,19 +84,20 @@ void SNESSystem::BuildSystemComponents()
     cpu_signal_setup_delay->pins.reset_n.Connect(&reset_wire);
 
     // TEMP let's monitor some wires
-    *cpu->pins.e.signal_changed    += [](Wire*, std::optional<bool> const& new_state) { cout << "E   = " << *new_state << endl; };
-    *cpu->pins.vda.signal_changed  += [](Wire*, std::optional<bool> const& new_state) { cout << "VDA = " << *new_state << endl; };
-    *cpu->pins.vpa.signal_changed  += [](Wire*, std::optional<bool> const& new_state) { cout << "VPA = " << *new_state << endl; };
-    *cpu->pins.mx.signal_changed   += [](Wire*, std::optional<bool> const& new_state) { cout << "MX  = " << *new_state << endl; };
-    *cpu->pins.rw_n.signal_changed += [](Wire*, std::optional<bool> const& new_state) { cout << "RWn = " << *new_state << endl; };
-    *cpu->pins.vp_n.signal_changed += [](Wire*, std::optional<bool> const& new_state) { cout << "VPn = " << *new_state << endl; };
-    *main_ram->pins.cs_n.signal_changed += [](Wire*, std::optional<bool> const& new_state) { cout << "ram CSn = " << *new_state << endl; };
-    *main_ram->pins.rw_n.signal_changed += [](Wire*, std::optional<bool> const& new_state) { cout << "ram RWn = " << *new_state << endl; };
-    *main_ram->pins.d.signal_changed += [](Bus<u8>*, std::optional<u8> const& new_state) { cout << "ram D = $" << hex << setw(2) << (u16)*new_state << endl; };
+    //!*cpu->pins.e.signal_changed    += [](Wire*, std::optional<bool> const& new_state) { cout << "E   = " << *new_state << endl; };
+    //!*cpu->pins.vda.signal_changed  += [](Wire*, std::optional<bool> const& new_state) { cout << "VDA = " << *new_state << endl; };
+    //!*cpu->pins.vpa.signal_changed  += [](Wire*, std::optional<bool> const& new_state) { cout << "VPA = " << *new_state << endl; };
+    //!*cpu->pins.mx.signal_changed   += [](Wire*, std::optional<bool> const& new_state) { cout << "MX  = " << *new_state << endl; };
+    //!*cpu->pins.rw_n.signal_changed += [](Wire*, std::optional<bool> const& new_state) { cout << "RWn = " << *new_state << endl; };
+    //!*cpu->pins.vp_n.signal_changed += [](Wire*, std::optional<bool> const& new_state) { cout << "VPn = " << *new_state << endl; };
+    //!*main_ram->pins.cs_n.signal_changed += [](Wire*, std::optional<bool> const& new_state) { cout << "ram CSn = " << *new_state << endl; };
+    //!*main_ram->pins.rw_n.signal_changed += [](Wire*, std::optional<bool> const& new_state) { cout << "ram RWn = " << *new_state << endl; };
+    //!*main_ram->pins.d.signal_changed += [](Bus<u8>*, std::optional<u8> const& new_state) { cout << "ram D = $" << hex << setw(2) << (u16)*new_state << endl; };
 }
 
 void SNESSystem::WaitForLastThreadCommand()
 {
+    system_thread_stop_clock = true; // if in the RUN state, stop
     while(system_thread_command != CMD_NONE) ;
 }
 
@@ -145,6 +147,21 @@ void SNESSystem::IssueStepCPU()
     system_thread_command_condition.notify_one();
 }
 
+void SNESSystem::IssueRun()
+{
+    WaitForLastThreadCommand();
+    {
+        std::lock_guard<std::mutex> lock(system_thread_command_mutex); // wait for previous command to complete
+        system_thread_command = CMD_RUN;
+        system_thread_stop_clock = false; // clear any previous stop
+    }
+    system_thread_command_condition.notify_one();
+}
+
+void SNESSystem::IssueStop()
+{
+    WaitForLastThreadCommand();
+}
 
 void SNESSystem::SystemThreadMain()
 {
@@ -195,6 +212,27 @@ void SNESSystem::SystemThreadMain()
                 system_clock->Step();
             }
             cout << "[SNESSystem] ==STEP CPU END==" << endl;
+            break;
+
+        case CMD_RUN:
+            cout << "[SNESSystem] ==RUN START==" << endl;
+            {
+                // run the CPU and count the cycles
+                auto startTime = std::chrono::steady_clock::now();
+                u64 clockSteps = 0;
+                for(;!system_thread_stop_clock;) {
+                    system_clock->Step();
+                    clockSteps += 1;
+                }
+
+                // print out the execution speed
+                auto stopTime = std::chrono::steady_clock::now();
+                double deltaTime = (stopTime - startTime) / 1.0s;
+                cout << "[SNESSystem] ran " << clockSteps << " master clock cycles in " << deltaTime << " s ";
+                double clocksPerSecond = (double)clockSteps / deltaTime;
+                cout << "(" << clocksPerSecond << " cycles/sec)" << endl;
+            }
+            cout << "[SNESSystem] ==RUN END==" << endl;
             break;
         }
 

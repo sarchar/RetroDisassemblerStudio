@@ -131,7 +131,7 @@ void SNESDebugger::RenderContent()
 
         INSPECT_SIGNAL(v_u8, "DB=$", system->GetSignalDB, 2, "zz");
         ImGui::SameLine();
-        INSPECT_SIGNAL(v_u8, "A=$", system->GetSignalDB, 4, "zzzz");
+        INSPECT_SIGNAL(v_u16, "A=$", system->GetSignalA, 4, "zzzz");
 
         INSPECT_SIGNAL(v_u8, "RAM_CSn=", system->GetSignalRAMCSn, 1, "z");
 #   undef INSPECT_SIGNAL
@@ -148,8 +148,14 @@ void SNESDebugger::RenderContent()
         }
 
         ImGui::SameLine();
-        if(ImGui::Button("Run")) {
-            cout << "run pressed" << endl;
+        if(system->IsRunning()) {
+            if(ImGui::Button("Stop")) {
+                system->IssueStop();
+            }
+        } else {
+            if(ImGui::Button("Run")) {
+                system->IssueRun();
+            }
         }
 
         if(ImGui::Button("Reset")) {

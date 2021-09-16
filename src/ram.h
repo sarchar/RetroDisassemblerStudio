@@ -44,10 +44,14 @@ RAM<A, D>::RAM(u8 _po2_size, bool _edge)
     // TEMP
     memory[0xFFFC] = 0x00;
     memory[0xFFFD] = 0xF0;
-    memory[0xF000] = 0xEA;
-    memory[0xF001] = 0x4C;
-    memory[0xF002] = 0x00;
-    memory[0xF003] = 0xF0;
+    u16 addr = 0xF000;
+    memory[addr++] = 0xA9;  // LDA #$42
+    memory[addr++] = 0x42;
+    memory[addr++] = 0xEA;  // NOP
+    memory[addr++] = 0x1A;  // INC A
+    memory[addr++] = 0x4C;  // JMP $F002
+    memory[addr++] = 0x02;
+    memory[addr++] = 0xF0;
 
     // default output pins
     pins.d.HighZ();
@@ -79,7 +83,7 @@ void RAM<A, D>::Latch()
 {
     if(!selected) return;
 
-    std::cout << "RAM latch: ";
+    std::cout << "[RAM] latch: ";
 
     A addr = pins.a.Sample() & mask;
 

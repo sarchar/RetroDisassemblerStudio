@@ -38,6 +38,9 @@ public:
     void IssueExitThread();
     void IssueStepSystem();
     void IssueStepCPU();
+    void IssueRun();
+    void IssueStop();
+    inline bool IsRunning() const { return system_thread_command == CMD_RUN; };
 
     inline u8  GetE()     const { return cpu->GetE();     }
     inline u8  GetFlags() const { return cpu->GetFlags(); }
@@ -91,6 +94,9 @@ private:
         CMD_RESET,
         CMD_EXIT_THREAD,
         CMD_STEP_SYSTEM,
-        CMD_STEP_CPU
+        CMD_STEP_CPU,
+        CMD_RUN
     } system_thread_command;
+
+    bool system_thread_stop_clock;
 };

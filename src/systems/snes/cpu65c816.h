@@ -110,27 +110,97 @@ private:
         };
     } registers;
 
-    enum INSTRUCTION_CYCLE {
-        IC_VECTOR_PULL_LOW,
-        IC_VECTOR_PULL_HIGH,
-        IC_OPCODE_FETCH,
-        IC_WORD_IMM_LOW,
-        IC_WORD_IMM_HIGH,
-        IC_STORE_PC_OPCODE_FETCH,
-        IC_DUMMY,
-        IC_DEAD
-    };
-    INSTRUCTION_CYCLE const* current_instruction_cycle_set;
-    u8                       current_instruction_cycle_set_pc;
-    INSTRUCTION_CYCLE        instruction_cycle;
+    typedef u64 UC_OPCODE;
 
+    // bits 0-2
+    static int const UC_FETCH_OPCODE  = 0 << 0;
+    static int const UC_FETCH_MEMORY  = 1 << 0;
+    static int const UC_FETCH_PC      = 2 << 0;
+    static int const UC_FETCH_A       = 3 << 0;
+    static int const UC_FETCH_X       = 4 << 0;
+    static int const UC_FETCH_Y       = 5 << 0;
+
+    // bits 3-5
+    // TODO could have a store/load bit and this selects the register dest/src
+    static int const UC_STORE_MEMORY  = 1 << 3;
+    static int const UC_STORE_PC      = 2 << 3;
+    static int const UC_STORE_A       = 3 << 3;
+    static int const UC_STORE_X       = 4 << 3;
+    static int const UC_STORE_Y       = 5 << 3;
+
+    // bits 6-8
+    static int const UC_NOP           = 0 << 6;
+    static int const UC_DEAD          = 1 << 6;
+    static int const UC_INC           = 2 << 6;
+
+    UC_OPCODE const* current_uc_set;
+    u8               current_uc_set_pc;
+    UC_OPCODE        current_uc_opcode;
+
+    enum ADDRESSING_MODE {
+        AM_IMPLIED = 0,
+        AM_ACCUMULATOR,
+        AM_IMMEDIATE_BYTE,
+        // AM_IMMEDIATE_M / AM_IMMEDIATE_X ? byte or word depending on M and X bits
+        AM_IMMEDIATE_WORD,
+        AM_VECTOR,
+        AM_ABSOLUTE
+    };
+
+    ADDRESSING_MODE current_addressing_mode;
+
+    enum MEMORY_STEP {
+        MS_INIT = 0,
+        MS_FETCH_OPERAND_LOW,
+        MS_FETCH_OPERAND_HIGH,
+        MS_FETCH_OPERAND_BANK,
+        MS_FETCH_VECTOR_LOW,
+        MS_FETCH_VECTOR_HIGH,
+        // TODO indexed adds, etc
+        // TODO stores, etc
+        MS_DONE
+    };
+
+    MEMORY_STEP current_memory_step;
+
+    enum INSTRUCTION_CYCLE {
+    //    IC_VECTOR_PULL_LOW,
+    //    IC_VECTOR_PULL_HIGH,
+    //    IC_OPCODE_FETCH,
+    //    IC_STORE_PC_OPCODE_FETCH,
+    //    IC_STORE_A,
+    //    IC_BYTE_IMM,
+    //    IC_WORD_IMM_LOW,
+    //    IC_WORD_IMM_HIGH,
+    //    IC_DUMMY,
+    //    IC_DEAD
+    };
+
+    //INSTRUCTION_CYCLE const* current_instruction_cycle_set;
+    //u8                       current_instruction_cycle_set_pc;
+    //INSTRUCTION_CYCLE        instruction_cycle;
+
+    bool vector_pull;
+    u16  vector_address;
+
+    u8  data_fetch_bank;
     u16 data_fetch_address;
-    u16 word_immediate;
+
+    union {
+        u8  memory_byte;
+        u16 memory_word;
+        struct {
+            u16 _unused;
+            u8  memory_bank;
+        };
+    };
 
 private:
-    static INSTRUCTION_CYCLE const VECTOR_PULL_UC[];
-    static INSTRUCTION_CYCLE const NOP_UC[];
-    static INSTRUCTION_CYCLE const JMP_UC[];
-    static INSTRUCTION_CYCLE const DEAD_INSTRUCTION[];
-    static INSTRUCTION_CYCLE const * const INSTRUCTION_UCs[256];
+    static UC_OPCODE const INC_UC[];
+    static UC_OPCODE const JMP_UC[];
+    static UC_OPCODE const LDA_UC[];
+    static UC_OPCODE const NOP_UC[];
+    static UC_OPCODE const DEAD_INSTRUCTION[];
+    static UC_OPCODE const * const INSTRUCTION_UCs[256];
+    static ADDRESSING_MODE const INSTRUCTION_ADDRESSING_MODES[256];
 };
