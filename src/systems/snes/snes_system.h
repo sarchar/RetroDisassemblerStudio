@@ -51,6 +51,10 @@ public:
     inline u8  GetXL()    const { return cpu->GetXL();    }
     inline u16 GetY()     const { return cpu->GetY();     }
     inline u8  GetYL()    const { return cpu->GetYL();    }
+    inline u8  GetPBR()   const { return cpu->GetPBR();   }
+    inline u8  GetDBR()   const { return cpu->GetDBR();   }
+    inline u16 GetD()     const { return cpu->GetD();     }
+    inline u16 GetS()     const { return cpu->GetS();     }
 
     inline std::optional<bool> const& GetSignalRWn() const { return cpu->pins.rw_n.Get(); }
     inline std::optional<bool> const& GetSignalVPn() const { return cpu->pins.vp_n.Get(); }
@@ -63,6 +67,7 @@ public:
 
     inline std::optional<u8>   const& GetSignalDB()  const { return cpu->pins.db.Get(); }
     inline std::optional<u16>  const& GetSignalA()   const { return cpu->pins.a.Get(); }
+
 
     inline std::optional<bool> const& GetADSignalRAMCSn() const { return address_decoder->pins.ram_cs_n.Get(); }
     inline std::optional<u8>   const& GetADSignalD()      const { return address_decoder->pins.d.Get(); }

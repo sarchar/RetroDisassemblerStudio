@@ -44,21 +44,27 @@ public:
 
     // Debugging interface
 public:
-    bool GetE() const { return registers.e; }
-    u8   GetFlags() const { return registers.flags; }
-
-    u16  GetPC() const { return registers.pc; }
-    u8   GetA()  const { return registers.a; }
-    u8   GetB()  const { return registers.b; }
-    u16  GetC()  const { return registers.c; }
-    u16  GetX()  const { return registers.x; }
-    u8   GetXL() const { return registers.xl; }
-    u16  GetY()  const { return registers.y; }
-    u8   GetYL() const { return registers.yl; }
+    inline bool GetE()     const { return registers.e; }
+    inline u8   GetFlags() const { return registers.flags; }
+    inline u16  GetPC()    const { return registers.pc; }
+    inline u8   GetA()     const { return registers.a; }
+    inline u8   GetB()     const { return registers.b; }
+    inline u16  GetC()     const { return registers.c; }
+    inline u16  GetX()     const { return registers.x; }
+    inline u8   GetXL()    const { return registers.xl; }
+    inline u16  GetY()     const { return registers.y; }
+    inline u8   GetYL()    const { return registers.yl; }
+    inline u8   GetPBR()   const { return registers.pbr; }
+    inline u8   GetDBR()   const { return registers.dbr; }
+    inline u16  GetD()     const { return registers.d; }
+    inline u16  GetS()     const { return registers.s; }
 
 private:
     inline bool IsReadCycle()  const { return (pins.rw_n.Sample() && (pins.vda.Sample() || pins.vpa.Sample())); }
     inline bool IsWriteCycle() const { return (!pins.rw_n.Sample() && (pins.vda.Sample() || pins.vpa.Sample())); }
+
+    inline bool IsWordMemoryEnabled() const { return (registers.e == 0 && (registers.flags & CPU_FLAG_M) == 0); }
+    inline bool IsWordIndexEnabled()  const { return (registers.e == 0 && (registers.flags & CPU_FLAG_X) == 0); }
 
     void StartReset();
     void Reset();
@@ -67,6 +73,8 @@ private:
     void FinishInstructionCycle(u8);
     void StartInstructionCycle();
     void SetupPinsLowCycle();
+    void SetupPinsLowCycleForFetch();
+    void SetupPinsLowCycleForStore();
 
     void ClockRisingEdge();
     void SetupPinsHighCycle();
@@ -113,25 +121,32 @@ private:
     typedef u64 UC_OPCODE;
 
     // bits 0-2
-    static int const UC_FETCH_OPCODE  = 1 << 0;
-    static int const UC_FETCH_MEMORY  = 2 << 0;
-    static int const UC_FETCH_PC      = 3 << 0;
-    static int const UC_FETCH_A       = 4 << 0;
-    static int const UC_FETCH_X       = 5 << 0;
-    static int const UC_FETCH_Y       = 6 << 0;
+    static unsigned int const UC_FETCH_MASK    = (0x07 << 0);
+    static unsigned int const UC_FETCH_NONE    = 0 << 0;
+    static unsigned int const UC_FETCH_OPCODE  = 1 << 0;
+    static unsigned int const UC_FETCH_MEMORY  = 2 << 0;
+    static unsigned int const UC_FETCH_PC      = 3 << 0;
+    static unsigned int const UC_FETCH_A       = 4 << 0;
+    static unsigned int const UC_FETCH_X       = 5 << 0;
+    static unsigned int const UC_FETCH_Y       = 6 << 0;
+    static unsigned int const UC_FETCH_D       = 7 << 0;
 
     // bits 3-5
     // TODO could have a store/load bit and this selects the register dest/src
-    static int const UC_STORE_MEMORY  = 1 << 3;
-    static int const UC_STORE_PC      = 2 << 3;
-    static int const UC_STORE_A       = 3 << 3;
-    static int const UC_STORE_X       = 4 << 3;
-    static int const UC_STORE_Y       = 5 << 3;
+    static unsigned int const UC_STORE_MASK    = (0x07 << 3);
+    static unsigned int const UC_STORE_NONE    = 0 << 0;
+    static unsigned int const UC_STORE_MEMORY  = 2 << 3;
+    static unsigned int const UC_STORE_PC      = 3 << 3;
+    static unsigned int const UC_STORE_A       = 4 << 3;
+    static unsigned int const UC_STORE_X       = 5 << 3;
+    static unsigned int const UC_STORE_Y       = 6 << 3;
+    static unsigned int const UC_STORE_D       = 7 << 3;
 
     // bits 6-8
-    static int const UC_NOP           = 0 << 6;
-    static int const UC_DEAD          = 1 << 6;
-    static int const UC_INC           = 2 << 6;
+    static unsigned int const UC_OPCODE_MASK   = (0x03 << 6);
+    static unsigned int const UC_NOP           = 0 << 6;
+    static unsigned int const UC_DEAD          = 1 << 6;
+    static unsigned int const UC_INC           = 2 << 6;
 
     UC_OPCODE const* current_uc_set;
     u8               current_uc_set_pc;
@@ -143,26 +158,29 @@ private:
         AM_IMMEDIATE_BYTE,
         // AM_IMMEDIATE_M / AM_IMMEDIATE_X ? byte or word depending on M and X bits
         AM_IMMEDIATE_WORD,
-        AM_VECTOR,
+        AM_VECTOR,         // internal mode for fetching vectors
         AM_DIRECT_PAGE,
-        AM_ABSOLUTE
+        AM_ABSOLUTE,
+        AM_STACK
     };
 
     ADDRESSING_MODE current_addressing_mode;
 
     enum MEMORY_STEP {
         MS_INIT = 0,
+        MS_FETCH_VECTOR_LOW,
+        MS_FETCH_VECTOR_HIGH,
         MS_FETCH_OPERAND_LOW,
         MS_FETCH_OPERAND_HIGH,
         MS_FETCH_OPERAND_BANK,
-        MS_FETCH_VECTOR_LOW,
-        MS_FETCH_VECTOR_HIGH,
         MS_FETCH_MEMORY_LOW,
         // TODO indexed adds, etc
         // TODO stores, etc
         MS_ADD_D_REGISTER,
         MS_MODIFY,
-        MS_WRITE_MEMORY_LOW
+        MS_WRITE_MEMORY_LOW,
+        MS_WRITE_STACK_LOW,
+        MS_WRITE_STACK_HIGH
     };
 
     MEMORY_STEP current_memory_step;
@@ -187,23 +205,31 @@ private:
     bool vector_pull;
     u16  vector_address;
 
-    u8  data_fetch_bank;
-    u16 data_fetch_address;
+    u8  data_w_value;
+    u8  data_rw_bank;
+    u16 data_rw_address;
 
+    // This union will break on little endian machines, but that's a long way off for now
     union {
-        u8  memory_byte;
-        u16 memory_word;
         struct {
-            u16 _unused;
-            u8  memory_bank;
+            u8  as_byte;
+            u8  high_byte;
+            u8  bank_byte;
         };
-    };
+        struct {
+            u16 as_word;
+            u8  _unused0;
+        };
+    } intermediate_data;
+
+    unsigned int intermediate_data_size;
 
 private:
     static UC_OPCODE const INC_UC[];
     static UC_OPCODE const JMP_UC[];
     static UC_OPCODE const LDA_UC[];
     static UC_OPCODE const NOP_UC[];
+    static UC_OPCODE const PHD_UC[];
     static UC_OPCODE const DEAD_INSTRUCTION[];
     static UC_OPCODE const * const INSTRUCTION_UCs[256];
     static ADDRESSING_MODE const INSTRUCTION_ADDRESSING_MODES[256];

@@ -101,6 +101,16 @@ void SNESDebugger::RenderContent()
             INSPECT_REG(v_u8, "Y=$", system->GetYL, 2);
         } else {
         }
+
+        // in both emu and native mode, but fixed values in emu mode
+        INSPECT_REG(v_u8, "PBR=$", system->GetPBR, 2);
+        ImGui::SameLine();
+        INSPECT_REG(v_u8, "DBR=$", system->GetDBR, 2);
+        ImGui::SameLine();
+        INSPECT_REG(v_u16, "D=$", system->GetD, 4);
+        ImGui::SameLine();
+        INSPECT_REG(v_u16, "S=$", system->GetS, 4);
+
 #   undef INSPECT_REG
     }
 
@@ -135,7 +145,7 @@ void SNESDebugger::RenderContent()
 
         ImGui::Separator();
         ImGui::Text("SNESAddressDecoder");
-        INSPECT_SIGNAL(v_u8, "D=", system->GetADSignalD, 1, "zz");
+        INSPECT_SIGNAL(v_u8, "D=$", system->GetADSignalD, 2, "zz");
         ImGui::SameLine();
         INSPECT_SIGNAL(v_bool, "RAM_CSn=", system->GetADSignalRAMCSn, 1, "z");
 #   undef INSPECT_SIGNAL

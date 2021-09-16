@@ -178,7 +178,6 @@ void SNESSystem::SystemThreadMain()
 
         // wait until we get a command mutex
         system_thread_command_condition.wait(lock, [=, this]{ return this->system_thread_command != CMD_NONE; });
-        cout << "[SNESSystem] got thread command " << system_thread_command << endl;
 
         switch(system_thread_command) {
         case CMD_NONE:
@@ -236,7 +235,6 @@ void SNESSystem::SystemThreadMain()
             break;
         }
 
-        cout << "[SNESSystem] system thread command done" << endl;
         system_thread_command = CMD_NONE;
         lock.unlock();
     }
