@@ -41,7 +41,7 @@ void CPU65C816::Reset()
 {
     cout << "[cpu65c816] cpu reset" << endl;
 
-    registers.d      = 0x1234; //0;
+    registers.d      = 0;
     registers.dbr    = 0;
     registers.pbr    = 0;
     registers.sh     = 0x01; // high byte of S
