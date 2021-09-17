@@ -138,9 +138,19 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
         case UC_NOP:
             break;
 
+        case UC_DEC:
+            // decrement the value
+            intermediate_data.as_byte -= 1;
+            break;
+
         case UC_INC:
-            // increment the word value
-            intermediate_data.as_word += 1;
+            // increment the value
+            intermediate_data.as_byte += 1;
+            break;
+
+        case UC_EOR:
+            // eXclusive OR A with memory
+            intermediate_data.as_byte ^= registers.a;
             break;
         }
 
@@ -176,6 +186,9 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
                 break;
 
             case AM_STACK:
+                // stack write operations have an extra IO cycle before the actual write (that's the previous
+                // cycle that's finishing right now).  Now we move onto the first stack write
+
                 // UC_STORE_MEMORY with addressing mode AM_STACK implies a push
                 // TODO determine size of memory and push HIGH first, since stack bytes are written in reverse order
                 if(intermediate_data_size == 2) {
@@ -190,7 +203,7 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
                 operand_address.as_word = registers.s;
 
                 // post-decrement stack pointer
-                registers.s -= 1;
+                registers.sl -= 1;
                 break;
 
             default:
@@ -240,6 +253,33 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
             current_memory_step = MS_INIT;
             break;
 
+        case UC_STORE_X:
+            cout << "[cpu65c816] storing byte into X" << endl;
+            // TODO determine size of A
+            //!if(IsWordMemoryEnabled()) {
+            //!    registers.x = intermediate_data.as_word;
+            //!} else {
+                registers.xl = intermediate_data.as_byte;
+            //!}
+
+            // move onto the next uC opcode
+            current_memory_step = MS_INIT;
+            break;
+
+        case UC_STORE_S:
+            cout << "[cpu65c816] storing byte into S" << endl;
+            // TODO determine size of A
+            //!if(IsWordMemoryEnabled()) {
+            //!    registers.x = intermediate_data.as_word;
+            //!} else {
+                registers.sl = intermediate_data.as_byte;
+                registers.sh = 0x01;
+            //!}
+
+            // move onto the next uC opcode
+            current_memory_step = MS_INIT;
+            break;
+
         case UC_STORE_NONE:
             // move onto the next uC opcode
             current_memory_step = MS_INIT;
@@ -273,7 +313,7 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
             operand_address.as_word = registers.s;
 
             // post-decrement stack pointer
-            registers.s -= 1;
+            registers.sl -= 1;
 
             current_uc_set_pc--;
             break;
@@ -409,6 +449,19 @@ void CPU65C816::StepMemoryAccessCycle(bool is_fetch, u8 data_line)
         current_memory_step = MS_MODIFY;
         break;
 
+    case MS_FETCH_STACK_LOW:
+        // latch the stack low byte
+        intermediate_data.as_byte = data_line;
+
+        // determine if we need to read the high byte
+        if(intermediate_data_size == 2) {
+            current_memory_step = MS_FETCH_STACK_HIGH;
+            current_uc_set_pc--;
+        } else {
+            current_memory_step = MS_MODIFY;
+        }
+        break;
+
     case MS_ADD_D_REGISTER:
         operand_address.as_word += registers.d;
 
@@ -432,6 +485,9 @@ void CPU65C816::StartInstructionCycle()
         // mode of the instruction tells us what to do
         if(((current_uc_opcode & UC_FETCH_MASK) == UC_FETCH_MEMORY)
             || (current_uc_opcode & UC_STORE_MASK) == UC_STORE_MEMORY) {
+
+            bool is_fetch = ((current_uc_opcode & UC_FETCH_MASK) == UC_FETCH_MEMORY);
+
             switch(current_addressing_mode) {
                 case AM_VECTOR:
                     current_memory_step = MS_FETCH_VECTOR_LOW;
@@ -441,6 +497,40 @@ void CPU65C816::StartInstructionCycle()
                 case AM_IMMEDIATE_WORD:
                 case AM_DIRECT_PAGE:
                     current_memory_step = MS_FETCH_OPERAND_LOW;
+                    break;
+
+                case AM_STACK:
+                    if(is_fetch) {
+                        // TODO stack fetch cycle requires two(!) IO cycles, maybe to determine how many data bytes to pull
+                        // or maybe to set up S. for now we are wrong but will need to be fixed soon
+                        // maybe with MS_FETCH_STACK_GET_ITEM_SIZE and MS_FETCH_STACK_SETUP ?
+                        // see item 22b on page 43 in the datasheet. Stack writes are currently implemented correctly.
+
+                        // TODO determine # of bytes to pull later?
+                        switch(current_uc_opcode & UC_STORE_MASK) {
+                        case UC_STORE_A:
+                        case UC_STORE_X:
+                        case UC_STORE_Y:
+                            intermediate_data_size = 1;
+                            break;
+                        case UC_STORE_D:
+                            intermediate_data_size = 2;
+                            break;
+                        default:
+                            assert(false); // unknown store value for stack
+                            break;
+                        }
+
+                        // increment S (TODO might be done on the IO cycle)
+                        registers.sl += 1;
+
+                        // set up the read address
+                        operand_address.bank_byte = 0; // all stack operations in bank 0
+                        operand_address.as_word   = registers.s;
+
+                        // always start with the low stack byte
+                        current_memory_step = MS_FETCH_STACK_LOW;
+                    }
                     break;
 
                 case AM_ACCUMULATOR:
@@ -479,9 +569,36 @@ void CPU65C816::StartInstructionCycle()
             // UC_FETCH_ZERO relies on it
             break;
 
+        case UC_FETCH_A:
+            cout << "[cpu65c816] fetching A" << endl;
+            intermediate_data.as_byte = registers.a;
+            intermediate_data_size = 1;
+
+            // skip any memory fetch and immediately perform the operation
+            current_memory_step = MS_MODIFY;
+            break;
+
+        case UC_FETCH_X:
+            cout << "[cpu65c816] fetching X" << endl;
+            intermediate_data.as_byte = registers.xl;
+            intermediate_data_size = 1;
+
+            // skip any memory fetch and immediately perform the operation
+            current_memory_step = MS_MODIFY;
+            break;
+
         case UC_FETCH_D:
             cout << "[cpu65c816] fetching D" << endl;
             intermediate_data.as_word = registers.d;
+            intermediate_data_size = 2;
+
+            // skip any memory fetch and immediately perform the operation
+            current_memory_step = MS_MODIFY;
+            break;
+
+        case UC_FETCH_S:
+            cout << "[cpu65c816] fetching S" << endl;
+            intermediate_data.as_word = registers.s;
             intermediate_data_size = 2;
 
             // skip any memory fetch and immediately perform the operation
@@ -556,6 +673,15 @@ void CPU65C816::SetupPinsLowCycleForFetch()
             data_rw_address = operand_address.as_word + (current_memory_step - MS_FETCH_VALUE_LOW);
             break;
 
+        case MS_FETCH_STACK_LOW:
+        case MS_FETCH_STACK_HIGH:
+            cout << "stack byte " << (current_memory_step - MS_FETCH_STACK_LOW) << endl;
+            pins.vda.AssertHigh(); // assert VDA
+            // operand_address is the S register, which is incremented in FinishInstructionCycle() us as we read stack values
+            data_rw_bank    = operand_address.bank_byte;
+            data_rw_address = operand_address.as_word;
+            break;
+
         case MS_ADD_D_REGISTER:
             cout << "adding D register to intermediate address (no fetch)" << endl;
             break;
@@ -607,9 +733,9 @@ void CPU65C816::SetupPinsLowCycleForStore()
             data_rw_address = operand_address.as_word + (current_memory_step - MS_WRITE_VALUE_LOW);
             break;
 
-        case MS_WRITE_STACK_LOW:
         case MS_WRITE_STACK_HIGH:
-            cout << "stack address byte " << (current_memory_step - MS_WRITE_STACK_LOW) << endl;
+        case MS_WRITE_STACK_LOW:
+            cout << "stack address byte " << (current_memory_step - MS_WRITE_STACK_HIGH) << endl;
             pins.vda.AssertHigh(); // assert VDA
 
             // the stack register will change, so we don't need an offset

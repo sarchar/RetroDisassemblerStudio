@@ -132,7 +132,8 @@ private:
     static unsigned int const UC_FETCH_X       = 5 << UC_FETCH_SHIFT;
     static unsigned int const UC_FETCH_Y       = 6 << UC_FETCH_SHIFT;
     static unsigned int const UC_FETCH_D       = 7 << UC_FETCH_SHIFT;
-    static unsigned int const UC_FETCH_ZERO    = 8 << UC_FETCH_SHIFT;
+    static unsigned int const UC_FETCH_S       = 8 << UC_FETCH_SHIFT;
+    static unsigned int const UC_FETCH_ZERO    = 9 << UC_FETCH_SHIFT;
 
     // bits 4-6
     static unsigned int const UC_STORE_SHIFT   = 4;
@@ -144,14 +145,17 @@ private:
     static unsigned int const UC_STORE_X       = 5 << UC_STORE_SHIFT;
     static unsigned int const UC_STORE_Y       = 6 << UC_STORE_SHIFT;
     static unsigned int const UC_STORE_D       = 7 << UC_STORE_SHIFT;
-    static unsigned int const UC_STORE_IR      = 8 << UC_STORE_SHIFT;
+    static unsigned int const UC_STORE_S       = 8 << UC_STORE_SHIFT;
+    static unsigned int const UC_STORE_IR      = 9 << UC_STORE_SHIFT;
 
-    // bits 8-10
+    // bits 8-11
     static unsigned int const UC_OPCODE_SHIFT  = 8;
-    static unsigned int const UC_OPCODE_MASK   = (0x03 << UC_OPCODE_SHIFT);
+    static unsigned int const UC_OPCODE_MASK   = (0x07 << UC_OPCODE_SHIFT);
     static unsigned int const UC_NOP           = 0 << UC_OPCODE_SHIFT;
-    static unsigned int const UC_DEAD          = 1 << UC_OPCODE_SHIFT;
+    static unsigned int const UC_DEC           = 1 << UC_OPCODE_SHIFT;
     static unsigned int const UC_INC           = 2 << UC_OPCODE_SHIFT;
+    static unsigned int const UC_EOR           = 3 << UC_OPCODE_SHIFT;
+    static unsigned int const UC_DEAD          = 4 << UC_OPCODE_SHIFT;
 
     UC_OPCODE const* current_uc_set;
     u8               current_uc_set_pc;
@@ -179,13 +183,15 @@ private:
         MS_FETCH_OPERAND_HIGH,
         MS_FETCH_OPERAND_BANK,
         MS_FETCH_VALUE_LOW,
+        MS_FETCH_STACK_LOW,
+        MS_FETCH_STACK_HIGH,
         // TODO indexed adds, etc
         // TODO stores, etc
         MS_ADD_D_REGISTER,
         MS_MODIFY,
         MS_WRITE_VALUE_LOW,
-        MS_WRITE_STACK_LOW,
-        MS_WRITE_STACK_HIGH
+        MS_WRITE_STACK_HIGH,
+        MS_WRITE_STACK_LOW
     };
 
     MEMORY_STEP current_memory_step;
@@ -229,12 +235,18 @@ private:
     unsigned int intermediate_data_size;
 
 private:
+    static UC_OPCODE const DECA_UC[];
+    static UC_OPCODE const EOR_UC[];
     static UC_OPCODE const INC_UC[];
     static UC_OPCODE const JMP_UC[];
     static UC_OPCODE const LDA_UC[];
+    static UC_OPCODE const LDX_UC[];
     static UC_OPCODE const NOP_UC[];
+    static UC_OPCODE const PHA_UC[];
     static UC_OPCODE const PHD_UC[];
+    static UC_OPCODE const PLA_UC[];
     static UC_OPCODE const STZ_UC[];
+    static UC_OPCODE const TXS_UC[];
     static UC_OPCODE const DEAD_INSTRUCTION[];
     static UC_OPCODE const * const INSTRUCTION_UCs[256];
     static ADDRESSING_MODE const INSTRUCTION_ADDRESSING_MODES[256];
