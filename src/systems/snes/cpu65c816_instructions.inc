@@ -26,6 +26,9 @@ CPU65C816::UC_OPCODE const
     CPU65C816::NOP_UC[]           = {                   UC_NOP                  , UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
+    CPU65C816::ORA_UC[]           = { UC_FETCH_MEMORY | UC_ORA | UC_STORE_A     , UC_FETCH_OPCODE | UC_STORE_IR };
+
+CPU65C816::UC_OPCODE const
     CPU65C816::PHA_UC[]           = { UC_FETCH_A      | UC_NOP | UC_STORE_MEMORY, UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
@@ -54,7 +57,7 @@ CPU65C816::UC_OPCODE const * const CPU65C816::INSTRUCTION_UCs[256] = {
     // 08: PHP        ORA #             ASL A             PHD
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, PHD_UC, 
     // 0C: TSB a      ORA a             ASL a             ORA al
-    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, ORA_UC          , DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 10: BPL r      ORA (d),y         ORA (d)           ORA (d,s),y
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 14: TRB d      ORA d,x           ASL d,x           ORA [d],y
@@ -185,7 +188,7 @@ CPU65C816::ADDRESSING_MODE const CPU65C816::INSTRUCTION_ADDRESSING_MODES[256] = 
     // 08: PHP         ORA #              ASL A                PHD
     AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED         , AM_STACK  ,
     // 0C: TSB a       ORA a              ASL a                ORA al
-    AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED         , AM_IMPLIED,
+    AM_IMPLIED       , AM_ABSOLUTE      , AM_IMPLIED         , AM_IMPLIED,
     // 10: BPL r       ORA (d),y          ORA (d)              ORA (d,s),y
     AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED         , AM_IMPLIED,
     // 14: TRB d       ORA d,x            ASL d,x              ORA [d],y

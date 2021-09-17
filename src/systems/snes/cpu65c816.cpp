@@ -157,6 +157,11 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
             intermediate_data.as_byte ^= registers.a;
             break;
 
+        case UC_ORA:
+            // OR A with memory
+            intermediate_data.as_byte |= registers.a;
+            break;
+
         // case UC_XCE:
         // TODO When switching from emulation to native mode the processor replaces the B BREAK flag 
         // and bit 5 with the 65816 M and X flags, and sets them to one. 
@@ -460,6 +465,7 @@ bool CPU65C816::ShouldFetchOperandHigh()
         return false;
 
     case AM_IMMEDIATE_WORD:
+    case AM_ABSOLUTE:
         return true;
 
     default:
@@ -476,6 +482,7 @@ bool CPU65C816::ShouldFetchOperandBank()
     case AM_DIRECT_PAGE:
     case AM_DIRECT_INDEXED_X:
     case AM_DIRECT_INDEXED_Y:
+    case AM_ABSOLUTE:
         return false;
         break;
 
@@ -534,6 +541,17 @@ void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch)
         } else {
             SetMemoryStepAfterDirectPageAdded(is_memory_fetch);
         }
+        break;
+
+    case AM_ABSOLUTE:
+        // absolute uses data bank
+        operand_address.bank_byte = registers.dbr;
+
+        // TODO move onto the next step, which will depend on the addressing mode
+        //! SetMemoryStepAfterAbsoluteOperand();
+        // for now, we will just read memory
+        current_memory_step = MS_FETCH_VALUE_LOW;
+        current_uc_set_pc--;
         break;
 
     default:
@@ -614,6 +632,7 @@ void CPU65C816::StartInstructionCycle()
                 case AM_DIRECT_PAGE:
                 case AM_DIRECT_INDEXED_X:
                 case AM_DIRECT_INDEXED_Y:
+                case AM_ABSOLUTE:
                     current_memory_step = MS_FETCH_OPERAND_LOW;
                     break;
 

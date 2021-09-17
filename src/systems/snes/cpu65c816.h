@@ -161,7 +161,8 @@ private:
     static unsigned int const UC_DEC           = 1 << UC_OPCODE_SHIFT;
     static unsigned int const UC_INC           = 2 << UC_OPCODE_SHIFT;
     static unsigned int const UC_EOR           = 3 << UC_OPCODE_SHIFT;
-    static unsigned int const UC_DEAD          = 4 << UC_OPCODE_SHIFT;
+    static unsigned int const UC_ORA           = 4 << UC_OPCODE_SHIFT;
+    static unsigned int const UC_DEAD          = 5 << UC_OPCODE_SHIFT;
 
     UC_OPCODE const* current_uc_set;
     u8               current_uc_set_pc;
@@ -263,6 +264,7 @@ private:
     static UC_OPCODE const LDX_UC[];
     static UC_OPCODE const LDY_UC[];
     static UC_OPCODE const NOP_UC[];
+    static UC_OPCODE const ORA_UC[];
     static UC_OPCODE const PHA_UC[];
     static UC_OPCODE const PHD_UC[];
     static UC_OPCODE const PLA_UC[];

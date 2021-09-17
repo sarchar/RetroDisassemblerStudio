@@ -3,3 +3,4 @@ csbcasm -f mem test_01.asm test_01.bin --list test_01.lst
 csbcasm -f mem test_02.asm test_02.bin --list test_02.lst
 csbcasm -f mem test_03.asm test_03.bin --list test_03.lst
 csbcasm -f mem test_04.asm test_04.bin --list test_04.lst
+csbcasm -f mem test_05.asm test_05.bin --list test_05.lst
