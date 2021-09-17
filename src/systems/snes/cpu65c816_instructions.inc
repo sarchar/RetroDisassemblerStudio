@@ -20,6 +20,9 @@ CPU65C816::UC_OPCODE const
     CPU65C816::LDX_UC[]           = { UC_FETCH_MEMORY | UC_NOP | UC_STORE_X     , UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
+    CPU65C816::LDY_UC[]           = { UC_FETCH_MEMORY | UC_NOP | UC_STORE_Y     , UC_FETCH_OPCODE | UC_STORE_IR };
+
+CPU65C816::UC_OPCODE const
     CPU65C816::NOP_UC[]           = {                   UC_NOP                  , UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
@@ -125,7 +128,7 @@ CPU65C816::UC_OPCODE const * const CPU65C816::INSTRUCTION_UCs[256] = {
     // 9C: STZ a      STA a,x           STZ a,x           STA al,x
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // A0: LDY #      LDA (d,x)         LDX #             LDA d,s
-    DEAD_INSTRUCTION, DEAD_INSTRUCTION, LDX_UC          , DEAD_INSTRUCTION, 
+    LDY_UC          , DEAD_INSTRUCTION, LDX_UC          , DEAD_INSTRUCTION, 
     // A4: LDY d      LDA d             LDX d             LDA [d]
     DEAD_INSTRUCTION, LDA_UC          , DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // A8: TAY        LDA #             TAX               PLD
@@ -135,7 +138,7 @@ CPU65C816::UC_OPCODE const * const CPU65C816::INSTRUCTION_UCs[256] = {
     // B0: BCS r      LDA (d),y         LDA (d)           LDY (d,s),y
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // B4: LDA d,x    LDY d,x           LDX d,y           LDA [d],y
-    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, LDX_UC          , DEAD_INSTRUCTION, 
     // B8: CLV        LDA a,y           TSX               TYX
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // BC: LDY a,x    LDA a,x           LDX a,y           LDA al,x
@@ -256,7 +259,7 @@ CPU65C816::ADDRESSING_MODE const CPU65C816::INSTRUCTION_ADDRESSING_MODES[256] = 
     // 9C: STZ a       STA a,x            STZ a,x              STA al,x
     AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED         , AM_IMPLIED,
     // A0: LDY #       LDA (d,x)          LDX #                LDA d,s
-    AM_IMPLIED       , AM_IMPLIED       , AM_IMMEDIATE_BYTE  , AM_IMPLIED,
+    AM_IMMEDIATE_BYTE, AM_IMPLIED       , AM_IMMEDIATE_BYTE  , AM_IMPLIED,
     // A4: LDY d       LDA d              LDX d                LDA [d]
     AM_IMPLIED       , AM_DIRECT_PAGE   , AM_IMPLIED         , AM_IMPLIED,
     // A8: TAY         LDA #              TAX                  PLD
@@ -266,7 +269,7 @@ CPU65C816::ADDRESSING_MODE const CPU65C816::INSTRUCTION_ADDRESSING_MODES[256] = 
     // B0: BCS r       LDA (d),y          LDA (d)              LDY (d,s),y
     AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED         , AM_IMPLIED,
     // B4: LDA d,x     LDY d,x            LDX d,y              LDA [d],y
-    AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED         , AM_IMPLIED,
+    AM_IMPLIED       , AM_IMPLIED       , AM_DIRECT_INDEXED_Y, AM_IMPLIED,
     // B8: CLV         LDA a,y            TSX                  TYX
     AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED         , AM_IMPLIED,
     // BC: LDY a,x     LDA a,x            LDX a,y              LDA al,x
