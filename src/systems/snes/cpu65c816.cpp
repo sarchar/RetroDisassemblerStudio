@@ -98,13 +98,13 @@ void CPU65C816::ClockFallingEdge()
 void CPU65C816::FinishInstructionCycle(u8 data_line)
 {
     // apply any memory fetch and store operations
-    if(current_memory_step < MS_MODIFY) {
+    if(current_memory_step < MS_MODIFY_WAIT) {
         // for instructions that require a computed memory address,
         // finish the current step and perform the next step
-        if(((current_uc_opcode & UC_FETCH_MASK) == UC_FETCH_MEMORY)
-            || (current_uc_opcode & UC_STORE_MASK) == UC_STORE_MEMORY) {
-            bool is_fetch = ((current_uc_opcode & UC_FETCH_MASK) == UC_FETCH_MEMORY);
-            StepMemoryAccessCycle(is_fetch, data_line);
+        bool is_memory_fetch = ((current_uc_opcode & UC_FETCH_MASK) == UC_FETCH_MEMORY);
+        bool is_memory_store = ((current_uc_opcode & UC_STORE_MASK) == UC_STORE_MEMORY);
+        if(is_memory_fetch || is_memory_store) {
+            StepMemoryAccessCycle(is_memory_fetch, is_memory_store, data_line);
         } else {
             // handle various other cases that don't make use of the addressing mode
             switch(current_uc_opcode & UC_FETCH_MASK) {
@@ -122,12 +122,16 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
                 break;
             }
         }
-    } /* current_memory_step < MS_MODIFY */
+    }
 
     // we fall through from the above if statement so we can process the read value from memory
     // in the cycle it becomes available. however, writing data back to memory has to wait a full write cycle
 
-    if(current_memory_step == MS_MODIFY) { // if memory is done, we can execute the heart of the opcode
+    if(current_memory_step == MS_MODIFY_WAIT) {
+        // supposed to be the IO operation here, but we'll do it right before the store
+        current_memory_step = MS_MODIFY;
+        current_uc_set_pc--;
+    } else if(current_memory_step == MS_MODIFY) { // if memory is done, we can execute the heart of the opcode
         // do the opcode
         switch(current_uc_opcode & UC_OPCODE_MASK) {
         case UC_DEAD:
@@ -152,6 +156,13 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
             // eXclusive OR A with memory
             intermediate_data.as_byte ^= registers.a;
             break;
+
+        // case UC_XCE:
+        // TODO When switching from emulation to native mode the processor replaces the B BREAK flag 
+        // and bit 5 with the 65816 M and X flags, and sets them to one. 
+        // TODO you lose the high byte of the stack pointer when you switch from native to emulation
+        // TODO X and Y register high bytes are lost
+        // TODO A high byte is not lost (it's in B register)
         }
 
         // TODO set flags here based on the result of the operation
@@ -323,7 +334,7 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
 
 // Latches whatever current data is on the data line and moves onto the next step
 // in computing the memory address
-void CPU65C816::StepMemoryAccessCycle(bool is_fetch, u8 data_line)
+void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store, u8 data_line)
 {
     switch(current_memory_step) {
     case MS_FETCH_VECTOR_LOW:
@@ -352,77 +363,11 @@ void CPU65C816::StepMemoryAccessCycle(bool is_fetch, u8 data_line)
 
         // move onto next stage, which might be the high byte of a word or something more complex
         // like direct page or indexed modes
-        switch(current_addressing_mode) {
-        case AM_IMMEDIATE_BYTE:
-            // move the operand to data since it's used as data
-            intermediate_data.as_byte = data_line;
-            intermediate_data_size = 1; // default to byte size, might be increased later
-
-            // for immediate bytes, we 're done
-            current_memory_step = MS_MODIFY;
-            break;
-
-        case AM_IMMEDIATE_WORD:
-            // move the operand to data since it's used as data
-            intermediate_data.as_byte = data_line;
-
-            // we've read the low byte and want a word, so stay in operand fetch, but fetch the high byte
+        if(ShouldFetchOperandHigh()) {
             current_memory_step = MS_FETCH_OPERAND_HIGH;
-            current_uc_set_pc--; 
-            break;
-
-        case AM_DIRECT_PAGE:
-            // first clear the high byte of the data address
-            operand_address.high_byte = 0;
-
-            // and direct page is always in bank 0
-            operand_address.bank_byte = 0;
-
-            // we only needed one byte but we need to add direct page to it
-            // if it's 0, we can skip the add, saving 1 clcok cycle
-            if(registers.d) {
-                current_memory_step = MS_ADD_D_REGISTER;
-                current_uc_set_pc--;
-            } else {
-                // if it's a fetch, go fetch the data
-                if(is_fetch) {
-                    current_memory_step = MS_FETCH_VALUE_LOW;
-                    current_uc_set_pc--;
-                } else {
-                    // otherwise, continue on
-                    current_memory_step = MS_MODIFY;
-                }
-            }
-            break;
-
-        case AM_DIRECT_INDEXED_X:
-        case AM_DIRECT_INDEXED_Y:
-            // first clear the high byte of the data address
-            operand_address.high_byte = 0;
-
-            // and direct page is always in bank 0
-            operand_address.bank_byte = 0;
-
-            // we only needed one byte but we need to add direct page to it
-            // if it's 0, we can skip the add, saving 1 clcok cycle
-            if(registers.d) {
-                current_memory_step = MS_ADD_D_REGISTER;
-            } else {
-                // we still need to X offset when D is 0
-                if(current_addressing_mode == AM_DIRECT_INDEXED_X) {
-                    current_memory_step = MS_ADD_X_REGISTER;
-                } else {
-                    current_memory_step = MS_ADD_Y_REGISTER;
-                }
-            }
             current_uc_set_pc--;
-            break;
-
-
-        default:
-            // all other cases are done, process the data and/or store it as necessary
-            current_memory_step = MS_MODIFY;
-            break;
+        } else {
+            SetMemoryStepAfterOperandFetch(is_memory_fetch);
         }
         break;
 
@@ -433,40 +378,40 @@ void CPU65C816::StepMemoryAccessCycle(bool is_fetch, u8 data_line)
         // increase PC to the next operand byte or instruction
         registers.pc += 1;
 
-        // TODO move onto bank byte if necessasry
-        switch(current_addressing_mode) {
-        case AM_IMMEDIATE_WORD:
-            // move the operand to data
-            intermediate_data.high_byte = data_line;
-
-            // wanted a word, and now we have a word, so done
-            current_memory_step = MS_MODIFY;
-            break;
-
-        //!case AM_IMMEDIATE_LONG:
-        //!    // read the LOW byte and want a word, so stay in memory fetch
-        //!    current_memory_step = MS_FETCH_OPERAND_BANK;
-        //!    current_uc_set_pc--; 
-        //!    break;
-
-        default:
-            // all other cases are done, process the data and/or store it as necessary
-            current_memory_step = MS_MODIFY;
-            break;
+        // move onto next stage, which might be the high byte of a word or something more complex
+        // like direct page or indexed modes
+        if(ShouldFetchOperandBank()) {
+            current_memory_step = MS_FETCH_OPERAND_BANK;
+            current_uc_set_pc--;
+        } else {
+            SetMemoryStepAfterOperandFetch(is_memory_fetch);
         }
+        break;
+
+    case MS_FETCH_OPERAND_BANK:
+        assert(false); //TODO
         break;
 
     case MS_FETCH_VALUE_LOW:
         // latch the memory low byte
         intermediate_data.as_byte = data_line;
 
-        // TODO move onto next byte, if required
-        // TODO how to tell if fetch is for memory or index?
-        //!if(IsWordMemoryEnabled()) {
-        //!}
+        if(ShouldFetchValueHigh()) {
+            current_memory_step = MS_FETCH_VALUE_HIGH;
+            current_uc_set_pc--;
+        } else {
+            // we're done with memory, but for R-W-M instructions (instructions where we fetch and write the same
+            // memory), we have to simulate an extra
+            if(is_memory_store) {
+                current_memory_step = MS_MODIFY_WAIT;
+            } else {
+                current_memory_step = MS_MODIFY;
+            }
+        }
+        break;
 
-        // we're done with memory, so we can move on and store the operand
-        current_memory_step = MS_MODIFY;
+    case MS_FETCH_VALUE_HIGH:
+        assert(false); //unimplemented
         break;
 
     case MS_FETCH_STACK_LOW:
@@ -482,58 +427,168 @@ void CPU65C816::StepMemoryAccessCycle(bool is_fetch, u8 data_line)
         }
         break;
 
-    case MS_ADD_D_REGISTER:
-        operand_address.as_word += registers.d;
+    case MS_ADD_DL_REGISTER:
+        // TODO Zero page addressing "wraps" in emulation mode, whereas in Native mode it rolls into the next page.
 
-        // determine the next step in the operation
-        switch(current_addressing_mode) {
-        case AM_DIRECT_PAGE:
-            // done computing the effective address
-            // with operand_address now containing the direct page address, we can go read the value from memory
-            // or we're only computing the address for a store operation
-            if(is_fetch) {
-                current_memory_step = MS_FETCH_VALUE_LOW;
-                current_uc_set_pc--;     // stay on the same uC instruction
-            } else {
-                current_memory_step = MS_MODIFY;
-            }
-            break;
+        // the high byte of the direct page register is already added, so add the low byte with carry
+        operand_address.as_word += (u16)registers.dl;
 
-        case AM_DIRECT_INDEXED_X:
-            // just go straight to adding X
-            current_memory_step = MS_ADD_X_REGISTER;
-            current_uc_set_pc--;
-            break;
-
-        case AM_DIRECT_INDEXED_Y:
-            // just go straight to adding Y
-            current_memory_step = MS_ADD_Y_REGISTER;
-            current_uc_set_pc--;
-            break;
-        }
-
+        // go onto the next step in direct page
+        SetMemoryStepAfterDirectPageAdded(is_memory_fetch);
         break;
 
     case MS_ADD_X_REGISTER:
     case MS_ADD_Y_REGISTER:
-        operand_address.as_word += (current_addressing_mode == MS_ADD_X_REGISTER) ? registers.x : registers.y;
+        // TODO only add 16-bit X and Y when X bit is 0
+        // TODO in emulation mode, this wraps the low byte in direct page but not in absolute
+        // TODO in native mode it never wraps
+        operand_address.as_byte += (current_memory_step == MS_ADD_X_REGISTER) ? registers.xl : registers.yl;
 
-        // determine the next step in the operation
-        switch(current_addressing_mode) {
-        case AM_DIRECT_INDEXED_X:
-        case AM_DIRECT_INDEXED_Y:
-            // done computing the effective address
-            // with operand_address now containing the direct,x/y address, we need to go read the value from memory
-            // or we're only computing the address for a store operation
-            if(is_fetch) {
-                current_memory_step = MS_FETCH_VALUE_LOW;
-                current_uc_set_pc--;     // stay on the same uC instruction
-            } else {
-                current_memory_step = MS_MODIFY;
-            }
-            break;
+        // go onto the next step in the direct page
+        SetMemoryStepAfterIndexRegisterAdded(is_memory_fetch);
+        break;
+    }
+}
+
+bool CPU65C816::ShouldFetchOperandHigh()
+{
+    switch(current_addressing_mode) {
+    case AM_IMMEDIATE:
+    case AM_DIRECT_PAGE:
+    case AM_DIRECT_INDEXED_X:
+    case AM_DIRECT_INDEXED_Y:
+        return false;
+
+    case AM_IMMEDIATE_WORD:
+        return true;
+
+    default:
+        assert(false); // unimplemented
+        return false;
+    }
+}
+
+bool CPU65C816::ShouldFetchOperandBank()
+{
+    switch(current_addressing_mode) {
+    case AM_IMMEDIATE:
+    case AM_IMMEDIATE_WORD:
+    case AM_DIRECT_PAGE:
+    case AM_DIRECT_INDEXED_X:
+    case AM_DIRECT_INDEXED_Y:
+        return false;
+        break;
+
+    default:
+        assert(false); // unimplemented
+        return false;
+    }
+}
+
+bool CPU65C816::ShouldFetchValueHigh()
+{
+    // TODO reading 16-bit and 24-bit values
+        // TODO move onto next byte, if required
+        // TODO how to tell if fetch is for memory or index?
+        //!if(IsWordMemoryEnabled()) {
+        //!}
+
+    return false;
+}
+
+void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch)
+{
+    switch(current_addressing_mode) {
+    case AM_IMMEDIATE: // always at least a low byte but may or may not contain a high byte depending on M/X
+        // move the operand to data since it's used as data
+        intermediate_data.as_byte = operand_address.as_byte;
+        intermediate_data_size = 1; // default to byte size, might be increased later
+
+        // for immediate bytes, we're done
+        current_memory_step = MS_MODIFY;
+        break;
+
+    case AM_IMMEDIATE_WORD:
+        // move the operand to data since it's used as data
+        intermediate_data.as_word = operand_address.as_word;
+        intermediate_data_size = 2;
+
+        // we've read the operand and it's time to do something with it
+        current_memory_step = MS_MODIFY;
+        break;
+
+    case AM_DIRECT_PAGE:
+    case AM_DIRECT_INDEXED_X:
+    case AM_DIRECT_INDEXED_Y:
+        // direct page is always in bank 0
+        operand_address.bank_byte = 0;
+
+        // as we latch the direct page operand, we put it in the low byte and the high byte gets
+        // the high byte of the direct page register. in the hardware, this happens with a nice OR.
+        operand_address.high_byte = registers.dh;
+
+        // however, if the low byte of the direct page register is non-zero, we need to add it which requires another cycle
+        if(registers.dl) {
+            current_memory_step = MS_ADD_DL_REGISTER;
+            current_uc_set_pc--;
+        } else {
+            SetMemoryStepAfterDirectPageAdded(is_memory_fetch);
         }
+        break;
 
+    default:
+        // all other cases are done, process the data and/or store it as necessary
+        current_memory_step = MS_MODIFY;
+        break;
+    }
+}
+
+// After a direct page address has been fully set up in operand_address, determine the next memory step
+void CPU65C816::SetMemoryStepAfterDirectPageAdded(bool is_memory_fetch)
+{
+    // determine the next step in the operation
+    switch(current_addressing_mode) {
+    case AM_DIRECT_PAGE:
+        // if all we wanted was the direct page address, then
+        // operand_address now contains the direct page address. we can go read the value from memory
+        // or if we're only computing the address for a store operation, then move on to execute the opcode
+        if(is_memory_fetch) {
+            current_memory_step = MS_FETCH_VALUE_LOW;
+            current_uc_set_pc--;     // stay on the same uC instruction
+        } else {
+            current_memory_step = MS_MODIFY;
+        }
+        break;
+
+    case AM_DIRECT_INDEXED_X:
+        // for direct-indexed-x, add the X register
+        current_memory_step = MS_ADD_X_REGISTER;
+        current_uc_set_pc--;
+        break;
+
+    case AM_DIRECT_INDEXED_Y:
+        // for direct-indexed-y, add the Y register
+        current_memory_step = MS_ADD_Y_REGISTER;
+        current_uc_set_pc--;
+        break;
+    }
+}
+
+// After an index register has been added to the address in operand_address, determine the next memory step
+void CPU65C816::SetMemoryStepAfterIndexRegisterAdded(bool is_memory_fetch)
+{
+    switch(current_addressing_mode) {
+    case AM_DIRECT_INDEXED_X:
+    case AM_DIRECT_INDEXED_Y:
+        // if all we wanted was direct page + index register, then we're done now and
+        // operand_address now contains the direct+x/y address. we can go read the value from memory
+        // or we're only computing the address for a store operation, then move on to execute the opcode
+        if(is_memory_fetch) {
+            current_memory_step = MS_FETCH_VALUE_LOW;
+            current_uc_set_pc--;     // stay on the same uC instruction
+        } else {
+            current_memory_step = MS_MODIFY;
+        }
         break;
     }
 }
@@ -547,14 +602,14 @@ void CPU65C816::StartInstructionCycle()
         if(((current_uc_opcode & UC_FETCH_MASK) == UC_FETCH_MEMORY)
             || (current_uc_opcode & UC_STORE_MASK) == UC_STORE_MEMORY) {
 
-            bool is_fetch = ((current_uc_opcode & UC_FETCH_MASK) == UC_FETCH_MEMORY);
+            bool is_memory_fetch = ((current_uc_opcode & UC_FETCH_MASK) == UC_FETCH_MEMORY);
 
             switch(current_addressing_mode) {
                 case AM_VECTOR:
                     current_memory_step = MS_FETCH_VECTOR_LOW;
                     break;
 
-                case AM_IMMEDIATE_BYTE:
+                case AM_IMMEDIATE:
                 case AM_IMMEDIATE_WORD:
                 case AM_DIRECT_PAGE:
                 case AM_DIRECT_INDEXED_X:
@@ -563,7 +618,7 @@ void CPU65C816::StartInstructionCycle()
                     break;
 
                 case AM_STACK:
-                    if(is_fetch) {
+                    if(is_memory_fetch) {
                         // TODO stack fetch cycle requires two(!) IO cycles, maybe to determine how many data bytes to pull
                         // or maybe to set up S. for now we are wrong but will need to be fixed soon
                         // maybe with MS_FETCH_STACK_GET_ITEM_SIZE and MS_FETCH_STACK_SETUP ?
@@ -598,8 +653,9 @@ void CPU65C816::StartInstructionCycle()
             }
         } 
 
-        // when we have UC_STORE_MEMORY and not UC_FETCH_MEMORY, we may need to also 
-        // fetch some other register at this point
+        // when we have UC_STORE_MEMORY and not UC_FETCH_MEMORY, we can fetch register contents in the same
+        // cycle that the opcode was decoded, reducing the cycle counts by 1.  data from memory requires an extra
+        // cycle to process since it has to be latched before the ALU can take it
         switch(current_uc_opcode & UC_FETCH_MASK) {
         case UC_FETCH_MEMORY:
             // was handled above, so do nothing here, leave current_memory_step alone
@@ -734,8 +790,16 @@ void CPU65C816::SetupPinsLowCycleForFetch()
             data_rw_address = operand_address.as_word;
             break;
 
-        case MS_ADD_D_REGISTER:
+        case MS_ADD_DL_REGISTER:
             cout << "adding D register to intermediate address (no fetch)" << endl;
+            break;
+
+        case MS_ADD_X_REGISTER:
+            cout << "adding X register to intermediate address (no fetch)" << endl;
+            break;
+
+        case MS_ADD_Y_REGISTER:
+            cout << "adding Y register to intermediate address (no fetch)" << endl;
             break;
         }
         

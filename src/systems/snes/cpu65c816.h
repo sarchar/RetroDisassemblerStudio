@@ -71,7 +71,7 @@ private:
 
     void ClockFallingEdge();
     void FinishInstructionCycle(u8);
-    void StepMemoryAccessCycle(bool, u8);
+    void StepMemoryAccessCycle(bool, bool, u8);
     void StartInstructionCycle();
     void SetupPinsLowCycle();
     void SetupPinsLowCycleForFetch();
@@ -86,7 +86,13 @@ private:
 
         u16 pc;
         u8 ir;
-        u16 d;
+        union {
+            struct {
+                u8 dl;
+                u8 dh;
+            };
+            u16 d;
+        };
         u8 pbr;
         u8 dbr;
         union {
@@ -168,12 +174,11 @@ private:
         // Accumulator is not used directly. We use AM_IMPLIED and specify UC_FETCH/STORE_A
         // AM_ACCUMULATOR,
 
-        // Immediate (Byte) - Read an operand byte and treat it as an immediate value
-        AM_IMMEDIATE_BYTE,
+        // Immediate (Byte or Word) - Read an operand byte or word, depending on the 
+        // memory/index modes and treat it as an immediate value
+        AM_IMMEDIATE,
 
         // AM_IMMEDIATE_M / AM_IMMEDIATE_X ? byte or word depending on M and X bits
-        // Immediate (Word) - Read an operand word and treat it as an immediate value
-        AM_IMMEDIATE_WORD,
 
         // Direct Page - Read one operand byte and add the D register to get the effective address
         AM_DIRECT_PAGE,
@@ -190,6 +195,7 @@ private:
         AM_STACK,
 
         // Psuedo- or internal modes
+        AM_IMMEDIATE_WORD, // Immediate (Word) - Read an operand word and treat it as an immediate value
         AM_VECTOR  // like AM_IMMEDIATE_WORD but asserts VPn, uses operand_address instead of registers.pc
     };
 
@@ -203,13 +209,15 @@ private:
         MS_FETCH_OPERAND_HIGH,
         MS_FETCH_OPERAND_BANK,
         MS_FETCH_VALUE_LOW,
+        MS_FETCH_VALUE_HIGH,
         MS_FETCH_STACK_LOW,
         MS_FETCH_STACK_HIGH,
         // TODO indexed adds, etc
         // TODO stores, etc
-        MS_ADD_D_REGISTER,
+        MS_ADD_DL_REGISTER,
         MS_ADD_X_REGISTER,
         MS_ADD_Y_REGISTER,
+        MS_MODIFY_WAIT,
         MS_MODIFY,
         MS_WRITE_VALUE_LOW,
         MS_WRITE_STACK_HIGH,
@@ -218,22 +226,14 @@ private:
 
     MEMORY_STEP current_memory_step;
 
-    enum INSTRUCTION_CYCLE {
-    //    IC_VECTOR_PULL_LOW,
-    //    IC_VECTOR_PULL_HIGH,
-    //    IC_OPCODE_FETCH,
-    //    IC_STORE_PC_OPCODE_FETCH,
-    //    IC_STORE_A,
-    //    IC_BYTE_IMM,
-    //    IC_WORD_IMM_LOW,
-    //    IC_WORD_IMM_HIGH,
-    //    IC_DUMMY,
-    //    IC_DEAD
-    };
+    // helper functions for changing to new states
+    bool ShouldFetchOperandHigh();
+    bool ShouldFetchOperandBank();
+    bool ShouldFetchValueHigh();
 
-    //INSTRUCTION_CYCLE const* current_instruction_cycle_set;
-    //u8                       current_instruction_cycle_set_pc;
-    //INSTRUCTION_CYCLE        instruction_cycle;
+    void SetMemoryStepAfterOperandFetch(bool);
+    void SetMemoryStepAfterDirectPageAdded(bool);
+    void SetMemoryStepAfterIndexRegisterAdded(bool);
 
     // the value to be put on the line during the high cycle of a write operation
     u8  data_w_value;

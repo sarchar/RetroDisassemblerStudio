@@ -215,7 +215,7 @@ CPU65C816::ADDRESSING_MODE const CPU65C816::INSTRUCTION_ADDRESSING_MODES[256] = 
     // 44: NVM xyc     EOR d              LSR d                EOR [d]
     AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED         , AM_IMPLIED,
     // 48: PHA         EOR #              LSR A                PHK s
-    AM_STACK         , AM_IMMEDIATE_BYTE, AM_IMPLIED         , AM_IMPLIED,
+    AM_STACK         , AM_IMMEDIATE     , AM_IMPLIED         , AM_IMPLIED,
     // 4C: JMP a       EOR a              LSR a                EOR al
     AM_IMMEDIATE_WORD, AM_IMPLIED       , AM_IMPLIED         , AM_IMPLIED,
     // 50: BVC r       EOR (d),y          EOR (d)              EOR (d,s),y
@@ -259,11 +259,11 @@ CPU65C816::ADDRESSING_MODE const CPU65C816::INSTRUCTION_ADDRESSING_MODES[256] = 
     // 9C: STZ a       STA a,x            STZ a,x              STA al,x
     AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED         , AM_IMPLIED,
     // A0: LDY #       LDA (d,x)          LDX #                LDA d,s
-    AM_IMMEDIATE_BYTE, AM_IMPLIED       , AM_IMMEDIATE_BYTE  , AM_IMPLIED,
+    AM_IMMEDIATE     , AM_IMPLIED       , AM_IMMEDIATE       , AM_IMPLIED,
     // A4: LDY d       LDA d              LDX d                LDA [d]
     AM_IMPLIED       , AM_DIRECT_PAGE   , AM_IMPLIED         , AM_IMPLIED,
     // A8: TAY         LDA #              TAX                  PLD
-    AM_IMPLIED       , AM_IMMEDIATE_BYTE, AM_IMPLIED         , AM_IMPLIED,
+    AM_IMPLIED       , AM_IMMEDIATE     , AM_IMPLIED         , AM_IMPLIED,
     // AC: LDY a       LDA a              LDX a                LDA al
     AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED         , AM_IMPLIED,
     // B0: BCS r       LDA (d),y          LDA (d)              LDY (d,s),y
