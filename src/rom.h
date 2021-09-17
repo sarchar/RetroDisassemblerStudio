@@ -77,7 +77,7 @@ void ROM<A, D>::Latch()
     if(!selected) return;
 
     A addr = pins.a.Sample() & mask;
-    std::cout << "[ROM] latch: reading ROM address $" << std::hex << addr << " value = $" << memory[addr] << std::endl;
+    std::cout << "[ROM] latch: reading ROM address $" << std::hex << addr << " value = $" << std::setw(2) << (u32)memory[addr] << std::endl;
     pins.d.Assert(memory[addr]);
 }
 

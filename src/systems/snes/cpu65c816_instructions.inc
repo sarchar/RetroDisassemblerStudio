@@ -1,17 +1,22 @@
 CPU65C816::UC_OPCODE const
-    CPU65C816::INC_UC[]           = { UC_FETCH_MEMORY | UC_INC | UC_STORE_MEMORY, UC_FETCH_OPCODE };
+    CPU65C816::INC_UC[]           = { UC_FETCH_MEMORY | UC_INC | UC_STORE_MEMORY, UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
-    CPU65C816::JMP_UC[]           = { UC_FETCH_MEMORY | UC_NOP | UC_STORE_PC    , UC_FETCH_OPCODE };
+    CPU65C816::JMP_UC[]           = { UC_FETCH_MEMORY | UC_NOP | UC_STORE_PC    , UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
-    CPU65C816::LDA_UC[]           = { UC_FETCH_MEMORY | UC_NOP | UC_STORE_A     , UC_FETCH_OPCODE };
+    CPU65C816::LDA_UC[]           = { UC_FETCH_MEMORY | UC_NOP | UC_STORE_A     , UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
-    CPU65C816::NOP_UC[]           = {                   UC_NOP                  , UC_FETCH_OPCODE };
+    CPU65C816::NOP_UC[]           = {                   UC_NOP                  , UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
-    CPU65C816::PHD_UC[]           = { UC_FETCH_D      | UC_NOP | UC_STORE_MEMORY, UC_FETCH_OPCODE };
+    CPU65C816::PHD_UC[]           = { UC_FETCH_D      | UC_NOP | UC_STORE_MEMORY, UC_FETCH_OPCODE | UC_STORE_IR };
+
+    // uh-oh. direct page address is computed in US_FETCH_MEMORY, but we aren't using it
+    // guess we need a way to determine if EITHER UC_FETCH_MEMORY or UC_STORE_MEMORY is being used
+CPU65C816::UC_OPCODE const
+    CPU65C816::STZ_UC[]           = { UC_FETCH_ZERO   | UC_NOP | UC_STORE_MEMORY, UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const 
     CPU65C816::DEAD_INSTRUCTION[] = { UC_DEAD };
@@ -68,7 +73,7 @@ CPU65C816::UC_OPCODE const * const CPU65C816::INSTRUCTION_UCs[256] = {
     // 60: RTS        ADC (d,x)         PER               ADC d,s
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 64: STZ d      ADC d             ROR d             ADC [d]
-    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    STZ_UC          , DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 68: PLA        ADC #             ROR A             RTL
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 6C: JMP (a)    ADC a             ROR a             ADC al
@@ -199,7 +204,7 @@ CPU65C816::ADDRESSING_MODE const CPU65C816::INSTRUCTION_ADDRESSING_MODES[256] = 
     // 60: RTS        ADC (d,x)         PER               ADC d,s
     AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED    , AM_IMPLIED,
     // 64: STZ d      ADC d             ROR d             ADC [d]
-    AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED    , AM_IMPLIED,
+    AM_DIRECT_PAGE   , AM_IMPLIED       , AM_IMPLIED    , AM_IMPLIED,
     // 68: PLA        ADC #             ROR A             RTL
     AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED    , AM_IMPLIED,
     // 6C: JMP (a)    ADC a             ROR a             ADC al

@@ -71,6 +71,7 @@ private:
 
     void ClockFallingEdge();
     void FinishInstructionCycle(u8);
+    void StepMemoryAccessCycle(bool, u8);
     void StartInstructionCycle();
     void SetupPinsLowCycle();
     void SetupPinsLowCycleForFetch();
@@ -120,33 +121,37 @@ private:
 
     typedef u64 UC_OPCODE;
 
-    // bits 0-2
-    static unsigned int const UC_FETCH_MASK    = (0x07 << 0);
-    static unsigned int const UC_FETCH_NONE    = 0 << 0;
-    static unsigned int const UC_FETCH_OPCODE  = 1 << 0;
-    static unsigned int const UC_FETCH_MEMORY  = 2 << 0;
-    static unsigned int const UC_FETCH_PC      = 3 << 0;
-    static unsigned int const UC_FETCH_A       = 4 << 0;
-    static unsigned int const UC_FETCH_X       = 5 << 0;
-    static unsigned int const UC_FETCH_Y       = 6 << 0;
-    static unsigned int const UC_FETCH_D       = 7 << 0;
+    // bits 0-3
+    static unsigned int const UC_FETCH_SHIFT   = 0;
+    static unsigned int const UC_FETCH_MASK    = (0x0F << UC_FETCH_SHIFT);
+    static unsigned int const UC_FETCH_NONE    = 0 << UC_FETCH_SHIFT;
+    static unsigned int const UC_FETCH_OPCODE  = 1 << UC_FETCH_SHIFT;
+    static unsigned int const UC_FETCH_MEMORY  = 2 << UC_FETCH_SHIFT;
+    static unsigned int const UC_FETCH_PC      = 3 << UC_FETCH_SHIFT;
+    static unsigned int const UC_FETCH_A       = 4 << UC_FETCH_SHIFT;
+    static unsigned int const UC_FETCH_X       = 5 << UC_FETCH_SHIFT;
+    static unsigned int const UC_FETCH_Y       = 6 << UC_FETCH_SHIFT;
+    static unsigned int const UC_FETCH_D       = 7 << UC_FETCH_SHIFT;
+    static unsigned int const UC_FETCH_ZERO    = 8 << UC_FETCH_SHIFT;
 
-    // bits 3-5
-    // TODO could have a store/load bit and this selects the register dest/src
-    static unsigned int const UC_STORE_MASK    = (0x07 << 3);
-    static unsigned int const UC_STORE_NONE    = 0 << 0;
-    static unsigned int const UC_STORE_MEMORY  = 2 << 3;
-    static unsigned int const UC_STORE_PC      = 3 << 3;
-    static unsigned int const UC_STORE_A       = 4 << 3;
-    static unsigned int const UC_STORE_X       = 5 << 3;
-    static unsigned int const UC_STORE_Y       = 6 << 3;
-    static unsigned int const UC_STORE_D       = 7 << 3;
+    // bits 4-6
+    static unsigned int const UC_STORE_SHIFT   = 4;
+    static unsigned int const UC_STORE_MASK    = (0x0F << UC_STORE_SHIFT);
+    static unsigned int const UC_STORE_NONE    = 0 << UC_STORE_SHIFT;
+    static unsigned int const UC_STORE_MEMORY  = 2 << UC_STORE_SHIFT;
+    static unsigned int const UC_STORE_PC      = 3 << UC_STORE_SHIFT;
+    static unsigned int const UC_STORE_A       = 4 << UC_STORE_SHIFT;
+    static unsigned int const UC_STORE_X       = 5 << UC_STORE_SHIFT;
+    static unsigned int const UC_STORE_Y       = 6 << UC_STORE_SHIFT;
+    static unsigned int const UC_STORE_D       = 7 << UC_STORE_SHIFT;
+    static unsigned int const UC_STORE_IR      = 8 << UC_STORE_SHIFT;
 
-    // bits 6-8
-    static unsigned int const UC_OPCODE_MASK   = (0x03 << 6);
-    static unsigned int const UC_NOP           = 0 << 6;
-    static unsigned int const UC_DEAD          = 1 << 6;
-    static unsigned int const UC_INC           = 2 << 6;
+    // bits 8-10
+    static unsigned int const UC_OPCODE_SHIFT  = 8;
+    static unsigned int const UC_OPCODE_MASK   = (0x03 << UC_OPCODE_SHIFT);
+    static unsigned int const UC_NOP           = 0 << UC_OPCODE_SHIFT;
+    static unsigned int const UC_DEAD          = 1 << UC_OPCODE_SHIFT;
+    static unsigned int const UC_INC           = 2 << UC_OPCODE_SHIFT;
 
     UC_OPCODE const* current_uc_set;
     u8               current_uc_set_pc;
@@ -173,12 +178,12 @@ private:
         MS_FETCH_OPERAND_LOW,
         MS_FETCH_OPERAND_HIGH,
         MS_FETCH_OPERAND_BANK,
-        MS_FETCH_MEMORY_LOW,
+        MS_FETCH_VALUE_LOW,
         // TODO indexed adds, etc
         // TODO stores, etc
         MS_ADD_D_REGISTER,
         MS_MODIFY,
-        MS_WRITE_MEMORY_LOW,
+        MS_WRITE_VALUE_LOW,
         MS_WRITE_STACK_LOW,
         MS_WRITE_STACK_HIGH
     };
@@ -205,9 +210,8 @@ private:
     bool vector_pull;
     u16  vector_address;
 
+    // the value to be put on the line during the high cycle of a write operation
     u8  data_w_value;
-    u8  data_rw_bank;
-    u16 data_rw_address;
 
     // This union will break on little endian machines, but that's a long way off for now
     union {
@@ -220,7 +224,7 @@ private:
             u16 as_word;
             u8  _unused0;
         };
-    } intermediate_data;
+    } intermediate_data, operand_address;
 
     unsigned int intermediate_data_size;
 
@@ -230,6 +234,7 @@ private:
     static UC_OPCODE const LDA_UC[];
     static UC_OPCODE const NOP_UC[];
     static UC_OPCODE const PHD_UC[];
+    static UC_OPCODE const STZ_UC[];
     static UC_OPCODE const DEAD_INSTRUCTION[];
     static UC_OPCODE const * const INSTRUCTION_UCs[256];
     static ADDRESSING_MODE const INSTRUCTION_ADDRESSING_MODES[256];

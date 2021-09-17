@@ -16,9 +16,9 @@ _nmi:
 _reset:
 _irq:
     stz $00
+@0:
     inc $00
     lda $00
-@0:
     jmp @0-
 
     .org $FFFA
