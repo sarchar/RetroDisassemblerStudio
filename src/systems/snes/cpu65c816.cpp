@@ -61,13 +61,13 @@ void CPU65C816::Reset()
     pins.db.HighZ();
 
     // set the next instruction cycle to fetch the reset vector and execute
-    current_uc_opcode       = UC_NOP; // this makes the next FinishInstructionCycle() do nothing
-    current_uc_set          = &CPU65C816::JMP_UC[0];
-    current_uc_set_pc       = 0;
-    current_addressing_mode = AM_VECTOR;
-    current_memory_step     = MS_MODIFY;
-    vector_address          = 0xFFFC;
-    vector_pull             = true;
+    current_uc_opcode         = UC_NOP; // this makes the next FinishInstructionCycle() do nothing
+    current_uc_set            = &CPU65C816::JMP_UC[0];
+    current_uc_set_pc         = 0;
+    current_addressing_mode   = AM_VECTOR;
+    current_memory_step       = MS_MODIFY;
+    operand_address.bank_byte = 0;
+    operand_address.as_word   = 0xFFFC;
 }
 
 
@@ -163,21 +163,6 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
         switch(current_uc_opcode & UC_STORE_MASK) {
         case UC_STORE_MEMORY:
             switch(current_addressing_mode) {
-            case AM_ACCUMULATOR:
-                // accumulator is easy
-                cout << "[cpu65c816] storing byte into A (AM_ACCUMULATOR)" << endl;
-
-                // TODO
-                //!if(IsWordMemoryEnabled()) {
-                //!    registers.a = intermediate_data.as_word;
-                //!} else {
-                    registers.a = intermediate_data.as_byte;
-                //!}
-
-                // move onto the next uC opcode
-                current_memory_step = MS_INIT;
-                break;
-
             case AM_DIRECT_PAGE:
                 // for direct page, the memory address has already been computed and stored in data_rw_address/bank
                 // stay in this uC instruction and write the data to the address it came from
@@ -338,9 +323,6 @@ void CPU65C816::StepMemoryAccessCycle(bool is_fetch, u8 data_line)
     case MS_FETCH_VECTOR_HIGH:
         // latch the vector high byte
         intermediate_data.high_byte = data_line;
-
-        // finished a vector pull
-        vector_pull = false;
 
         // we're done with memory, so we can move on and store the operand
         current_memory_step = MS_MODIFY;
@@ -532,22 +514,6 @@ void CPU65C816::StartInstructionCycle()
                         current_memory_step = MS_FETCH_STACK_LOW;
                     }
                     break;
-
-                case AM_ACCUMULATOR:
-                    // accumulator is immediately available
-                    // TODO get rid of me and use UC_FETCH_A/UC_STORE_A
-                    cout << "[cpu65c816] fetching A" << endl;
-                    //!if(IsWordMemoryEnabled()) {
-                    //!    intermediate_data.as_word = registers.c;
-                    //!    intermediate_data_size = 2;
-                    //!} else {
-                        intermediate_data.as_byte = registers.a;
-                        intermediate_data_size = 1;
-                    //!}
-
-                    // skip any memory fetch and immediately perform the operation
-                    current_memory_step = MS_MODIFY;
-                    break;
             }
         } 
 
@@ -571,8 +537,13 @@ void CPU65C816::StartInstructionCycle()
 
         case UC_FETCH_A:
             cout << "[cpu65c816] fetching A" << endl;
-            intermediate_data.as_byte = registers.a;
-            intermediate_data_size = 1;
+            //!if(IsWordMemoryEnabled()) {
+            //!    intermediate_data.as_word = registers.c;
+            //!    intermediate_data_size = 2;
+            //!} else {
+                intermediate_data.as_byte = registers.a;
+                intermediate_data_size = 1;
+            //!}
 
             // skip any memory fetch and immediately perform the operation
             current_memory_step = MS_MODIFY;
@@ -660,8 +631,8 @@ void CPU65C816::SetupPinsLowCycleForFetch()
             cout << "vector address byte " << (current_memory_step - MS_FETCH_VECTOR_LOW) << endl;
             pins.vpa.AssertHigh(); // assert VPA
             pins.vp_n.AssertLow(); // for vector fetch only, assert VPn low
-            data_rw_bank = 0;      // vector is always in bank 0
-            data_rw_address = vector_address + (current_memory_step - MS_FETCH_VECTOR_LOW); // use the vector address
+            data_rw_bank    = operand_address.bank_byte;  // vector is always in bank 0, but use it anyway
+            data_rw_address = operand_address.as_word + (current_memory_step - MS_FETCH_VECTOR_LOW); // use the vector address
             break;
         
         case MS_FETCH_VALUE_LOW:

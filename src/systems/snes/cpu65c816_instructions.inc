@@ -8,6 +8,9 @@ CPU65C816::UC_OPCODE const
     CPU65C816::INC_UC[]           = { UC_FETCH_MEMORY | UC_INC | UC_STORE_MEMORY, UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
+    CPU65C816::INCA_UC[]          = { UC_FETCH_A      | UC_INC | UC_STORE_A     , UC_FETCH_OPCODE | UC_STORE_IR };
+
+CPU65C816::UC_OPCODE const
     CPU65C816::JMP_UC[]           = { UC_FETCH_MEMORY | UC_NOP | UC_STORE_PC    , UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
@@ -51,7 +54,7 @@ CPU65C816::UC_OPCODE const * const CPU65C816::INSTRUCTION_UCs[256] = {
     // 14: TRB d      ORA d,x           ASL d,x           ORA [d],y
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 18: CLC        ORA a,y           INC A             TCS
-    DEAD_INSTRUCTION, DEAD_INSTRUCTION, INC_UC          , DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, DEAD_INSTRUCTION, INCA_UC         , DEAD_INSTRUCTION, 
     // 1C: TRB a      ORA a,x           ASL a,x           ORA al,x
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 20: JSR a      AND (d,x)         JSL al            AND d,s
@@ -182,7 +185,7 @@ CPU65C816::ADDRESSING_MODE const CPU65C816::INSTRUCTION_ADDRESSING_MODES[256] = 
     // 14: TRB d       ORA d,x            ASL d,x            ORA [d],y
     AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED,
     // 18: CLC         ORA a,y            INC A              TCS
-    AM_IMPLIED       , AM_IMPLIED       , AM_ACCUMULATOR   , AM_IMPLIED,
+    AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED,
     // 1C: TRB a       ORA a,x            ASL a,x            ORA al,x
     AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED       , AM_IMPLIED,
     // 20: JSR a       AND (d,x)          JSL al             AND d,s
