@@ -21,6 +21,7 @@
 #include "systems/system.h"
 #include "systems/snes/snes_system.h"
 #include "windows/debugger.h"
+#include "windows/memory.h"
 #include "windows/rom_loader.h"
 
 #undef DISABLE_IMGUI_SAVE_LOAD_LAYOUT
@@ -257,6 +258,10 @@ void MyApp::RenderMainMenuBar()
         if(ImGui::BeginMenu("Windows")) {
             if(ImGui::MenuItem("Debugger")) {
                 auto wnd = SNESDebugger::CreateWindow();
+                AddWindow(wnd);
+            }
+            if(ImGui::MenuItem("Memory")) {
+                auto wnd = SNESMemory::CreateWindow();
                 AddWindow(wnd);
             }
             ImGui::EndMenu();

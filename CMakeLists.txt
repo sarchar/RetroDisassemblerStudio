@@ -22,6 +22,7 @@ add_executable(${PROJECT_NAME}
 
                src/windows/base_window.cpp
                src/windows/debugger.cpp
+               src/windows/memory.cpp
                src/windows/rom_loader.cpp
 
                imgui/imgui.cpp

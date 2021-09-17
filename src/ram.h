@@ -17,6 +17,10 @@ public:
     RAM(u8 _po2_size, bool _edge);
     ~RAM();
 
+    inline void ReadDirect(D* dest, A start_address, A count) const {
+        memcpy((void*)dest, (void*)&memory[start_address & mask], count * sizeof(D));
+    }
+
     struct {
         Wire   clk  { "RAM.clk"  };
         Wire   cs_n { "RAM.cs_n" };

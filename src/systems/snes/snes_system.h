@@ -74,6 +74,10 @@ public:
     inline std::optional<bool> const& GetADSignalROMCSn() const { return address_decoder->pins.rom_cs_n.Get(); }
     inline std::optional<u8>   const& GetADSignalD()      const { return address_decoder->pins.d.Get(); }
     inline std::optional<u32>  const& GetADSignalA()      const { return address_decoder->pins.a_out.Get(); }
+
+    inline void GetRAM(u8* dest, u32 start_address, u32 count) const {
+        main_ram->ReadDirect(dest, start_address, count);
+    }
 private:
     void BuildSystemComponents();
     void CreateSystemThread();
