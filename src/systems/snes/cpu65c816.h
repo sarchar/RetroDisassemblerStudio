@@ -178,6 +178,10 @@ private:
         // Direct Page - Read one operand byte and add the D register to get the effective address
         AM_DIRECT_PAGE,
 
+        // Direct Page indexed with X - Read one operand byte and add the D register and 
+        // the X register to get the effective address
+        AM_DIRECT_INDEXED_X,
+
         // Absolute - Read one operand bytes and treat it as the effective address
         AM_ABSOLUTE,
 
@@ -203,6 +207,7 @@ private:
         // TODO indexed adds, etc
         // TODO stores, etc
         MS_ADD_D_REGISTER,
+        MS_ADD_X_REGISTER,
         MS_MODIFY,
         MS_WRITE_VALUE_LOW,
         MS_WRITE_STACK_HIGH,
@@ -258,6 +263,7 @@ private:
     static UC_OPCODE const PHA_UC[];
     static UC_OPCODE const PHD_UC[];
     static UC_OPCODE const PLA_UC[];
+    static UC_OPCODE const STA_UC[];
     static UC_OPCODE const STZ_UC[];
     static UC_OPCODE const TXS_UC[];
     static UC_OPCODE const DEAD_INSTRUCTION[];
