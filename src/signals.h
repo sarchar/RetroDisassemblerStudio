@@ -61,7 +61,7 @@ private:
 // https://stackoverflow.com/questions/13592847/c11-observer-pattern-signals-slots-events-change-broadcaster-listener-or
 template <typename Func>
 struct signal : public std::enable_shared_from_this<signal<Func>> {
-    typedef signal_connection<signal<Func>> signal_connection_t;
+    typedef std::shared_ptr<signal_connection<signal<Func>>> signal_connection_t;
 
     _signal_id_t next_id;
 
@@ -71,8 +71,8 @@ struct signal : public std::enable_shared_from_this<signal<Func>> {
     signal_connection_t connect(FuncLike f) 
     {
         _signal_id_t id = next_id++;
-        signal_connection_t conn(shared_from_this(), id);
         connections[id] = f;
+        signal_connection_t conn = std::make_shared<signal_connection<signal<Func>>>(shared_from_this(), id);
         return conn;
     }
 

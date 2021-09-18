@@ -28,7 +28,7 @@ SNESDebugger::SNESDebugger()
 
     // listen for system changes
     current_system_changed_connection = \
-            MyApp::Instance()->current_system_changed->connect([=, this]() { UpdateTitle(); });
+            MyApp::Instance()->current_system_changed->connect(std::bind(&SNESDebugger::UpdateTitle, this));
 }
 
 SNESDebugger::~SNESDebugger()

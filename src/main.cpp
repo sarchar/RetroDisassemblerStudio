@@ -397,7 +397,7 @@ void MyApp::CreateROMLoader(string const& file_path_name)
 void MyApp::SystemLoadedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<System> new_system)
 {
     current_system = new_system;
-    cout << "[MyApp] New " << current_system->GetInformation()->full_name << " loaded." << endl;
+    cout << "[MyApp] new " << current_system->GetInformation()->full_name << " loaded." << endl;
     current_system_changed->emit();
 
     // if there's no debugger in the list of windows, open one
