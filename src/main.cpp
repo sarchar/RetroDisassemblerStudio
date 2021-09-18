@@ -95,6 +95,11 @@ bool MyApp::OnWindowCreated()
     // scale up some
     io.FontGlobalScale = 1.2f;
 
+    // TEMP go ahead and create the default debugger and memory watch
+    auto& wnd = SNESDebugger::CreateWindow();
+    AddWindow(wnd);
+    auto& wnd2 = SNESMemory::CreateWindow();
+    AddWindow(wnd2);
     return true;
 }
 
@@ -303,6 +308,7 @@ void MyApp::RenderGUI()
     // Show the ImGui demo window if requested
     if (show_imgui_demo) ImGui::ShowDemoWindow(&show_imgui_demo);
 
+#if 0
     // 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
     {
         static float f = 0.0f;
@@ -324,6 +330,7 @@ void MyApp::RenderGUI()
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
         ImGui::End();
     }
+#endif
 
     // Render all open windows
     for(auto &window : managed_windows) {
