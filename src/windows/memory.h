@@ -20,4 +20,6 @@ protected:
 
 public:
     static std::shared_ptr<SNESMemory> CreateWindow();
+
+    BASE_WINDOW_FUNCTIONAL_CODE_DECL();
 };

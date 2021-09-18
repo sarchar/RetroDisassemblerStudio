@@ -28,4 +28,6 @@ private:
 
 public:
     static std::shared_ptr<SNESDebugger> CreateWindow();
+
+    BASE_WINDOW_FUNCTIONAL_CODE_DECL();
 };

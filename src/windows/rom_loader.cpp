@@ -14,6 +14,8 @@
 
 using namespace std;
 
+BASE_WINDOW_FUNCTIONAL_CODE_IMPL(ROMLoader);
+
 std::vector<System::Information const*> ROMLoader::system_informations;
 
 shared_ptr<ROMLoader> ROMLoader::CreateWindow(string const& _file_path_name)
@@ -22,10 +24,11 @@ shared_ptr<ROMLoader> ROMLoader::CreateWindow(string const& _file_path_name)
 }
 
 ROMLoader::ROMLoader(string const& _file_path_name)
-    : BaseWindow("ROM Loader"),
+    : BaseWindow("rom_loader"),
       file_path_name(_file_path_name),
       loader_state(LOADER_STATE_INIT)
 {
+    SetTitle("ROM Loader");
     SetWindowless(true);
     system_loaded = make_shared<system_loaded_t>();
 }

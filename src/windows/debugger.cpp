@@ -16,13 +16,15 @@
 using namespace std;
 #include <stdio.h>
 
+BASE_WINDOW_FUNCTIONAL_CODE_IMPL(SNESDebugger);
+
 shared_ptr<SNESDebugger> SNESDebugger::CreateWindow()
 {
     return make_shared<SNESDebugger>();
 }
 
 SNESDebugger::SNESDebugger()
-    : BaseWindow("")
+    : BaseWindow("snes_debugger")
 {
     UpdateTitle();
 
@@ -38,10 +40,13 @@ SNESDebugger::~SNESDebugger()
 void SNESDebugger::UpdateTitle()
 {
     shared_ptr<SNESSystem> system = dynamic_pointer_cast<SNESSystem>(MyApp::Instance()->GetCurrentSystem());
-    if(!system) return;
+    if(!system) {
+        SetTitle("SNES Debugger");
+        return;
+    }
 
     stringstream ss;
-    ss << "SNES Debugger :: " << system->GetROMFilePathName() << endl;
+    ss << "SNES Debugger :: " << system->GetROMFilePathName();
     SetTitle(ss.str());
 }
 
@@ -114,7 +119,7 @@ void SNESDebugger::RenderContent()
 #   undef INSPECT_REG
     }
 
-    if(ImGui::CollapsingHeader("System signals", 0)) {
+    if(ImGui::CollapsingHeader("System signals", ImGuiTreeNodeFlags_DefaultOpen)) {
 #   define INSPECT_SIGNAL(__var, __label, __function, __width, __high_z_str) \
             ss.str(""); ss.clear(); \
             __var = __function(); \

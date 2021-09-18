@@ -40,4 +40,6 @@ public:
 
 private:
     static std::vector<System::Information const*> system_informations;
+
+    BASE_WINDOW_FUNCTIONAL_CODE_DECL();
 };

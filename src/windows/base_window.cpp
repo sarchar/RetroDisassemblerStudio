@@ -1,3 +1,4 @@
+#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -8,17 +9,11 @@
 
 using namespace std;
 
-// not thread safe, all windows need to be created on the main thread
-unsigned int BaseWindow::next_id = 0;
-
-BaseWindow::BaseWindow(string const& title)
-    : windowless(false), open(true)
+BaseWindow::BaseWindow(string const& tag)
+    : windowless(false), open(true), window_tag(tag)
 {
-    // give the window an id
-    window_id = BaseWindow::next_id++;
-
-    // set the window title
-    SetTitle(title);
+    // start window_id at -1 for later
+    window_id = -1;
 
     // create the signals
     window_closed = make_shared<window_closed_t>();
@@ -31,7 +26,8 @@ BaseWindow::~BaseWindow()
 void BaseWindow::SetTitle(std::string const& t)
 {
     stringstream ss;
-    ss << t << "##" << BaseWindow::next_id++;
+    if(window_id < 0) window_id = GetNextIDRef()++;
+    ss << t << "###" << window_tag << "_" << window_id;
     window_title = ss.str();
 }
 
