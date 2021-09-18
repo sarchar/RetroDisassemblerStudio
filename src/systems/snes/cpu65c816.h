@@ -205,6 +205,7 @@ private:
         AM_ABSOLUTE,
         AM_ABSOLUTE_INDEXED_X,
         AM_ABSOLUTE_INDEXED_Y,
+        AM_ABSOLUTE_INDEXED_X_INDIRECT,
         AM_ABSOLUTE_INDIRECT,
 
         // Stack - Push or Pull from the stack using the S register

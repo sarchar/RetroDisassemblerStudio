@@ -15,7 +15,16 @@ HEADER_SIZE = 4
 _nmi:
 _reset:
 _irq:
-    jmp _reset
+    lda #<behind
+    sta $10
+    lda #>behind
+    sta $11
+behind:
+    jmp ahead
+    nop
+ahead:
+    ldx #$10
+    jmp ($0000,x)
 
     .org $FFFA
 VECTORS:

@@ -186,12 +186,19 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
             case AM_DIRECT_INDEXED_X_INDIRECT:
             case AM_DIRECT_INDIRECT_INDEXED_Y:
             case AM_ABSOLUTE:
-            case AM_ABSOLUTE_INDIRECT:
+            case AM_ABSOLUTE_INDEXED_X:
+            case AM_ABSOLUTE_INDEXED_Y:
                 // for these modes, the memory address has already been computed and stored in operand_address
                 // stay in this uC instruction and write the data to the address it came from
                 // TODO the value needs to be written in reverse (high byte first) if it's a R-M-W instruction
                 current_memory_step = MS_WRITE_VALUE_LOW;
                 current_uc_set_pc--;
+                break;
+
+            // absolute indirect modes don't have any instructions that store to memory
+            case AM_ABSOLUTE_INDEXED_X_INDIRECT:
+            case AM_ABSOLUTE_INDIRECT:
+                assert(false);
                 break;
 
             case AM_STACK:
@@ -446,6 +453,9 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
         // latch the memory low byte
         intermediate_data.as_byte = data_line;
 
+        // start the data size read at 1
+        intermediate_data_size = 1;
+
         if(ShouldFetchValueHigh()) {
             current_memory_step = MS_FETCH_VALUE_HIGH;
             current_uc_set_pc--;
@@ -464,6 +474,9 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
         // latch the memory high byte
         intermediate_data.high_byte = data_line;
 
+        // increment the data size read
+        intermediate_data_size++;
+
         if(ShouldFetchValueBank()) {
             current_memory_step = MS_FETCH_VALUE_BANK;
             current_uc_set_pc--;
@@ -476,6 +489,10 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
                 current_memory_step = MS_MODIFY;
             }
         }
+        break;
+
+    case MS_FETCH_VALUE_BANK:
+        assert(false); //TODO
         break;
 
     case MS_FETCH_STACK_LOW:
@@ -516,6 +533,7 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
 
         case AM_ABSOLUTE_INDEXED_X:
         case AM_ABSOLUTE_INDEXED_Y:
+        case AM_ABSOLUTE_INDEXED_X_INDIRECT:
         case AM_DIRECT_INDIRECT_INDEXED_Y:  // for this mode, the indirect address is a word and doesn't page wrap
             operand_address.as_word += (u16)((current_memory_step == MS_ADD_X_REGISTER) ? registers.xl : registers.yl);
             break;
@@ -544,6 +562,7 @@ bool CPU65C816::ShouldFetchOperandHigh()
     case AM_ABSOLUTE:
     case AM_ABSOLUTE_INDEXED_X:
     case AM_ABSOLUTE_INDEXED_Y:
+    case AM_ABSOLUTE_INDEXED_X_INDIRECT:
     case AM_ABSOLUTE_INDIRECT:
         return true;
 
@@ -561,6 +580,7 @@ bool CPU65C816::ShouldFetchOperandBank()
     case AM_ABSOLUTE:
     case AM_ABSOLUTE_INDEXED_X:
     case AM_ABSOLUTE_INDEXED_Y:
+    case AM_ABSOLUTE_INDEXED_X_INDIRECT:
     case AM_ABSOLUTE_INDIRECT:
         return false;
         break;
@@ -581,7 +601,8 @@ bool CPU65C816::ShouldFetchValueHigh()
 
     switch(current_addressing_mode) {
     case AM_ABSOLUTE_INDIRECT:
-        // AM_ABSOLUTE_INDIRECT used with JMP (a) requires a word
+    case AM_ABSOLUTE_INDEXED_X_INDIRECT:
+        // these indirect values are usedused with JMP and JSR, and they require a word /value/
         return true;
 
     default:
@@ -648,43 +669,49 @@ void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch)
     case AM_ABSOLUTE:
     case AM_ABSOLUTE_INDEXED_X:
     case AM_ABSOLUTE_INDEXED_Y:
+    case AM_ABSOLUTE_INDEXED_X_INDIRECT:
         // absolute uses data bank
         operand_address.bank_byte = registers.dbr;
 
         // TODO move onto the next step, which will depend on the addressing mode
         //! SetMemoryStepAfterAbsoluteOperand();
         // for now, we will just read memory
-        if(current_addressing_mode == AM_ABSOLUTE) {
+        switch(current_addressing_mode) {
+        case AM_ABSOLUTE:
             if(is_memory_fetch) {
                 current_memory_step = MS_FETCH_VALUE_LOW;
                 current_uc_set_pc--;
             } else {
                 current_memory_step = MS_MODIFY;
             }
-        } else if(current_addressing_mode == AM_ABSOLUTE_INDEXED_X) {
+            break;
+
+        case AM_ABSOLUTE_INDEXED_X:
+        case AM_ABSOLUTE_INDEXED_X_INDIRECT:
             current_memory_step = MS_ADD_X_REGISTER;
             current_uc_set_pc--;
-        } else if(current_addressing_mode == AM_ABSOLUTE_INDEXED_Y) {
+            break;
+
+        case AM_ABSOLUTE_INDEXED_Y:
             current_memory_step = MS_ADD_Y_REGISTER;
             current_uc_set_pc--;
+            break;
         }
         break;
 
     case AM_ABSOLUTE_INDIRECT:
-        // AM_ABSOLUTE_INDIRECT is only used with JMP (a) and JML (a).  All other absolute indirects are indexed.
+        // this addressing mode is only available during a fetch
+        assert(is_memory_fetch);
+
+        // AM_ABSOLUTE_INDIRECT is only used with JMP (a) and JML (a), and UC_STORE_PC wants the the indirect
+        // address, not the value at the address, so we use FETCH_VALUE not FETCH_INDIRECT
         //
-        // absolute uses data bank
+        // absolute read uses data bank
         operand_address.bank_byte = registers.dbr;
 
-        // TODO move onto the next step, which will depend on the addressing mode
-        //! SetMemoryStepAfterAbsoluteOperand();
-        // for now, we will just read the value address
-        if(is_memory_fetch) {
-            current_memory_step = MS_FETCH_VALUE_LOW;
-            current_uc_set_pc--;
-        } else {
-            current_memory_step = MS_MODIFY;
-        }
+        // always move on to read the value
+        current_memory_step = MS_FETCH_VALUE_LOW;
+        current_uc_set_pc--;
         break;
 
     default:
@@ -699,7 +726,6 @@ void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch)
 void CPU65C816::SetMemoryStepAfterIndirectAddressFetch(bool is_memory_fetch)
 {
     switch(current_addressing_mode) {
-    case AM_ABSOLUTE_INDIRECT:
     case AM_DIRECT_INDIRECT:
     case AM_DIRECT_INDEXED_X_INDIRECT:
         // the last step in this addressing mode was to fetch the indirect address,
@@ -716,6 +742,10 @@ void CPU65C816::SetMemoryStepAfterIndirectAddressFetch(bool is_memory_fetch)
         // on post-indexed Y, we now need to add Y to the address
         current_memory_step = MS_ADD_Y_REGISTER;
         current_uc_set_pc--;
+        break;
+
+    default:
+        assert(false); // invalid addressing mode fetching something indirect
         break;
     }
 }
@@ -780,8 +810,16 @@ void CPU65C816::SetMemoryStepAfterIndexRegisterAdded(bool is_memory_fetch)
         break;
 
     case AM_DIRECT_INDEXED_X_INDIRECT:
-        // in the indirect mode, fetch the indirect address
+        // in the indirect modes, fetch the indirect address
         current_memory_step = MS_FETCH_INDIRECT_LOW;
+        current_uc_set_pc--;
+        break;
+
+    case AM_ABSOLUTE_INDEXED_X_INDIRECT:
+        // absolute indexed x indirect is only used with JMP and JSR, and they want the actual
+        // indirect address, not the value of the data pointed to by the indirect address. so we'll use
+        // a FETCH_VALUE here to load intermediate_data with the address so that UC_STORE_PC gets the right value
+        current_memory_step = MS_FETCH_VALUE_LOW;
         current_uc_set_pc--;
         break;
     }
@@ -814,6 +852,7 @@ void CPU65C816::StartInstructionCycle()
                 case AM_ABSOLUTE:
                 case AM_ABSOLUTE_INDEXED_X:
                 case AM_ABSOLUTE_INDEXED_Y:
+                case AM_ABSOLUTE_INDEXED_X_INDIRECT:
                 case AM_ABSOLUTE_INDIRECT:
                     current_memory_step = MS_FETCH_OPERAND_LOW;
                     break;
