@@ -191,6 +191,8 @@ private:
 
         // Absolute - Read one operand bytes and treat it as the effective address
         AM_ABSOLUTE,
+        AM_ABSOLUTE_INDEXED_X,
+        AM_ABSOLUTE_INDEXED_Y,
         AM_ABSOLUTE_INDIRECT,
 
         // Stack - Push or Pull from the stack using the S register
@@ -262,6 +264,7 @@ private:
     static UC_OPCODE const EOR_UC[];
     static UC_OPCODE const INC_UC[];
     static UC_OPCODE const INCA_UC[];
+    static UC_OPCODE const INX_UC[];
     static UC_OPCODE const JMP_UC[];
     static UC_OPCODE const LDA_UC[];
     static UC_OPCODE const LDX_UC[];
