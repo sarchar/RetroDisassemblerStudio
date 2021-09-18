@@ -191,6 +191,7 @@ private:
 
         // Absolute - Read one operand bytes and treat it as the effective address
         AM_ABSOLUTE,
+        AM_ABSOLUTE_INDIRECT,
 
         // Stack - Push or Pull from the stack using the S register
         AM_STACK,
@@ -211,6 +212,7 @@ private:
         MS_FETCH_OPERAND_BANK,
         MS_FETCH_VALUE_LOW,
         MS_FETCH_VALUE_HIGH,
+        MS_FETCH_VALUE_BANK,
         MS_FETCH_STACK_LOW,
         MS_FETCH_STACK_HIGH,
         // TODO indexed adds, etc
@@ -231,6 +233,7 @@ private:
     bool ShouldFetchOperandHigh();
     bool ShouldFetchOperandBank();
     bool ShouldFetchValueHigh();
+    bool ShouldFetchValueBank();
 
     void SetMemoryStepAfterOperandFetch(bool);
     void SetMemoryStepAfterDirectPageAdded(bool);

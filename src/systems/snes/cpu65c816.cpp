@@ -182,8 +182,11 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
             case AM_DIRECT_PAGE:
             case AM_DIRECT_INDEXED_X:
             case AM_DIRECT_INDEXED_Y:
-                // for direct page, the memory address has already been computed and stored in data_rw_address/bank
+            case AM_ABSOLUTE:
+            case AM_ABSOLUTE_INDIRECT:
+                // for these modes, the memory address has already been computed and stored in operand_address
                 // stay in this uC instruction and write the data to the address it came from
+                // TODO the value needs to be written in reverse (high byte first) if it's a R-M-W instruction
                 current_memory_step = MS_WRITE_VALUE_LOW;
                 current_uc_set_pc--;
                 break;
@@ -416,7 +419,21 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
         break;
 
     case MS_FETCH_VALUE_HIGH:
-        assert(false); //unimplemented
+        // latch the memory high byte
+        intermediate_data.high_byte = data_line;
+
+        if(ShouldFetchValueBank()) {
+            current_memory_step = MS_FETCH_VALUE_BANK;
+            current_uc_set_pc--;
+        } else {
+            // we're done with memory, but for R-W-M instructions (instructions where we fetch and write the same
+            // memory), we have to simulate an extra
+            if(is_memory_store) {
+                current_memory_step = MS_MODIFY_WAIT;
+            } else {
+                current_memory_step = MS_MODIFY;
+            }
+        }
         break;
 
     case MS_FETCH_STACK_LOW:
@@ -457,6 +474,7 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
 
 bool CPU65C816::ShouldFetchOperandHigh()
 {
+    // TODO just use lookup tables once all the addressing modes are implemented
     switch(current_addressing_mode) {
     case AM_IMMEDIATE:
     case AM_DIRECT_PAGE:
@@ -466,6 +484,7 @@ bool CPU65C816::ShouldFetchOperandHigh()
 
     case AM_IMMEDIATE_WORD:
     case AM_ABSOLUTE:
+    case AM_ABSOLUTE_INDIRECT:
         return true;
 
     default:
@@ -476,6 +495,7 @@ bool CPU65C816::ShouldFetchOperandHigh()
 
 bool CPU65C816::ShouldFetchOperandBank()
 {
+    // TODO just use lookup tables once all the addressing modes are implemented
     switch(current_addressing_mode) {
     case AM_IMMEDIATE:
     case AM_IMMEDIATE_WORD:
@@ -483,6 +503,7 @@ bool CPU65C816::ShouldFetchOperandBank()
     case AM_DIRECT_INDEXED_X:
     case AM_DIRECT_INDEXED_Y:
     case AM_ABSOLUTE:
+    case AM_ABSOLUTE_INDIRECT:
         return false;
         break;
 
@@ -495,13 +516,27 @@ bool CPU65C816::ShouldFetchOperandBank()
 bool CPU65C816::ShouldFetchValueHigh()
 {
     // TODO reading 16-bit and 24-bit values
-        // TODO move onto next byte, if required
-        // TODO how to tell if fetch is for memory or index?
-        //!if(IsWordMemoryEnabled()) {
-        //!}
+    // TODO move onto next byte, if required
+    // TODO how to tell if fetch is for memory or index?
+    //!if(IsWordMemoryEnabled()) {
+    //!}
 
+    switch(current_addressing_mode) {
+    case AM_ABSOLUTE_INDIRECT:
+        // AM_ABSOLUTE_INDIRECT used with JMP (a) requires a word
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+bool CPU65C816::ShouldFetchValueBank()
+{
+    // nothing using this yet
     return false;
 }
+
 
 void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch)
 {
@@ -550,8 +585,29 @@ void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch)
         // TODO move onto the next step, which will depend on the addressing mode
         //! SetMemoryStepAfterAbsoluteOperand();
         // for now, we will just read memory
-        current_memory_step = MS_FETCH_VALUE_LOW;
-        current_uc_set_pc--;
+        if(is_memory_fetch) {
+            current_memory_step = MS_FETCH_VALUE_LOW;
+            current_uc_set_pc--;
+        } else {
+            current_memory_step = MS_MODIFY;
+        }
+        break;
+
+    case AM_ABSOLUTE_INDIRECT:
+        // AM_ABSOLUTE_INDIRECT is only used with JMP (a) and JML (a).  All other absolute indirects are indexed.
+        //
+        // absolute uses data bank
+        operand_address.bank_byte = registers.dbr;
+
+        // TODO move onto the next step, which will depend on the addressing mode
+        //! SetMemoryStepAfterAbsoluteOperand();
+        // for now, we will just read the value address
+        if(is_memory_fetch) {
+            current_memory_step = MS_FETCH_VALUE_LOW;
+            current_uc_set_pc--;
+        } else {
+            current_memory_step = MS_MODIFY;
+        }
         break;
 
     default:
@@ -633,6 +689,7 @@ void CPU65C816::StartInstructionCycle()
                 case AM_DIRECT_INDEXED_X:
                 case AM_DIRECT_INDEXED_Y:
                 case AM_ABSOLUTE:
+                case AM_ABSOLUTE_INDIRECT:
                     current_memory_step = MS_FETCH_OPERAND_LOW;
                     break;
 
@@ -773,15 +830,6 @@ void CPU65C816::SetupPinsLowCycleForFetch()
         cout << "[cpu65c816] asserting memory fetch lines for ";
 
         switch(current_memory_step) {
-        case MS_FETCH_OPERAND_LOW:
-        case MS_FETCH_OPERAND_HIGH:
-        case MS_FETCH_OPERAND_BANK:
-            cout << "instruction operand byte " << (current_memory_step - MS_FETCH_OPERAND_LOW) << endl;
-            pins.vpa.AssertHigh(); // assert VPA
-            data_rw_bank    = registers.pbr; // operands use the program bank
-            data_rw_address = registers.pc;  // PC is incremented in FinishInstructionCycle() on operand fetches
-            break;
-        
         case MS_FETCH_VECTOR_LOW:
         case MS_FETCH_VECTOR_HIGH:
             cout << "vector address byte " << (current_memory_step - MS_FETCH_VECTOR_LOW) << endl;
@@ -790,8 +838,19 @@ void CPU65C816::SetupPinsLowCycleForFetch()
             data_rw_bank    = operand_address.bank_byte;  // vector is always in bank 0, but use it anyway
             data_rw_address = operand_address.as_word + (current_memory_step - MS_FETCH_VECTOR_LOW); // use the vector address
             break;
-        
+
+        case MS_FETCH_OPERAND_LOW:
+        case MS_FETCH_OPERAND_HIGH:
+        case MS_FETCH_OPERAND_BANK:
+            cout << "instruction operand byte " << (current_memory_step - MS_FETCH_OPERAND_LOW) << endl;
+            pins.vpa.AssertHigh(); // assert VPA
+            data_rw_bank    = registers.pbr; // operands use the program bank
+            data_rw_address = registers.pc;  // PC is incremented in FinishInstructionCycle() on operand fetches
+            break;
+       
         case MS_FETCH_VALUE_LOW:
+        case MS_FETCH_VALUE_HIGH:
+        case MS_FETCH_VALUE_BANK:
             cout << "memory address byte " << (current_memory_step - MS_FETCH_VALUE_LOW) << endl;
             pins.vda.AssertHigh(); // assert VDA
             // data_rw_address and bank are already set up but we'll need an offset for low/high/bank bytes
