@@ -189,6 +189,10 @@ private:
         AM_DIRECT_INDEXED_X,
         AM_DIRECT_INDEXED_Y,
 
+        // Direct page indexed with X indirect - Read one operand byte, add X and then X
+        // then read an effective address from that address
+        AM_DIRECT_INDEXED_X_INDIRECT,
+
         // Absolute - Read one operand bytes and treat it as the effective address
         AM_ABSOLUTE,
         AM_ABSOLUTE_INDEXED_X,
@@ -212,6 +216,9 @@ private:
         MS_FETCH_OPERAND_LOW,
         MS_FETCH_OPERAND_HIGH,
         MS_FETCH_OPERAND_BANK,
+        MS_FETCH_INDIRECT_LOW,
+        MS_FETCH_INDIRECT_HIGH,
+        MS_FETCH_INDIRECT_BANK,
         MS_FETCH_VALUE_LOW,
         MS_FETCH_VALUE_HIGH,
         MS_FETCH_VALUE_BANK,
@@ -234,6 +241,7 @@ private:
     // helper functions for changing to new states
     bool ShouldFetchOperandHigh();
     bool ShouldFetchOperandBank();
+    bool ShouldFetchIndirectBank();
     bool ShouldFetchValueHigh();
     bool ShouldFetchValueBank();
 
@@ -255,7 +263,7 @@ private:
             u16 as_word;
             u8  _unused0;
         };
-    } intermediate_data, operand_address;
+    } intermediate_data, operand_address, indirect_address;
 
     unsigned int intermediate_data_size;
 

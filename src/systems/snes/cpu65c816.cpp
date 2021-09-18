@@ -182,6 +182,7 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
             case AM_DIRECT_PAGE:
             case AM_DIRECT_INDEXED_X:
             case AM_DIRECT_INDEXED_Y:
+            case AM_DIRECT_INDEXED_X_INDIRECT:
             case AM_ABSOLUTE:
             case AM_ABSOLUTE_INDIRECT:
                 // for these modes, the memory address has already been computed and stored in operand_address
@@ -400,6 +401,44 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
         assert(false); //TODO
         break;
 
+    case MS_FETCH_INDIRECT_LOW:
+        // set the bank byte to the data bank
+        indirect_address.bank_byte = registers.dbr;
+
+        // latch the indirect address low byte
+        indirect_address.as_byte = data_line;
+
+        // TODO page wrap appropriately
+        operand_address.as_word += 1;
+
+        // indirect addresses are always at least word size, so go read the high byte
+        current_memory_step = MS_FETCH_INDIRECT_HIGH;
+        current_uc_set_pc--;
+        break;
+
+    case MS_FETCH_INDIRECT_HIGH:
+        // latch the indirect address high byte
+        indirect_address.high_byte = data_line;
+
+        if(ShouldFetchIndirectBank()) {
+            current_memory_step = MS_FETCH_INDIRECT_BANK;
+            current_uc_set_pc--;
+        } else {
+            // now we have an indirect_address, overwrite operand_address with it and either fetch data or move on
+            operand_address = indirect_address;
+            if(is_memory_fetch) {
+                current_memory_step = MS_FETCH_VALUE_LOW;
+                current_uc_set_pc--;
+            } else {
+                current_memory_step = MS_MODIFY;
+            }
+        }
+        break;
+
+    case MS_FETCH_INDIRECT_BANK:
+        assert(false); //unimplemented
+        break;
+
     case MS_FETCH_VALUE_LOW:
         // latch the memory low byte
         intermediate_data.as_byte = data_line;
@@ -468,6 +507,7 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
         switch(current_addressing_mode) {
         case AM_DIRECT_INDEXED_X:
         case AM_DIRECT_INDEXED_Y:
+        case AM_DIRECT_INDEXED_X_INDIRECT:
             operand_address.as_byte += (current_memory_step == MS_ADD_X_REGISTER) ? registers.xl : registers.yl;
             break;
 
@@ -491,6 +531,7 @@ bool CPU65C816::ShouldFetchOperandHigh()
     case AM_DIRECT_PAGE:
     case AM_DIRECT_INDEXED_X:
     case AM_DIRECT_INDEXED_Y:
+    case AM_DIRECT_INDEXED_X_INDIRECT:
         return false;
 
     case AM_IMMEDIATE_WORD:
@@ -546,6 +587,12 @@ bool CPU65C816::ShouldFetchValueHigh()
     }
 }
 
+bool CPU65C816::ShouldFetchIndirectBank()
+{
+    // nothing using this yet
+    return false;
+}
+
 bool CPU65C816::ShouldFetchValueBank()
 {
     // nothing using this yet
@@ -577,6 +624,7 @@ void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch)
     case AM_DIRECT_PAGE:
     case AM_DIRECT_INDEXED_X:
     case AM_DIRECT_INDEXED_Y:
+    case AM_DIRECT_INDEXED_X_INDIRECT:
         // direct page is always in bank 0
         operand_address.bank_byte = 0;
 
@@ -660,7 +708,8 @@ void CPU65C816::SetMemoryStepAfterDirectPageAdded(bool is_memory_fetch)
         break;
 
     case AM_DIRECT_INDEXED_X:
-        // for direct-indexed-x, add the X register
+    case AM_DIRECT_INDEXED_X_INDIRECT:
+        // for direct-indexed-x and direct-indexed-x-indirect, add the X register
         current_memory_step = MS_ADD_X_REGISTER;
         current_uc_set_pc--;
         break;
@@ -691,6 +740,12 @@ void CPU65C816::SetMemoryStepAfterIndexRegisterAdded(bool is_memory_fetch)
             current_memory_step = MS_MODIFY;
         }
         break;
+
+    case AM_DIRECT_INDEXED_X_INDIRECT:
+        // in the indirect mode, fetch the indirect address
+        current_memory_step = MS_FETCH_INDIRECT_LOW;
+        current_uc_set_pc--;
+        break;
     }
 }
 
@@ -715,6 +770,7 @@ void CPU65C816::StartInstructionCycle()
                 case AM_DIRECT_PAGE:
                 case AM_DIRECT_INDEXED_X:
                 case AM_DIRECT_INDEXED_Y:
+                case AM_DIRECT_INDEXED_X_INDIRECT:
                 case AM_ABSOLUTE:
                 case AM_ABSOLUTE_INDEXED_X:
                 case AM_ABSOLUTE_INDEXED_Y:
@@ -875,6 +931,15 @@ void CPU65C816::SetupPinsLowCycleForFetch()
             pins.vpa.AssertHigh(); // assert VPA
             data_rw_bank    = registers.pbr; // operands use the program bank
             data_rw_address = registers.pc;  // PC is incremented in FinishInstructionCycle() on operand fetches
+            break;
+
+        case MS_FETCH_INDIRECT_LOW:
+        case MS_FETCH_INDIRECT_HIGH:
+        case MS_FETCH_INDIRECT_BANK:
+            cout << "indirect address byte " << (current_memory_step - MS_FETCH_INDIRECT_LOW) << endl;
+            pins.vda.AssertHigh(); // assert VDA
+            data_rw_bank    = operand_address.bank_byte; // indirect address comes from data bank
+            data_rw_address = operand_address.as_word;   // address incremented in FinishInstructionCycle() on operand fetches
             break;
        
         case MS_FETCH_VALUE_LOW:
