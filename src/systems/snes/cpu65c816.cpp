@@ -182,6 +182,7 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
             case AM_DIRECT_PAGE:
             case AM_DIRECT_INDEXED_X:
             case AM_DIRECT_INDEXED_Y:
+            case AM_DIRECT_INDIRECT:
             case AM_DIRECT_INDEXED_X_INDIRECT:
             case AM_DIRECT_INDIRECT_INDEXED_Y:
             case AM_ABSOLUTE:
@@ -534,6 +535,7 @@ bool CPU65C816::ShouldFetchOperandHigh()
     case AM_DIRECT_PAGE:
     case AM_DIRECT_INDEXED_X:
     case AM_DIRECT_INDEXED_Y:
+    case AM_DIRECT_INDIRECT:
     case AM_DIRECT_INDEXED_X_INDIRECT:
     case AM_DIRECT_INDIRECT_INDEXED_Y:
         return false;
@@ -624,6 +626,7 @@ void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch)
     case AM_DIRECT_PAGE:
     case AM_DIRECT_INDEXED_X:
     case AM_DIRECT_INDEXED_Y:
+    case AM_DIRECT_INDIRECT:
     case AM_DIRECT_INDEXED_X_INDIRECT:
     case AM_DIRECT_INDIRECT_INDEXED_Y:
         // direct page is always in bank 0
@@ -697,7 +700,10 @@ void CPU65C816::SetMemoryStepAfterIndirectAddressFetch(bool is_memory_fetch)
 {
     switch(current_addressing_mode) {
     case AM_ABSOLUTE_INDIRECT:
+    case AM_DIRECT_INDIRECT:
     case AM_DIRECT_INDEXED_X_INDIRECT:
+        // the last step in this addressing mode was to fetch the indirect address,
+        // so move on to fetch the value or execute the opcode
         if(is_memory_fetch) {
             current_memory_step = MS_FETCH_VALUE_LOW;
             current_uc_set_pc--;
@@ -744,8 +750,9 @@ void CPU65C816::SetMemoryStepAfterDirectPageAdded(bool is_memory_fetch)
         current_uc_set_pc--;
         break;
 
+    case AM_DIRECT_INDIRECT:
     case AM_DIRECT_INDIRECT_INDEXED_Y:
-        // for direct-indirect-indexed-y, we first have to fetch the indirect address before adding Y
+        // for direct-indirect-***, we first have to fetch the indirect address before doing anything else, like adding Y
         current_memory_step = MS_FETCH_INDIRECT_LOW;
         current_uc_set_pc--;
         break;
@@ -801,6 +808,7 @@ void CPU65C816::StartInstructionCycle()
                 case AM_DIRECT_PAGE:
                 case AM_DIRECT_INDEXED_X:
                 case AM_DIRECT_INDEXED_Y:
+                case AM_DIRECT_INDIRECT:
                 case AM_DIRECT_INDEXED_X_INDIRECT:
                 case AM_DIRECT_INDIRECT_INDEXED_Y:
                 case AM_ABSOLUTE:

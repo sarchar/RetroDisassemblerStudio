@@ -26,6 +26,9 @@ _irq:
     lda #$42
     sta ($00,x)
     ; memory $0210 should contain $42
+    ; zero out $0210
+    lda #$00
+    sta ($02)
     ; overwrite $02 with $00
     stz $02
     ; put $10 into Y

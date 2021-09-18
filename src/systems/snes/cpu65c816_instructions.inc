@@ -126,7 +126,7 @@ CPU65C816::UC_OPCODE const * const CPU65C816::INSTRUCTION_UCs[256] = {
     // 8C: STY a      STA a             STX a             STA al
     DEAD_INSTRUCTION, STA_UC          , DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 90: BCC r      STA (d),y         STA (d)           STA (d,s),y
-    DEAD_INSTRUCTION, STA_UC          , DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    DEAD_INSTRUCTION, STA_UC          , STA_UC          , DEAD_INSTRUCTION, 
     // 94: STY d,x    STA d,x           STX d,y           STA [d],y
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 98: TYA        STA a,y           TXS               TXY
@@ -257,7 +257,7 @@ CPU65C816::ADDRESSING_MODE const CPU65C816::INSTRUCTION_ADDRESSING_MODES[256] = 
     // 8C: STY a          STA a                         STX a                STA al
     AM_IMPLIED          , AM_ABSOLUTE                 , AM_IMPLIED         , AM_IMPLIED,
     // 90: BCC r          STA (d),y                     STA (d)              STA (d,s),y
-    AM_IMPLIED          , AM_DIRECT_INDIRECT_INDEXED_Y, AM_IMPLIED         , AM_IMPLIED,
+    AM_IMPLIED          , AM_DIRECT_INDIRECT_INDEXED_Y, AM_DIRECT_INDIRECT , AM_IMPLIED,
     // 94: STY d,x        STA d,x                       STX d,y              STA [d],y
     AM_IMPLIED          , AM_IMPLIED                  , AM_IMPLIED         , AM_IMPLIED,
     // 98: TYA            STA a,y                       TXS                  TXY

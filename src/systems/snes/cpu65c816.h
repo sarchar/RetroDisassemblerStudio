@@ -189,9 +189,16 @@ private:
         AM_DIRECT_INDEXED_X,
         AM_DIRECT_INDEXED_Y,
 
+        // Direct page indirect - Read one operand, add the D regsiter to it, then read
+        // the indirect address from that result
+        AM_DIRECT_INDIRECT,
+
         // Direct page indexed with X indirect - Read one operand byte, add X and then X
         // then read an effective address from that address
         AM_DIRECT_INDEXED_X_INDIRECT,
+
+        // Direct page indirect post indexed with Y - Read one operand byte, add the D register
+        // then fetch that indirect address and add Y to it
         AM_DIRECT_INDIRECT_INDEXED_Y,
 
         // Absolute - Read one operand bytes and treat it as the effective address
