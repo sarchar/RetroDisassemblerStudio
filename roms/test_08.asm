@@ -26,6 +26,14 @@ _irq:
     lda #$42
     sta ($00,x)
     ; memory $0210 should contain $42
+    ; overwrite $02 with $00
+    stz $02
+    ; put $10 into Y
+    ldy #$10
+    ; write $E8
+    lda #$E8
+    sta ($02),y
+    ; memory at $210 should contain $E8
 @0:
     jmp @0-
 

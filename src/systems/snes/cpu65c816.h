@@ -192,6 +192,7 @@ private:
         // Direct page indexed with X indirect - Read one operand byte, add X and then X
         // then read an effective address from that address
         AM_DIRECT_INDEXED_X_INDIRECT,
+        AM_DIRECT_INDIRECT_INDEXED_Y,
 
         // Absolute - Read one operand bytes and treat it as the effective address
         AM_ABSOLUTE,
@@ -232,6 +233,7 @@ private:
         MS_MODIFY_WAIT,
         MS_MODIFY,
         MS_WRITE_VALUE_LOW,
+        MS_WRITE_VALUE_HIGH,
         MS_WRITE_STACK_HIGH,
         MS_WRITE_STACK_LOW
     };
@@ -246,6 +248,7 @@ private:
     bool ShouldFetchValueBank();
 
     void SetMemoryStepAfterOperandFetch(bool);
+    void SetMemoryStepAfterIndirectAddressFetch(bool);
     void SetMemoryStepAfterDirectPageAdded(bool);
     void SetMemoryStepAfterIndexRegisterAdded(bool);
 

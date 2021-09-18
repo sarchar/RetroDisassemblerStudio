@@ -183,6 +183,7 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
             case AM_DIRECT_INDEXED_X:
             case AM_DIRECT_INDEXED_Y:
             case AM_DIRECT_INDEXED_X_INDIRECT:
+            case AM_DIRECT_INDIRECT_INDEXED_Y:
             case AM_ABSOLUTE:
             case AM_ABSOLUTE_INDIRECT:
                 // for these modes, the memory address has already been computed and stored in operand_address
@@ -320,6 +321,10 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
             current_memory_step = MS_INIT;
             break;
 
+        case MS_WRITE_VALUE_HIGH:
+            assert(false);
+            break;
+
         case MS_WRITE_STACK_LOW:
             // TODO need 16 and 24-bit writes
             current_memory_step = MS_INIT;
@@ -426,12 +431,9 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
         } else {
             // now we have an indirect_address, overwrite operand_address with it and either fetch data or move on
             operand_address = indirect_address;
-            if(is_memory_fetch) {
-                current_memory_step = MS_FETCH_VALUE_LOW;
-                current_uc_set_pc--;
-            } else {
-                current_memory_step = MS_MODIFY;
-            }
+
+            // might need to do more processing depending on the addressing mode
+            SetMemoryStepAfterIndirectAddressFetch(is_memory_fetch);
         }
         break;
 
@@ -513,6 +515,7 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
 
         case AM_ABSOLUTE_INDEXED_X:
         case AM_ABSOLUTE_INDEXED_Y:
+        case AM_DIRECT_INDIRECT_INDEXED_Y:  // for this mode, the indirect address is a word and doesn't page wrap
             operand_address.as_word += (u16)((current_memory_step == MS_ADD_X_REGISTER) ? registers.xl : registers.yl);
             break;
         }
@@ -532,6 +535,7 @@ bool CPU65C816::ShouldFetchOperandHigh()
     case AM_DIRECT_INDEXED_X:
     case AM_DIRECT_INDEXED_Y:
     case AM_DIRECT_INDEXED_X_INDIRECT:
+    case AM_DIRECT_INDIRECT_INDEXED_Y:
         return false;
 
     case AM_IMMEDIATE_WORD:
@@ -551,11 +555,7 @@ bool CPU65C816::ShouldFetchOperandBank()
 {
     // TODO just use lookup tables once all the addressing modes are implemented
     switch(current_addressing_mode) {
-    case AM_IMMEDIATE:
     case AM_IMMEDIATE_WORD:
-    case AM_DIRECT_PAGE:
-    case AM_DIRECT_INDEXED_X:
-    case AM_DIRECT_INDEXED_Y:
     case AM_ABSOLUTE:
     case AM_ABSOLUTE_INDEXED_X:
     case AM_ABSOLUTE_INDEXED_Y:
@@ -625,6 +625,7 @@ void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch)
     case AM_DIRECT_INDEXED_X:
     case AM_DIRECT_INDEXED_Y:
     case AM_DIRECT_INDEXED_X_INDIRECT:
+    case AM_DIRECT_INDIRECT_INDEXED_Y:
         // direct page is always in bank 0
         operand_address.bank_byte = 0;
 
@@ -690,6 +691,29 @@ void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch)
     }
 }
 
+// After the indirect address has been fetched, we may need to do more work
+// otherwise, fetch the value in memory or go on to process it
+void CPU65C816::SetMemoryStepAfterIndirectAddressFetch(bool is_memory_fetch)
+{
+    switch(current_addressing_mode) {
+    case AM_ABSOLUTE_INDIRECT:
+    case AM_DIRECT_INDEXED_X_INDIRECT:
+        if(is_memory_fetch) {
+            current_memory_step = MS_FETCH_VALUE_LOW;
+            current_uc_set_pc--;
+        } else {
+            current_memory_step = MS_MODIFY;
+        }
+        break;
+
+    case AM_DIRECT_INDIRECT_INDEXED_Y:
+        // on post-indexed Y, we now need to add Y to the address
+        current_memory_step = MS_ADD_Y_REGISTER;
+        current_uc_set_pc--;
+        break;
+    }
+}
+
 // After a direct page address has been fully set up in operand_address, determine the next memory step
 void CPU65C816::SetMemoryStepAfterDirectPageAdded(bool is_memory_fetch)
 {
@@ -719,6 +743,12 @@ void CPU65C816::SetMemoryStepAfterDirectPageAdded(bool is_memory_fetch)
         current_memory_step = MS_ADD_Y_REGISTER;
         current_uc_set_pc--;
         break;
+
+    case AM_DIRECT_INDIRECT_INDEXED_Y:
+        // for direct-indirect-indexed-y, we first have to fetch the indirect address before adding Y
+        current_memory_step = MS_FETCH_INDIRECT_LOW;
+        current_uc_set_pc--;
+        break;
     }
 }
 
@@ -728,11 +758,12 @@ void CPU65C816::SetMemoryStepAfterIndexRegisterAdded(bool is_memory_fetch)
     switch(current_addressing_mode) {
     case AM_DIRECT_INDEXED_X:
     case AM_DIRECT_INDEXED_Y:
+    case AM_DIRECT_INDIRECT_INDEXED_Y:
     case AM_ABSOLUTE_INDEXED_X:
     case AM_ABSOLUTE_INDEXED_Y:
-        // if all we wanted was operand + index register, then we're done now and
-        // operand_address now contains the direct/absolute+x/y address. we can go read the value from memory
-        // or we're only computing the address for a store operation, then move on to execute the opcode
+        // if adding a register offset is the last operation to do, then we're done now and
+        // operand_address now contains the direct/absolute/indirect+x/y address. we can go read the value from memory
+        // or if we're only computing the address for a store operation later, move on to execute the opcode
         if(is_memory_fetch) {
             current_memory_step = MS_FETCH_VALUE_LOW;
             current_uc_set_pc--;     // stay on the same uC instruction
@@ -771,6 +802,7 @@ void CPU65C816::StartInstructionCycle()
                 case AM_DIRECT_INDEXED_X:
                 case AM_DIRECT_INDEXED_Y:
                 case AM_DIRECT_INDEXED_X_INDIRECT:
+                case AM_DIRECT_INDIRECT_INDEXED_Y:
                 case AM_ABSOLUTE:
                 case AM_ABSOLUTE_INDEXED_X:
                 case AM_ABSOLUTE_INDEXED_Y:
