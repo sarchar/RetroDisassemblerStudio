@@ -16,8 +16,6 @@
 using namespace std;
 #include <stdio.h>
 
-BASE_WINDOW_FUNCTIONAL_CODE_IMPL(SNESMemory);
-
 shared_ptr<SNESMemory> SNESMemory::CreateWindow()
 {
     return make_shared<SNESMemory>();

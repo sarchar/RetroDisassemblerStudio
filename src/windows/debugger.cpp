@@ -16,8 +16,6 @@
 using namespace std;
 #include <stdio.h>
 
-BASE_WINDOW_FUNCTIONAL_CODE_IMPL(SNESDebugger);
-
 shared_ptr<SNESDebugger> SNESDebugger::CreateWindow()
 {
     return make_shared<SNESDebugger>();

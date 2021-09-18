@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -73,4 +75,18 @@ private:
 
 private:
     std::shared_ptr<System> current_system;
+
+    typedef std::function<std::shared_ptr<BaseWindow>(void)> create_window_func;
+    std::map<std::string, create_window_func> create_window_functions;
+
+private:
+    struct WindowFromINI {
+        std::string window_class;
+        std::string window_id;
+    };
+
+    void SetupINIHandlers();
+    WindowFromINI* NewINIWindow();
+    void CreateINIWindows();
+    std::vector<std::shared_ptr<WindowFromINI>> ini_windows;
 };

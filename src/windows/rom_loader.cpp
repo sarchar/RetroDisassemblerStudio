@@ -14,8 +14,6 @@
 
 using namespace std;
 
-BASE_WINDOW_FUNCTIONAL_CODE_IMPL(ROMLoader);
-
 std::vector<System::Information const*> ROMLoader::system_informations;
 
 shared_ptr<ROMLoader> ROMLoader::CreateWindow(string const& _file_path_name)

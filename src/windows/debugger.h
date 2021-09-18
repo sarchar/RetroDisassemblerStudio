@@ -12,6 +12,9 @@ public:
     SNESDebugger();
     virtual ~SNESDebugger();
 
+    virtual char const * const GetWindowClass() { return SNESDebugger::GetWindowClassStatic(); }
+    static char const * const GetWindowClassStatic() { return "SNESDebugger"; }
+
     // signals
 
 private:
@@ -28,6 +31,4 @@ private:
 
 public:
     static std::shared_ptr<SNESDebugger> CreateWindow();
-
-    BASE_WINDOW_FUNCTIONAL_CODE_DECL();
 };

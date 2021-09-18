@@ -12,6 +12,9 @@ public:
     SNESMemory();
     virtual ~SNESMemory();
 
+    virtual char const * const GetWindowClass() { return SNESMemory::GetWindowClassStatic(); }
+    static char const * const GetWindowClassStatic() { return "SNESMemory"; }
+
     // signals
 
 protected:
@@ -20,6 +23,4 @@ protected:
 
 public:
     static std::shared_ptr<SNESMemory> CreateWindow();
-
-    BASE_WINDOW_FUNCTIONAL_CODE_DECL();
 };

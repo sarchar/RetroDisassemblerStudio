@@ -36,6 +36,13 @@ MyApp::MyApp(int argc, char* argv[])
     ((void)argv);
     ROMLoader::RegisterSystemInformation(SNESSystem::GetInformationStatic());
     current_system_changed = make_shared<current_system_changed_t>();
+
+    // register all the windows
+#   define REGISTER_WINDOW_TYPE(className) \
+        create_window_functions[className::GetWindowClassStatic()] = std::bind(&className::CreateWindow);
+    REGISTER_WINDOW_TYPE(SNESMemory);
+    REGISTER_WINDOW_TYPE(SNESDebugger);
+#   undef REGISTER_WINDOW_TYPE
 }
 
 MyApp::~MyApp()
@@ -62,6 +69,11 @@ bool MyApp::OnWindowCreated()
     cout << layout_file << endl;
     io.IniFilename = layout_file.c_str();
 #endif
+
+    cout << "[MyApp] ImGui layout file is " << io.IniFilename << endl;
+
+    // Connect handlers for ImGui to store layout data
+    SetupINIHandlers();
 
     // position the window in a consistent location
 #ifndef NDEBUG
@@ -95,12 +107,95 @@ bool MyApp::OnWindowCreated()
     // scale up some
     io.FontGlobalScale = 1.2f;
 
-    // TEMP go ahead and create the default debugger and memory watch
-    auto& wnd = SNESDebugger::CreateWindow();
-    AddWindow(wnd);
-    auto& wnd2 = SNESMemory::CreateWindow();
-    AddWindow(wnd2);
     return true;
+}
+
+void MyApp::SetupINIHandlers()
+{
+    ImGuiSettingsHandler ini_handler;
+
+    ini_handler.TypeName = "RetroGameDisassemblerLayout";
+    ini_handler.TypeHash = ImHashStr("RetroGameDisassemblerLayout");
+    
+    ini_handler.ClearAllFn = [](ImGuiContext*, ImGuiSettingsHandler*) {
+        // TODO not sure when this is called
+        assert(false); 
+    };
+
+    ini_handler.ReadOpenFn = [](ImGuiContext*, ImGuiSettingsHandler*, char const* name) -> void* {
+        // name contains the value in the second set of []. we don't use it, we just assume
+        // the order is correct, and if it isn't, it really isn't a big deal
+        WindowFromINI* wfini = MyApp::Instance()->NewINIWindow();
+        return (void*)wfini;
+    };
+
+    ini_handler.ReadLineFn = [](ImGuiContext*, ImGuiSettingsHandler*, void* entry, const char* line) {
+        // for each line within the ini section, this function gets called
+        WindowFromINI* wfini = (WindowFromINI*)entry;
+
+        char buffer[64];
+        if(sscanf(line, "WindowClass=%63[^\r\n]", buffer) == 1) {
+            wfini->window_class = string(buffer);
+        } else if(sscanf(line, "WindowID=%16[^\r\n]", buffer) == 1) {
+            wfini->window_id = string(buffer);
+        }
+
+    };
+
+    ini_handler.ApplyAllFn = [](ImGuiContext*, ImGuiSettingsHandler*) {
+        // after the entire ini file is loaded, this function is called and we create the windows
+        MyApp::Instance()->CreateINIWindows();
+    };
+
+    ini_handler.WriteAllFn = [](ImGuiContext*, ImGuiSettingsHandler* handler, ImGuiTextBuffer* buf) {
+        // this function is called to output data to the ini file
+
+        // loop over all managed windows and add them to the ini file under their own heading
+        MyApp* instance = MyApp::Instance();
+        int window_index = 0;
+        for(auto &window : instance->managed_windows) {
+            buf->appendf("[%s][%d]\n", handler->TypeName, window_index);
+            buf->appendf("WindowClass=%s\n", window->GetWindowClass());
+            buf->appendf("WindowID=%s\n", window->GetWindowID().c_str());
+            buf->appendf("\n");
+            window_index++;
+        }
+    };
+
+    // add the handler to the ImGuiContext
+    ImGuiContext& g = *ImGui::GetCurrentContext();
+    g.SettingsHandlers.push_back(ini_handler);
+}
+
+MyApp::WindowFromINI* MyApp::NewINIWindow()
+{
+    shared_ptr<WindowFromINI> wfini = make_shared<WindowFromINI>();
+    ini_windows.push_back(wfini);
+    return wfini.get(); // considered unsafe, but I know it's not stored for use later
+}
+
+void MyApp::CreateINIWindows()
+{
+    // loop over all the INI windows and create them
+    for(auto& wfini : ini_windows) {
+        if(!create_window_functions.contains(wfini->window_class)) {
+            cout << "[MyApp] warning: class type " << wfini->window_class << " from INI doesn't exist" << endl;
+            continue;
+        }
+
+        // create the window
+        auto& create_function = create_window_functions[wfini->window_class];
+        auto& wnd = create_function();
+
+        // set the ID to match the one in the file
+        wnd->SetWindowID(wfini->window_id);
+
+        // add it to the managed windows list
+        AddWindow(wnd);
+    }
+
+    // free memory
+    ini_windows.clear();
 }
 
 void MyApp::AddWindow(shared_ptr<BaseWindow> window)

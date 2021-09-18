@@ -13,6 +13,9 @@ public:
     ROMLoader(std::string const& _file_path_name);
     virtual ~ROMLoader();
 
+    virtual char const * const GetWindowClass() { return ROMLoader::GetWindowClassStatic(); }
+    static char const * const GetWindowClassStatic() { return "ROMLoader"; }
+
     // signals
     typedef signal<std::function<void(std::shared_ptr<BaseWindow>, std::shared_ptr<System>)>> system_loaded_t;
     std::shared_ptr<system_loaded_t> system_loaded;
@@ -40,6 +43,4 @@ public:
 
 private:
     static std::vector<System::Information const*> system_informations;
-
-    BASE_WINDOW_FUNCTIONAL_CODE_DECL();
 };
