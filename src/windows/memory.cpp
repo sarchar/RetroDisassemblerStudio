@@ -13,6 +13,11 @@
 #include "systems/snes/snes_system.h"
 #include "windows/memory.h"
 
+//#define USE_IMGUI_MEMORY_EDITOR
+#ifdef USE_IMGUI_MEMORY_EDITOR
+#   include "../../imgui_club/imgui_memory_editor/imgui_memory_editor.h"
+#endif
+
 using namespace std;
 #include <stdio.h>
 
@@ -44,16 +49,31 @@ void SNESMemory::RenderContent()
         return;
     }
 
+#ifdef USE_IMGUI_MEMORY_EDITOR
+    static MemoryEditor mem_edit;
+    static u8 memory[16384];
+    mem_edit.DrawContents(memory, 16384);
+    return;
+#endif
+
     const float TEXT_BASE_HEIGHT = ImGui::GetTextLineHeightWithSpacing();
 
-    static ImGuiTableFlags flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersOuter;
+    static ImGuiTableFlags flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_SizingFixedFit;
     static char const * const columns[] = { "", "00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "0A", "0B", "0C", "0D", "0E", "0F" };
 
+    auto textWidthOne = ImGui::CalcTextSize("0").x;
+    ImVec2 cell_padding(textWidthOne, 0.0f);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, cell_padding);
     if (ImGui::BeginTable("snes_memory", 17, flags))
     {
+        // set the column width to exactly the size of the text, which is uniform across the table
+        auto textWidthAddr  = ImGui::CalcTextSize("0000").x;
+        auto textWidthValue = ImGui::CalcTextSize("00").x;
+
         ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
         for(int col = 0; col < 17; col++) {
-            ImGui::TableSetupColumn(columns[col], ImGuiTableColumnFlags_None);
+            ImGui::TableSetupColumn(columns[col], ImGuiTableColumnFlags_None, (col == 0) ? textWidthAddr : textWidthValue);
         }
         ImGui::TableHeadersRow();
 
@@ -85,4 +105,5 @@ void SNESMemory::RenderContent()
         }
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar();
 }
