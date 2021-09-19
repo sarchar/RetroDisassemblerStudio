@@ -162,6 +162,22 @@ void CPU65C816::FinishInstructionCycle(u8 data_line)
             intermediate_data.as_byte |= registers.a;
             break;
 
+        case UC_JSR:
+            // with JSR, the fetch memory code has retrieved the destination address in operand_address
+            // but our addressing mode is AM_IMMEDIATE_WORD. If we change to AM_STACK, whatever is in
+            // intermediate_data will be pushed to the stack.  Using this, JSR becomes quite easy.
+            // And because the UC code has both a fetch and a store operation, we correctly get the
+            // extra IO cycle inbetween.
+            intermediate_data.as_word = registers.pc - 1; // PC is pointing 1 past the immediate word that was read
+            intermediate_data_size = 2;
+            registers.pc = operand_address.as_word;
+            current_addressing_mode = AM_STACK;
+            break;
+
+        case UC_RTS:
+            // with RTS, the intermediate_data was incremented in a separate cycle, so we just don't need to do anything
+            break;
+
         // case UC_XCE:
         // TODO When switching from emulation to native mode the processor replaces the B BREAK flag 
         // and bit 5 with the 65816 M and X flags, and sets them to one. 
@@ -389,7 +405,7 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
             current_memory_step = MS_FETCH_OPERAND_HIGH;
             current_uc_set_pc--;
         } else {
-            SetMemoryStepAfterOperandFetch(is_memory_fetch);
+            SetMemoryStepAfterOperandFetch(is_memory_fetch, is_memory_store);
         }
         break;
 
@@ -406,7 +422,7 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
             current_memory_step = MS_FETCH_OPERAND_BANK;
             current_uc_set_pc--;
         } else {
-            SetMemoryStepAfterOperandFetch(is_memory_fetch);
+            SetMemoryStepAfterOperandFetch(is_memory_fetch, is_memory_store);
         }
         break;
 
@@ -501,10 +517,40 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
 
         // determine if we need to read the high byte
         if(intermediate_data_size == 2) {
+            // increment stack pointer to read the next value
+            registers.s += 1;
+
+            // set up the read address
+            operand_address.bank_byte = 0; // all stack operations in bank 0
+            operand_address.as_word   = registers.s;
+
+            // move to next state
             current_memory_step = MS_FETCH_STACK_HIGH;
             current_uc_set_pc--;
         } else {
             current_memory_step = MS_MODIFY;
+        }
+        break;
+
+    case MS_FETCH_STACK_HIGH:
+        // latch the stack high byte
+        intermediate_data.high_byte = data_line;
+
+        // determine if we need to read the bank byte
+        if(intermediate_data_size == 3) {
+            assert(false); //TODO
+        } else {
+            // some values from the stack require incrementing before they get used, depending on the opcode
+            switch(current_uc_opcode & UC_OPCODE_MASK) {
+            case UC_RTS:
+                current_memory_step = MS_INCREMENT_DATA;
+                current_uc_set_pc--;
+                break;
+
+            default:
+                current_memory_step = MS_MODIFY;
+                break;
+            }
         }
         break;
 
@@ -541,6 +587,14 @@ void CPU65C816::StepMemoryAccessCycle(bool is_memory_fetch, bool is_memory_store
 
         // go onto the next step in the direct page
         SetMemoryStepAfterIndexRegisterAdded(is_memory_fetch);
+        break;
+
+    case MS_INCREMENT_DATA:
+        // very basic +1 to the intermediate_data
+        intermediate_data.as_word += 1;
+
+        // and we're done
+        current_memory_step = MS_MODIFY;
         break;
     }
 }
@@ -623,7 +677,7 @@ bool CPU65C816::ShouldFetchValueBank()
 }
 
 
-void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch)
+void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch, bool is_memory_store)
 {
     switch(current_addressing_mode) {
     case AM_IMMEDIATE: // always at least a low byte but may or may not contain a high byte depending on M/X
@@ -641,7 +695,11 @@ void CPU65C816::SetMemoryStepAfterOperandFetch(bool is_memory_fetch)
         intermediate_data_size = 2;
 
         // we've read the operand and it's time to do something with it
-        current_memory_step = MS_MODIFY;
+        if(is_memory_store) {
+            current_memory_step = MS_MODIFY_WAIT;
+        } else {
+            current_memory_step = MS_MODIFY;
+        }
         break;
 
     case AM_DIRECT_PAGE:
@@ -872,6 +930,7 @@ void CPU65C816::StartInstructionCycle()
                             intermediate_data_size = 1;
                             break;
                         case UC_STORE_D:
+                        case UC_STORE_PC:
                             intermediate_data_size = 2;
                             break;
                         default:

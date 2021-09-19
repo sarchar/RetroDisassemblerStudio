@@ -162,7 +162,9 @@ private:
     static unsigned int const UC_INC           = 2 << UC_OPCODE_SHIFT;
     static unsigned int const UC_EOR           = 3 << UC_OPCODE_SHIFT;
     static unsigned int const UC_ORA           = 4 << UC_OPCODE_SHIFT;
-    static unsigned int const UC_DEAD          = 5 << UC_OPCODE_SHIFT;
+    static unsigned int const UC_JSR           = 5 << UC_OPCODE_SHIFT;
+    static unsigned int const UC_RTS           = 6 << UC_OPCODE_SHIFT;
+    static unsigned int const UC_DEAD          = 7 << UC_OPCODE_SHIFT;
 
     UC_OPCODE const* current_uc_set;
     u8               current_uc_set_pc;
@@ -233,6 +235,7 @@ private:
         MS_FETCH_VALUE_BANK,
         MS_FETCH_STACK_LOW,
         MS_FETCH_STACK_HIGH,
+        MS_INCREMENT_DATA,
         // TODO indexed adds, etc
         // TODO stores, etc
         MS_ADD_DL_REGISTER,
@@ -255,7 +258,7 @@ private:
     bool ShouldFetchValueHigh();
     bool ShouldFetchValueBank();
 
-    void SetMemoryStepAfterOperandFetch(bool);
+    void SetMemoryStepAfterOperandFetch(bool, bool);
     void SetMemoryStepAfterIndirectAddressFetch(bool);
     void SetMemoryStepAfterDirectPageAdded(bool);
     void SetMemoryStepAfterIndexRegisterAdded(bool);
@@ -285,6 +288,7 @@ private:
     static UC_OPCODE const INCA_UC[];
     static UC_OPCODE const INX_UC[];
     static UC_OPCODE const JMP_UC[];
+    static UC_OPCODE const JSR_UC[];
     static UC_OPCODE const LDA_UC[];
     static UC_OPCODE const LDX_UC[];
     static UC_OPCODE const LDY_UC[];
@@ -293,6 +297,7 @@ private:
     static UC_OPCODE const PHA_UC[];
     static UC_OPCODE const PHD_UC[];
     static UC_OPCODE const PLA_UC[];
+    static UC_OPCODE const RTS_UC[];
     static UC_OPCODE const STA_UC[];
     static UC_OPCODE const STZ_UC[];
     static UC_OPCODE const TXS_UC[];

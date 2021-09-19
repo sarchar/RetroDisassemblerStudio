@@ -17,6 +17,9 @@ CPU65C816::UC_OPCODE const
     CPU65C816::JMP_UC[]           = { UC_FETCH_MEMORY | UC_NOP | UC_STORE_PC    , UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
+    CPU65C816::JSR_UC[]           = { UC_FETCH_MEMORY | UC_JSR | UC_STORE_MEMORY, UC_FETCH_OPCODE | UC_STORE_IR };
+
+CPU65C816::UC_OPCODE const
     CPU65C816::LDA_UC[]           = { UC_FETCH_MEMORY | UC_NOP | UC_STORE_A     , UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
@@ -39,6 +42,9 @@ CPU65C816::UC_OPCODE const
 
 CPU65C816::UC_OPCODE const
     CPU65C816::PLA_UC[]           = { UC_FETCH_MEMORY | UC_NOP | UC_STORE_A     , UC_FETCH_OPCODE | UC_STORE_IR };
+
+CPU65C816::UC_OPCODE const
+    CPU65C816::RTS_UC[]           = { UC_FETCH_MEMORY | UC_RTS | UC_STORE_PC    , UC_FETCH_OPCODE | UC_STORE_IR };
 
 CPU65C816::UC_OPCODE const
     CPU65C816::STA_UC[]           = { UC_FETCH_A      | UC_NOP | UC_STORE_MEMORY, UC_FETCH_OPCODE | UC_STORE_IR };
@@ -70,7 +76,7 @@ CPU65C816::UC_OPCODE const * const CPU65C816::INSTRUCTION_UCs[256] = {
     // 1C: TRB a      ORA a,x           ASL a,x           ORA al,x
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 20: JSR a      AND (d,x)         JSL al            AND d,s
-    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    JSR_UC          , DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 24: BIT d      AND d             ROL d             AND [d]
     DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 28: PLP        AND #             ROL A             PLD
@@ -102,7 +108,7 @@ CPU65C816::UC_OPCODE const * const CPU65C816::INSTRUCTION_UCs[256] = {
     // 5C: JMP al     EOR a,x           LSR a,x           EOR al,x
     DEAD_INSTRUCTION, EOR_UC          , DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 60: RTS        ADC (d,x)         PER               ADC d,s
-    DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
+    RTS_UC          , DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 64: STZ d      ADC d             ROR d             ADC [d]
     STZ_UC          , DEAD_INSTRUCTION, DEAD_INSTRUCTION, DEAD_INSTRUCTION, 
     // 68: PLA        ADC #             ROR A             RTL
@@ -201,7 +207,7 @@ CPU65C816::ADDRESSING_MODE const CPU65C816::INSTRUCTION_ADDRESSING_MODES[256] = 
     // 1C: TRB a                    ORA a,x                       ASL a,x              ORA al,x
     AM_IMPLIED                    , AM_IMPLIED                  , AM_IMPLIED         , AM_IMPLIED,
     // 20: JSR a                    AND (d,x)                     JSL al               AND d,s
-    AM_IMPLIED                    , AM_IMPLIED                  , AM_IMPLIED         , AM_IMPLIED,
+    AM_IMMEDIATE_WORD             , AM_IMPLIED                  , AM_IMPLIED         , AM_IMPLIED,
     // 24: BIT d                    AND d                         ROL d                AND [d]
     AM_IMPLIED                    , AM_IMPLIED                  , AM_IMPLIED         , AM_IMPLIED,
     // 28: PLP                      AND #                         ROL A                PLD
@@ -233,7 +239,7 @@ CPU65C816::ADDRESSING_MODE const CPU65C816::INSTRUCTION_ADDRESSING_MODES[256] = 
     // 5C: JMP al                   EOR a,x                       LSR a,x              EOR al,x
     AM_IMPLIED                    , AM_ABSOLUTE_INDEXED_X       , AM_IMPLIED         , AM_IMPLIED,
     // 60: RTS                      ADC (d,x)                     PER                  ADC d,s
-    AM_IMPLIED                    , AM_IMPLIED                  , AM_IMPLIED         , AM_IMPLIED,
+    AM_STACK                      , AM_IMPLIED                  , AM_IMPLIED         , AM_IMPLIED,
     // 64: STZ d                    ADC d                         ROR d                ADC [d]
     AM_DIRECT_PAGE                , AM_IMPLIED                  , AM_IMPLIED         , AM_IMPLIED,
     // 68: PLA                      ADC #                         ROR A                RTL

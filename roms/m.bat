@@ -7,3 +7,4 @@ csbcasm -f mem test_05.asm test_05.bin --list test_05.lst
 csbcasm -f mem test_06.asm test_06.bin --list test_06.lst
 csbcasm -f mem test_07.asm test_07.bin --list test_07.lst
 csbcasm -f mem test_08.asm test_08.bin --list test_08.lst
+csbcasm -f mem test_jsr.asm test_jsr.bin --list test_jsr.lst
