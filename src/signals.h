@@ -72,7 +72,7 @@ struct signal : public std::enable_shared_from_this<signal<Func>> {
     {
         _signal_id_t id = next_id++;
         connections[id] = f;
-        signal_connection_t conn = std::make_shared<signal_connection<signal<Func>>>(shared_from_this(), id);
+        signal_connection_t conn = std::make_shared<signal_connection<signal<Func>>>(this->shared_from_this(), id);
         return conn;
     }
 
@@ -81,7 +81,7 @@ struct signal : public std::enable_shared_from_this<signal<Func>> {
     {
         _signal_id_t id = next_id++;
         connections[id] = f;
-        return shared_from_this();
+        return this->shared_from_this();
     }
 
     void disconnect(_signal_id_t id)

@@ -9,6 +9,8 @@
 // and changing the names, etc.
 #pragma once
 
+#include <iomanip>
+
 #include "util.h"
 #include "wires.h"
 

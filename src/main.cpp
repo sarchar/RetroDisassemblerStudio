@@ -84,13 +84,13 @@ bool MyApp::OnWindowCreated()
     // TODO everything will one day be user customizable
     ImFont* default_font = io.Fonts->AddFontDefault();
 
-    main_font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\iosevka-regular.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
+    main_font = io.Fonts->AddFontFromFileTTF("ext/iosevka-regular.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
     if(main_font == nullptr) {
         cout << "[MyApp] Warning: unable to load iosevka-regular.ttf. Using default font." << endl;
         main_font = default_font;
     }
 
-    main_font_bold = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\iosevka-heavy.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
+    main_font_bold = io.Fonts->AddFontFromFileTTF("ext/iosevka-heavy.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
     if(main_font_bold == nullptr) { 
         cout << "[MyApp] Warning: unable to load iosevka-bold.ttf. Using default font." << endl;
         main_font_bold = default_font;
@@ -185,7 +185,7 @@ void MyApp::CreateINIWindows()
 
         // create the window
         auto& create_function = create_window_functions[wfini->window_class];
-        auto& wnd = create_function();
+        auto wnd = create_function();
 
         // set the ID to match the one in the file
         wnd->SetWindowID(wfini->window_id);
