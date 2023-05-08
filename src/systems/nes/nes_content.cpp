@@ -63,6 +63,10 @@ std::string ContentBlock::FormatDataElement(u16 n)
     return ss.str();
 }
 
+void ListingItemUnknown::RenderContent(shared_ptr<System>& system)
+{
+}
+
 void ListingItemData::RenderContent(shared_ptr<System>& system)
 {
     ImGuiTableFlags common_inner_table_flags = ImGuiTableFlags_NoPadOuterX;
@@ -80,9 +84,6 @@ void ListingItemData::RenderContent(shared_ptr<System>& system)
         auto content_block = system->GetContentBlockAt(global_memory_location);
         assert(content_block->type == CONTENT_BLOCK_TYPE_DATA);
 
-        //u8 data = prg_bank0->ReadByte(address);
-        //u8 data = 0xEA;
-    
         ImGui::TableNextColumn();
         ImGui::Text(content_block->FormatInstructionField().c_str());
     
@@ -99,8 +100,21 @@ void ListingItemData::RenderContent(shared_ptr<System>& system)
     }
 }
 
-void ListingItemUnknown::RenderContent(shared_ptr<System>& system)
+void ListingItemLabel::RenderContent(shared_ptr<System>& system)
 {
+    ImGuiTableFlags common_inner_table_flags = ImGuiTableFlags_NoPadOuterX;
+    ImGuiTableFlags table_flags = common_inner_table_flags | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
+
+    if(ImGui::BeginTable("listing_item_label", 3, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+        ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableNextRow();
+    
+        ImGui::TableNextColumn();
+        ImGui::Text("%s:", label_name.c_str());
+    
+        ImGui::EndTable();
+    }
 }
+
 
 }

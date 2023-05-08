@@ -26,8 +26,14 @@ protected:
     void CheckInput();
 
 private:
+    void NewLabelPopup();
+
+private:
     NES::GlobalMemoryLocation selection;
-    int                       jump_to_selection;
+
+    int                       jump_to_selection    = 0;
+    bool                      create_new_label     = false;
+    char                      new_label_buffer[64] = "";
 
 public:
     static std::shared_ptr<Listing> CreateWindow();

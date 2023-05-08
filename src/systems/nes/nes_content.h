@@ -67,7 +67,8 @@ class ListingItem {
 public:
     enum TYPE {
         LISTING_ITEM_TYPE_UNKNOWN,
-        LISTING_ITEM_TYPE_DATA
+        LISTING_ITEM_TYPE_DATA,
+        LISTING_ITEM_TYPE_LABEL,
     };
 
     ListingItem(TYPE type, GlobalMemoryLocation const& where) :
@@ -107,6 +108,20 @@ public:
 
 private:
     std::shared_ptr<ProgramRomBank> prg_bank;
+};
+
+class ListingItemLabel : public ListingItem {
+public:
+    ListingItemLabel(GlobalMemoryLocation const& where, std::string const& _name)
+        : ListingItem(ListingItem::LISTING_ITEM_TYPE_LABEL, where), label_name(_name) 
+    { 
+    }
+    virtual ~ListingItemLabel() { }
+
+    void RenderContent(std::shared_ptr<System>&) override;
+
+private:
+    std::string label_name;
 };
 
 }

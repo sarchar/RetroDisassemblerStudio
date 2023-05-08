@@ -25,8 +25,7 @@ shared_ptr<Listing> Listing::CreateWindow()
 }
 
 Listing::Listing()
-    : BaseWindow("NES::Listing"),
-      jump_to_selection(0)
+    : BaseWindow("NES::Listing")
 {
     SetTitle("Listing");
     SetNav(false); // dsisable navigation
@@ -46,9 +45,6 @@ Listing::~Listing()
 
 void Listing::UpdateContent(double deltaTime) 
 {
-//    if(IsFocused()) { // Things to do only if the window is receiving focus
-//        CheckInput();
-//    }
 }
 
 void Listing::CheckInput()
@@ -59,12 +55,14 @@ void Listing::CheckInput()
         ImWchar c = io.InputQueueCharacters[i]; 
 
         if(c == L'w') {
-            cout << "input" << endl;
             // mark data as a word
             shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
             if(system) {
                 system->MarkContentAsData(selection, 2, CONTENT_BLOCK_DATA_TYPE_UWORD);
             }
+        } else if(c == 'l') {
+            // create a new label at the current address
+            create_new_label = true;
         }
     }
 
@@ -165,6 +163,54 @@ void Listing::RenderContent()
         CheckInput();
     }
 
+    // Render popups
+    NewLabelPopup();
+}
+
+void Listing::NewLabelPopup() 
+{
+    static char title[] = "Create new label...";
+
+    if(!ImGui::IsPopupOpen(title)) {
+        if(!create_new_label) return;
+
+        create_new_label = false;
+        new_label_buffer[0] = '\0';
+
+        ImGui::OpenPopup(title);
+    }
+
+    // center this window
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    bool ret = false;
+    if (ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+        // focus on the text input if nothing else is selected
+        if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
+
+        ImVec2 button_size(ImGui::GetFontSize() * 7.0f, 0.0f);
+        if(ImGui::InputText("Label", new_label_buffer, sizeof(new_label_buffer), ImGuiInputTextFlags_EnterReturnsTrue)
+                || ImGui::Button("OK", button_size)) {
+            ret = true;
+            ImGui::CloseCurrentPopup(); 
+        }
+
+        if(ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+
+    if(ret) {
+        // create the label
+        string lstr(new_label_buffer);
+
+        shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
+        if(!system) return;
+        system->CreateLabel(selection, lstr);
+    }
 }
 
 }

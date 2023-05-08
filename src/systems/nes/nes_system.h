@@ -43,6 +43,9 @@ public:
     // Listings
     void GetListingItems(NES::GlobalMemoryLocation const&, std::vector<std::shared_ptr<NES::ListingItem>>& out);
 
+    // Labels
+    void CreateLabel(GlobalMemoryLocation const&, std::string const&);
+
 private:
     std::string rom_file_path_name;
 };

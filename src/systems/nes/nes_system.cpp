@@ -170,6 +170,11 @@ void System::GetListingItems(GlobalMemoryLocation const& where, std::vector<std:
         switch(content_block->type) {
         case CONTENT_BLOCK_TYPE_DATA:
         {
+            if(where.address == 0xFFFC) {
+                auto dataitem = make_shared<ListingItemLabel>(where, "_reset");
+                out.push_back(dataitem);
+            }
+
             auto dataitem = make_shared<ListingItemData>(where, prg_bank);
             out.push_back(dataitem);
             break;
@@ -235,6 +240,11 @@ std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const
     } else {
         return cartridge->GetProgramRomBank(where.prg_rom_bank);
     }
+}
+
+void System::CreateLabel(GlobalMemoryLocation const& where, string const& label)
+{
+    cout << "defined label " << label << " at " << where << endl;
 }
 
 BaseSystem::Information const* System::GetInformation()
