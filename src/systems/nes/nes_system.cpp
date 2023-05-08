@@ -14,18 +14,6 @@
 
 using namespace std;
 
-std::ostream& operator<<(std::ostream& stream, const NES::GlobalMemoryLocation& p) 
-{
-    std::ios_base::fmtflags saveflags(stream.flags());
-    stream << "GlobalMemoryLocation(address=0x" << std::hex << std::setw(4) << std::setfill('0') << std::uppercase << p.address;
-    stream << ", prg_rom_bank=" << std::dec << std::setw(0) << p.prg_rom_bank;
-    stream << ", chr_rom_bank=" << std::dec << std::setw(0) << p.chr_rom_bank;
-    stream << ", is_chr=" << p.is_chr;
-    stream << ")";
-    stream.flags(saveflags);
-    return stream;
-}
-
 namespace NES {
 
 System::System()
@@ -97,7 +85,7 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
         auto prg_bank = cartridge->GetProgramRomBank(i); // Bank should be empty with no content
 
         // Initialize the entire bank as just a series of bytes
-        prg_bank->InitializeAsBytes(0, sizeof(data), reinterpret_cast<u8*>(data)); // Mark content starting at offset 0 as data
+        prg_bank->InitializeWithData(0, sizeof(data), reinterpret_cast<u8*>(data)); // Mark content starting at offset 0 as data
     }
 
     // Load the CHR banks
@@ -118,7 +106,7 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
         auto chr_bank = cartridge->GetCharacterRomBank(i); // Bank should be empty with no content
 
         // Initialize the entire bank as just a series of bytes
-        chr_bank->InitializeAsBytes(0, sizeof(data), reinterpret_cast<u8*>(data)); // Mark content starting at offset 0 as data
+        chr_bank->InitializeWithData(0, sizeof(data), reinterpret_cast<u8*>(data)); // Mark content starting at offset 0 as data
     }
 
     create_new_project_progress->emit(shared_from_this(), false, num_steps, ++current_step, "Done");
@@ -209,7 +197,7 @@ u16 System::GetSegmentBase(GlobalMemoryLocation const& where)
         return 0x6000;
     } else {
         auto prg_bank = cartridge->GetProgramRomBank(where.prg_rom_bank);
-        return prg_bank->GetActualLoadAddress();
+        return prg_bank->GetBaseAddress();
     }
 }
 
@@ -227,7 +215,7 @@ u32 System::GetSegmentSize(GlobalMemoryLocation const& where)
         return 0x2000;
     } else {
         auto prg_bank = cartridge->GetProgramRomBank(where.prg_rom_bank);
-        return prg_bank->GetActualSize();
+        return prg_bank->GetRegionSize();
     }
 }
 

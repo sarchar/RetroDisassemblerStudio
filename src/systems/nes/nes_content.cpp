@@ -8,6 +8,7 @@
 #include "imgui_internal.h"
 
 #include "systems/nes/nes_content.h"
+#include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
 
 #include "util.h"

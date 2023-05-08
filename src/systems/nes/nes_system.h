@@ -3,6 +3,7 @@
 #include "systems/system.h"
 
 #include "systems/nes/nes_content.h"
+#include "systems/nes/nes_defs.h"
 #include "systems/nes/nes_memory.h"
 
 class NESSystem; // TODO move into NES namespace
@@ -11,12 +12,6 @@ namespace NES {
 
 class Cartridge;
 class ProgramRomBank;
-
-enum MIRRORING {
-    MIRRORING_HORIZONTAL = 0,
-    MIRRORING_VERTICAL,
-    MIRRORING_FOUR_SCREEN,
-};
 
 class System : public ::BaseSystem {
 public:
@@ -40,7 +35,7 @@ public:
     u32  GetSegmentSize(NES::GlobalMemoryLocation const&);
 
     // Content
-    std::shared_ptr<NES::ContentBlock>& GetContentBlockAt(NES::GlobalMemoryLocation const&);
+    std::shared_ptr<ContentBlock>& GetContentBlockAt(GlobalMemoryLocation const&);
     void MarkContentAsData(NES::GlobalMemoryLocation const&, u32 byte_count, NES::CONTENT_BLOCK_DATA_TYPE data_type);
 
     // Listings

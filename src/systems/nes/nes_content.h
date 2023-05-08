@@ -1,22 +1,12 @@
 #pragma once
 
+#include "systems/nes/nes_defs.h"
 #include "systems/nes/nes_memory.h"
 
 namespace NES {
 
 class System;
 class ProgramRomBank;
-
-enum CONTENT_BLOCK_TYPE {
-    CONTENT_BLOCK_TYPE_DATA = 0,
-    CONTENT_BLOCK_TYPE_CODE,
-    CONTENT_BLOCK_TYPE_CHR,
-};
-
-enum CONTENT_BLOCK_DATA_TYPE {
-    CONTENT_BLOCK_DATA_TYPE_UBYTE = 0,
-    CONTENT_BLOCK_DATA_TYPE_UWORD
-};
 
 // Content blocks can be data, code, or graphics
 // Data can be structured, arrays, etc. So we will need types, arrays, etc
