@@ -2,8 +2,11 @@
 
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 
 #include "systems/system.h"
+
+class NESSystem; // TODO move into NES namespace
 
 namespace NES {
 
@@ -24,6 +27,7 @@ enum CONTENT_BLOCK_TYPE {
 
 enum CONTENT_BLOCK_DATA_TYPE {
     CONTENT_BLOCK_DATA_TYPE_UBYTE = 0,
+    CONTENT_BLOCK_DATA_TYPE_UWORD
 };
 
 // Content blocks can be data, code, or graphics
@@ -40,13 +44,81 @@ struct ContentBlock {
 
         struct {
             CONTENT_BLOCK_DATA_TYPE type; // byte, word, pointer, user defined
-            u16   count;       // Total number of elements
-            void* data_ptr;    // TODO will need a structure to hold various content blocks
+            u16   count;   // Total number of elements
+            void* ptr;     // TODO will need a structure to hold various content blocks
         } data;
 
         struct {
         } chr;
     };
+
+    u32 GetDataTypeSize() const {
+        switch(data.type) {
+        case CONTENT_BLOCK_DATA_TYPE_UBYTE:
+            return 1;
+        case CONTENT_BLOCK_DATA_TYPE_UWORD:
+            return 2;
+        default:
+            assert(false);
+            return 0;
+        }
+    }
+
+    // return size in bytes
+    u32 GetSize() const {
+        switch(type) {
+        case CONTENT_BLOCK_TYPE_DATA:
+            return data.count * GetDataTypeSize();
+
+        default:
+            assert(false); // TODO
+            return 0;
+        }
+    }
+
+    std::string FormatInstructionField() {
+        switch(type) {
+        case CONTENT_BLOCK_TYPE_DATA:
+            switch(data.type) {
+            case CONTENT_BLOCK_DATA_TYPE_UBYTE:
+                return ".DB";
+            case CONTENT_BLOCK_DATA_TYPE_UWORD:
+                return ".DW";
+            default:
+                assert(false);
+                return "";
+            }
+            break;
+
+        default:
+            assert(false);
+            return "";
+        }
+    }
+
+    std::string FormatDataElement(u16 n) {
+        std::stringstream ss;
+
+        assert(type == CONTENT_BLOCK_TYPE_DATA);
+        switch(data.type) {
+        case CONTENT_BLOCK_DATA_TYPE_UBYTE:
+            ss << "$" << std::hex << std::setfill('0') << std::setw(2) << (u16)((u8*)data.ptr)[n];
+            break;
+
+        case CONTENT_BLOCK_DATA_TYPE_UWORD:
+        {
+            u16* p = &((u16*)data.ptr)[n];
+            u16  v = p[0] | (p[1] << 8);
+            ss << "$" << std::hex << std::setfill('0') << std::setw(4) << v;
+            break;
+        }
+
+        default:
+            break;
+        }
+
+        return ss.str();
+    }
 };
 
 // SystemMemoryLocation dials into a specific byte within the system. It has enough information to select which
@@ -78,8 +150,9 @@ struct GlobalMemoryLocation {
     void Increment() {
     }
 
-    GlobalMemoryLocation operator+(u16 const& v) {
-        GlobalMemoryLocation ret = *this;
+    template<typename T>
+    GlobalMemoryLocation operator+(T const& v) const {
+        GlobalMemoryLocation ret(*this);
         ret.address += v; // TODO wrap, increment banks, etc
         return ret;
     }
@@ -111,7 +184,8 @@ public:
     }
     virtual ~ListingItem() { }
 
-    TYPE GetType() const { return item_type; }
+    //TYPE GetType() const { return item_type; }
+    virtual void RenderContent(std::shared_ptr<NESSystem>&) = 0;
 
 protected:
     TYPE                 item_type;
@@ -125,6 +199,8 @@ public:
     { 
     }
     virtual ~ListingItemUnknown() { }
+
+    void RenderContent(std::shared_ptr<NESSystem>&) override;
 };
 
 class ListingItemData : public ListingItem {
@@ -134,6 +210,8 @@ public:
     { 
     }
     virtual ~ListingItemData() { }
+
+    void RenderContent(std::shared_ptr<NESSystem>&) override;
 
 private:
     std::shared_ptr<ProgramRomBank> prg_bank;
@@ -162,6 +240,10 @@ public:
     void GetEntryPoint(NES::GlobalMemoryLocation*);
     u16  GetSegmentBase(NES::GlobalMemoryLocation const&);
     u32  GetSegmentSize(NES::GlobalMemoryLocation const&);
+
+    // Content
+    std::shared_ptr<NES::ContentBlock>& GetContentBlockAt(NES::GlobalMemoryLocation const&);
+    void MarkContentAsData(NES::GlobalMemoryLocation const&, u32 byte_count, NES::CONTENT_BLOCK_DATA_TYPE data_type);
 
     // Listings
     void GetListingItems(NES::GlobalMemoryLocation const&, std::vector<std::shared_ptr<NES::ListingItem>>& out);

@@ -35,6 +35,14 @@ public:
 
     void InitializeAsBytes(u16 offset, u16 count, u8* data);
 
+    u16 ConvertToOffset(u16 address) {
+        if(load_address == PROGRAM_ROM_BANK_LOAD_LOW_16K) {
+            return address - 0x8000;
+        } else /* if(load_address == PROGRAM_ROM_BANK_LOAD_HIGH_16K) */ {
+            return address - 0xC000;
+        }
+    }
+
     u16 GetActualLoadAddress() {
         return (load_address == PROGRAM_ROM_BANK_LOAD_LOW_16K) ? 0x8000 : 0xC000;
     }
@@ -43,8 +51,12 @@ public:
         return (bank_size == PROGRAM_ROM_BANK_SIZE_32K) ? 0x8000 : 0x4000;
     }
 
-    std::shared_ptr<ContentBlock> GetContentBlockAt(GlobalMemoryLocation const& where);
+    std::shared_ptr<ContentBlock>& GetContentBlockAt(GlobalMemoryLocation const& where);
     u8   ReadByte(u16 offset);
+
+    void                           AddContentBlock(std::shared_ptr<ContentBlock>& content_block);
+    std::shared_ptr<ContentBlock>  SplitContentBlock(NES::GlobalMemoryLocation const& where);
+    void                           MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type);
 private:
     void Erase();
 
@@ -111,6 +123,9 @@ public:
     std::shared_ptr<CharacterRomBank>& GetCharacterRomBank(u8 bank) { return character_rom_banks[bank]; }
 
     u16 GetResetVectorBank();
+
+    std::shared_ptr<ContentBlock>& GetContentBlockAt(GlobalMemoryLocation const&);
+    void MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type);
 private:
     std::vector<std::shared_ptr<ProgramRomBank>>   program_rom_banks;
     std::vector<std::shared_ptr<CharacterRomBank>> character_rom_banks;

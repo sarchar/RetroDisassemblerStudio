@@ -90,6 +90,19 @@ u16 Cartridge::GetResetVectorBank()
     return 0;
 }
 
+std::shared_ptr<ContentBlock>& Cartridge::GetContentBlockAt(GlobalMemoryLocation const& where)
+{
+    return GetProgramRomBank(where.prg_rom_bank)->GetContentBlockAt(where);
+}
+
+void Cartridge::MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type)
+{
+    assert(where.address >= 0x8000); // TODO support SRAM etc
+
+    auto prg_bank = GetProgramRomBank(where.prg_rom_bank);
+    prg_bank->MarkContentAsData(where, byte_count, new_data_type);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ProgramRomBank::ProgramRomBank(PROGRAM_ROM_BANK_LOAD _load_address, PROGRAM_ROM_BANK_SIZE _bank_size)
@@ -106,8 +119,8 @@ ProgramRomBank::~ProgramRomBank()
     }
 
     for(auto& blk : content) {
-        if(blk->type == CONTENT_BLOCK_TYPE_DATA && blk->data.data_ptr != NULL) {
-            delete [] blk->data.data_ptr;
+        if(blk->type == CONTENT_BLOCK_TYPE_DATA && blk->data.ptr != NULL) {
+            delete [] blk->data.ptr;
         }
     }
 }
@@ -148,36 +161,32 @@ void ProgramRomBank::InitializeAsBytes(u16 offset, u16 count, u8* data)
     blk->data.count = count;
 
     u32 size = sizeof(u8) * count;
-    blk->data.data_ptr = new u8[size];
-    memcpy(blk->data.data_ptr, data, size);
+    blk->data.ptr = new u8[size];
+    memcpy(blk->data.ptr, data, size);
 
-    // Add the first content
-    u16 ref = content.size();
-    assert(ref == 0);
-    content.push_back(blk);
-    
-    // Set all the address pointers
-    for(u32 s = offset; s < (u32)offset + (u32)count; s++) {
-        content_ptrs[s] = ref;
-    }
+    // Add the content to the bank
+    AddContentBlock(blk);
 
     cout << "[ProgramRomBank::InitializeAsBytes] set 0x" << hex << uppercase << setfill('0') << setw(0) << count 
          << " bytes of data starting at bank offset 0x" << setw(4) << offset
          << " base 0x" << (load_address == PROGRAM_ROM_BANK_LOAD_LOW_16K ? 0x8000 : 0xC000) << endl;
 }
 
-std::shared_ptr<ContentBlock> ProgramRomBank::GetContentBlockAt(GlobalMemoryLocation const& where)
+void ProgramRomBank::AddContentBlock(shared_ptr<ContentBlock>& content_block)
 {
-    u16 base = where.address;
-    if(load_address == PROGRAM_ROM_BANK_LOAD_LOW_16K) {
-        base -= 0x8000;
-    } else if(load_address == PROGRAM_ROM_BANK_LOAD_HIGH_16K) {
-        base -= 0xC000;
+    u16 ref = content.size();
+    content.push_back(content_block);
+
+    u32 size = content_block->GetSize();
+    for(u32 s = content_block->offset; s < content_block->offset + size; s++) {
+        content_ptrs[s] = ref;
     }
+}
 
+std::shared_ptr<ContentBlock>& ProgramRomBank::GetContentBlockAt(GlobalMemoryLocation const& where)
+{
+    u16 base = ConvertToOffset(where.address);
     u16 cref = content_ptrs[base];
-    if(cref == (u16)-1) return nullptr;
-
     return content[cref];
 }
 
@@ -189,9 +198,105 @@ u8 ProgramRomBank::ReadByte(u16 offset)
     auto& c = content[cref];
     assert(c->type == CONTENT_BLOCK_TYPE_DATA);
     assert((offset - c->offset) < c->data.count); // TODO take into account data size
-    return static_cast<u8*>(c->data.data_ptr)[offset - c->offset];
+    return static_cast<u8*>(c->data.ptr)[offset - c->offset];
 }
 
+shared_ptr<ContentBlock> ProgramRomBank::SplitContentBlock(NES::GlobalMemoryLocation const& where)
+{
+    // Attempt to split the content block at `where`. It has to lie on a data type boundary
+    auto content_block = GetContentBlockAt(where);
+    if(content_block->type != CONTENT_BLOCK_TYPE_DATA) {
+        cout << "[ProgramRomBank::SplitContentBlock] Unupported trying to split non-data block at " << where << endl;
+        return nullptr;
+    }
+
+    // Make sure the split is aligned
+    u16 split_offset = ConvertToOffset(where.address);
+    if((split_offset % content_block->GetDataTypeSize()) != 0) {
+        cout << "[ProgramRomBank::SplitContentBlock] Illegal split at non-aligned boundary at " << where << " requiring alignment " << content_block->GetDataTypeSize() << endl;
+        return nullptr;
+    }
+
+    // save the old data pointer
+    void* data_ptr = content_block->data.ptr;
+    assert(data_ptr != nullptr);
+    u32 old_count = content_block->data.count;
+    
+    // create a new one and copy the beginning data do it
+    u32 left_size = split_offset - content_block->offset;
+    content_block->data.count = left_size / content_block->GetDataTypeSize();
+    content_block->data.ptr = new u8[left_size];
+    memcpy(content_block->data.ptr, data_ptr, left_size);
+
+    // the remaining data has to go into a new content block
+    shared_ptr<ContentBlock> right_block = make_shared<ContentBlock>();
+    right_block->type = CONTENT_BLOCK_TYPE_DATA;
+    right_block->offset = split_offset;
+    right_block->data.type = content_block->data.type;
+    right_block->data.count = old_count - content_block->data.count;
+
+    // allocate the storage for the data and copy over the right side
+    u32 right_size = right_block->GetSize();
+    right_block->data.ptr = new u8[right_size];
+    memcpy(right_block->data.ptr, (u8*)data_ptr + left_size, right_size);
+
+    // free old memory
+    delete [] data_ptr;
+
+    // return the new object (this leaves content_ptrs out of date, so you better fix them!)
+    return right_block;
+}
+
+void ProgramRomBank::MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type)
+{
+    auto content_block = GetContentBlockAt(where);
+    if(content_block->type != CONTENT_BLOCK_TYPE_DATA) {
+        cout << "[ProgramRomBank::MarkContentAsData] TODO right now can only split other data blocks" << endl;
+        return;
+    }
+
+    if(content_block->data.type == new_data_type) {
+        cout << "[ProgramRomBank::MarkContentAsData] Content is already of data type " << new_data_type << endl;
+        return;
+    }
+
+    // Verify the region fits within this content block
+    u16 start_offset = ConvertToOffset(where.address);
+    if(byte_count > (content_block->GetSize() - start_offset)) {
+        cout << "[ProgramRomBank::MarkContentAsData] Error trying to mark too much data" << endl;
+        return;
+    }
+
+    // OK, this content block can have the data split. The first part is to split the bank at the start of the new data
+    content_block = SplitContentBlock(where);
+    if(!content_block) return;
+    assert(start_offset == content_block->offset);
+
+    // The new block needs to be added into the system
+    AddContentBlock(content_block);
+
+    // This new block may need to be truncated!
+    if(byte_count < content_block->GetSize()) {
+        GlobalMemoryLocation end_where = where + byte_count;
+        shared_ptr<ContentBlock> next_block = SplitContentBlock(end_where);
+
+        if(!next_block) return;
+        assert(ConvertToOffset(end_where.address) == next_block->offset);
+
+        // This final block won't be used, but needs to be added to the system
+        AddContentBlock(next_block);
+
+        // And let's just refetch the working block JIC
+        content_block = GetContentBlockAt(where);
+    }
+
+    // now we can convert the data type and update count
+    u32 size = content_block->GetSize();
+    content_block->data.type = new_data_type;
+    content_block->data.count = size / content_block->GetDataTypeSize();
+
+    cout << "finished" << endl;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -209,8 +314,8 @@ CharacterRomBank::~CharacterRomBank()
     }
 
     for(auto& blk : content) {
-        if(blk->type == CONTENT_BLOCK_TYPE_DATA && blk->data.data_ptr != NULL) {
-            delete [] blk->data.data_ptr;
+        if(blk->type == CONTENT_BLOCK_TYPE_DATA && blk->data.ptr != NULL) {
+            delete [] blk->data.ptr;
         }
     }
 }
@@ -251,8 +356,8 @@ void CharacterRomBank::InitializeAsBytes(u16 offset, u16 count, u8* data)
     blk->data.count = count;
 
     u32 size = sizeof(u8) * count;
-    blk->data.data_ptr = new u8[size];
-    memcpy(blk->data.data_ptr, data, size);
+    blk->data.ptr = new u8[size];
+    memcpy(blk->data.ptr, data, size);
 
     // Add the first content
     u16 ref = content.size();

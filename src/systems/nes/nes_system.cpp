@@ -4,6 +4,9 @@
 #include <iomanip>
 #include <memory>
 
+#include "imgui.h"
+#include "imgui_internal.h"
+
 #include "systems/nes/nes_cartridge.h"
 #include "systems/nes/nes_system.h"
 
@@ -11,6 +14,47 @@
 
 using namespace std;
 using namespace NES;
+
+void ListingItemData::RenderContent(shared_ptr<NESSystem>& system)
+{
+    ImGuiTableFlags common_inner_table_flags = ImGuiTableFlags_NoPadOuterX;
+    ImGuiTableFlags table_flags = common_inner_table_flags | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
+
+    if(ImGui::BeginTable("listing_item_data", 3, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+        ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("DataType", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Content", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableNextRow();
+    
+        ImGui::TableNextColumn();
+        ImGui::Text("$%02X:0x%04X", global_memory_location.prg_rom_bank, global_memory_location.address);
+    
+        auto content_block = system->GetContentBlockAt(global_memory_location);
+        assert(content_block->type == CONTENT_BLOCK_TYPE_DATA);
+
+        //u8 data = prg_bank0->ReadByte(address);
+        //u8 data = 0xEA;
+    
+        ImGui::TableNextColumn();
+        ImGui::Text(content_block->FormatInstructionField().c_str());
+    
+        ImGui::TableNextColumn();
+        // TODO this 0xC000 subtraction should come from the bank knowing where it's loaded
+        // right now I only have the content block, which will need to know what bank it's in
+        // that can only happen once I abstract out memory regions and create program rom/character rom and 
+        // various memory banks derived from memory regions.
+        // Something like: content_block->GetContainingMemoryRegion()->ConvertToOffset(global address)
+        u16 n = (global_memory_location.address - 0xC000 - content_block->offset) / content_block->GetDataTypeSize();
+        ImGui::Text(content_block->FormatDataElement(n).c_str());
+    
+        ImGui::EndTable();
+    }
+}
+
+void ListingItemUnknown::RenderContent(shared_ptr<NESSystem>& system)
+{
+}
+
 
 NESSystem::NESSystem()
 {
@@ -127,6 +171,24 @@ void NESSystem::GetEntryPoint(NES::GlobalMemoryLocation* out)
     zero(out);
     out->address      = 0xFFFC;
     out->prg_rom_bank = cartridge->GetResetVectorBank();
+}
+
+shared_ptr<ContentBlock>& NESSystem::GetContentBlockAt(NES::GlobalMemoryLocation const& where)
+{
+    if(where.address >= 0x8000) {
+        return cartridge->GetContentBlockAt(where);
+    }
+
+    static shared_ptr<ContentBlock> empty_ptr;
+    return empty_ptr;
+}
+
+void NESSystem::MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE data_type)
+{
+    // TODO right now we only work with ROM banks
+    if(where.address >= 0x8000) {
+        cartridge->MarkContentAsData(where, byte_count, data_type);
+    }
 }
 
 // Listings
