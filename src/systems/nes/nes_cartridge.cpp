@@ -47,7 +47,7 @@ void Cartridge::Prepare()
             assert(false); // Unhandled mapper
         }
 
-        auto bank = make_shared<Cartridge::ProgramRomBank>(load_address, bank_size);
+        auto bank = make_shared<ProgramRomBank>(load_address, bank_size);
         program_rom_banks.push_back(bank);
     }
 
@@ -72,21 +72,34 @@ void Cartridge::Prepare()
             assert(false); // Unhandled mapper
         }
 
-        auto bank = make_shared<Cartridge::CharacterRomBank>(load_address, bank_size);
+        auto bank = make_shared<CharacterRomBank>(load_address, bank_size);
         character_rom_banks.push_back(bank);
     }
 }
 
+u16 Cartridge::GetResetVectorBank()
+{
+    switch(header.mapper) {
+    case 0:
+        return header.num_prg_rom_banks == 2 ? 1 : 0;
+
+    case 1:
+        assert(false); // TODO
+    }
+
+    return 0;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-Cartridge::ProgramRomBank::ProgramRomBank(PROGRAM_ROM_BANK_LOAD _load_address, PROGRAM_ROM_BANK_SIZE _bank_size)
+ProgramRomBank::ProgramRomBank(PROGRAM_ROM_BANK_LOAD _load_address, PROGRAM_ROM_BANK_SIZE _bank_size)
     : load_address(_load_address),
       bank_size(_bank_size),
       content_ptrs(NULL)
 {
 }
 
-Cartridge::ProgramRomBank::~ProgramRomBank()
+ProgramRomBank::~ProgramRomBank()
 {
     if(content_ptrs != NULL) {
         delete [] content_ptrs;
@@ -99,7 +112,7 @@ Cartridge::ProgramRomBank::~ProgramRomBank()
     }
 }
 
-void Cartridge::ProgramRomBank::Erase()
+void ProgramRomBank::Erase()
 {
     if(content_ptrs != NULL) {
         delete [] content_ptrs;
@@ -120,7 +133,7 @@ void Cartridge::ProgramRomBank::Erase()
     }
 }
 
-void Cartridge::ProgramRomBank::InitializeAsBytes(u16 offset, u16 count, u8* data)
+void ProgramRomBank::InitializeAsBytes(u16 offset, u16 count, u8* data)
 {
     assert(offset + count <= 16 * 1024); // make sure we don't overflow the bank
 
@@ -131,7 +144,7 @@ void Cartridge::ProgramRomBank::InitializeAsBytes(u16 offset, u16 count, u8* dat
     shared_ptr<ContentBlock> blk = make_shared<ContentBlock>();
     blk->type = CONTENT_BLOCK_TYPE_DATA;
     blk->offset = offset;
-    blk->data.data_type = CONTENT_BLOCK_DATA_TYPE_UBYTE;
+    blk->data.type = CONTENT_BLOCK_DATA_TYPE_UBYTE;
     blk->data.count = count;
 
     u32 size = sizeof(u8) * count;
@@ -148,12 +161,27 @@ void Cartridge::ProgramRomBank::InitializeAsBytes(u16 offset, u16 count, u8* dat
         content_ptrs[s] = ref;
     }
 
-    cout << "[Cartridge::ProgramRomBank::InitializeAsBytes] set 0x" << hex << uppercase << setfill('0') << setw(0) << count 
+    cout << "[ProgramRomBank::InitializeAsBytes] set 0x" << hex << uppercase << setfill('0') << setw(0) << count 
          << " bytes of data starting at bank offset 0x" << setw(4) << offset
          << " base 0x" << (load_address == PROGRAM_ROM_BANK_LOAD_LOW_16K ? 0x8000 : 0xC000) << endl;
 }
 
-u8 Cartridge::ProgramRomBank::ReadByte(u16 offset)
+std::shared_ptr<ContentBlock> ProgramRomBank::GetContentBlockAt(GlobalMemoryLocation const& where)
+{
+    u16 base = where.address;
+    if(load_address == PROGRAM_ROM_BANK_LOAD_LOW_16K) {
+        base -= 0x8000;
+    } else if(load_address == PROGRAM_ROM_BANK_LOAD_HIGH_16K) {
+        base -= 0xC000;
+    }
+
+    u16 cref = content_ptrs[base];
+    if(cref == (u16)-1) return nullptr;
+
+    return content[cref];
+}
+
+u8 ProgramRomBank::ReadByte(u16 offset)
 {
     u16 cref = content_ptrs[offset];
     if(cref == (u16)-1) return 0xEA;
@@ -164,16 +192,17 @@ u8 Cartridge::ProgramRomBank::ReadByte(u16 offset)
     return static_cast<u8*>(c->data.data_ptr)[offset - c->offset];
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-Cartridge::CharacterRomBank::CharacterRomBank(CHARACTER_ROM_BANK_LOAD _load_address, CHARACTER_ROM_BANK_SIZE _bank_size)
+CharacterRomBank::CharacterRomBank(CHARACTER_ROM_BANK_LOAD _load_address, CHARACTER_ROM_BANK_SIZE _bank_size)
     : load_address(_load_address),
       bank_size(_bank_size),
       content_ptrs(NULL)
 {
 }
 
-Cartridge::CharacterRomBank::~CharacterRomBank()
+CharacterRomBank::~CharacterRomBank()
 {
     if(content_ptrs != NULL) {
         delete [] content_ptrs;
@@ -186,7 +215,7 @@ Cartridge::CharacterRomBank::~CharacterRomBank()
     }
 }
 
-void Cartridge::CharacterRomBank::Erase()
+void CharacterRomBank::Erase()
 {
     if(content_ptrs != NULL) {
         delete [] content_ptrs;
@@ -207,7 +236,7 @@ void Cartridge::CharacterRomBank::Erase()
     }
 }
 
-void Cartridge::CharacterRomBank::InitializeAsBytes(u16 offset, u16 count, u8* data)
+void CharacterRomBank::InitializeAsBytes(u16 offset, u16 count, u8* data)
 {
     assert(offset + count <= 8 * 1024); // make sure we don't overflow the bank TODO fix
 
@@ -218,7 +247,7 @@ void Cartridge::CharacterRomBank::InitializeAsBytes(u16 offset, u16 count, u8* d
     shared_ptr<ContentBlock> blk = make_shared<ContentBlock>();
     blk->type = CONTENT_BLOCK_TYPE_DATA;
     blk->offset = offset;
-    blk->data.data_type = CONTENT_BLOCK_DATA_TYPE_UBYTE;
+    blk->data.type = CONTENT_BLOCK_DATA_TYPE_UBYTE;
     blk->data.count = count;
 
     u32 size = sizeof(u8) * count;
@@ -235,10 +264,9 @@ void Cartridge::CharacterRomBank::InitializeAsBytes(u16 offset, u16 count, u8* d
         content_ptrs[s] = ref;
     }
 
-    cout << "[Cartridge::CharacterRomBank::InitializeAsBytes] set 0x" << hex << uppercase << setfill('0') << setw(0) << count 
+    cout << "[CharacterRomBank::InitializeAsBytes] set 0x" << hex << uppercase << setfill('0') << setw(0) << count 
          << " bytes of data starting at bank offset 0x" << setw(4) << offset
          << " base 0x" << setw(4) << (load_address == CHARACTER_ROM_BANK_LOAD_LOW ? 0x0000 : 0x1000) << endl;
 }
-
 
 }

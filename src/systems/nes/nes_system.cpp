@@ -120,6 +120,82 @@ bool NESSystem::IsROMValid(std::string const& file_path_name, std::istream& is)
     return false;
 }
 
+// Memory
+void NESSystem::GetEntryPoint(NES::GlobalMemoryLocation* out)
+{
+    assert((bool)cartridge);
+    zero(out);
+    out->address      = 0xFFFC;
+    out->prg_rom_bank = cartridge->GetResetVectorBank();
+}
+
+// Listings
+void NESSystem::GetListingItems(NES::GlobalMemoryLocation const& where, std::vector<std::shared_ptr<ListingItem>>& out)
+{
+    assert(!where.is_chr); // TODO support CHR
+
+    if(where.address >= 0x8000) {
+        auto prg_bank = cartridge->GetProgramRomBank(where.prg_rom_bank);
+
+        auto content_block = prg_bank->GetContentBlockAt(where);
+        if(!content_block) {
+            // memory not present, add a ListingUnknown to out
+            auto unk = make_shared<ListingItemUnknown>(where);
+            out.push_back(unk);
+        }
+
+        switch(content_block->type) {
+        case CONTENT_BLOCK_TYPE_DATA:
+        {
+            auto dataitem = make_shared<ListingItemData>(where, prg_bank);
+            out.push_back(dataitem);
+            break;
+        }
+
+        case CONTENT_BLOCK_TYPE_CODE:
+        case CONTENT_BLOCK_TYPE_CHR:
+        default:
+            assert(false); // TODO block types
+        }
+    }
+}
+
+u16 NESSystem::GetSegmentBase(NES::GlobalMemoryLocation const& where)
+{
+    assert(!where.is_chr); // TODO
+
+    if(where.address < 0x2000) {
+        return where.address & ~0x7FF;
+    } else if(where.address < 0x4020) {
+        return 0x2000;
+    } else if(where.address < 0x6000) {
+        return 0x4020;
+    } else if(where.address < 0x8000) {
+        return 0x6000;
+    } else {
+        auto prg_bank = cartridge->GetProgramRomBank(where.prg_rom_bank);
+        return prg_bank->GetActualLoadAddress();
+    }
+}
+
+u32 NESSystem::GetSegmentSize(NES::GlobalMemoryLocation const& where)
+{
+    assert(!where.is_chr); // TODO
+
+    if(where.address < 0x2000) {
+        return 0x800;
+    } else if(where.address < 0x4020) {
+        return 0x2020;
+    } else if(where.address < 0x6000) {
+        return 0x1FE0;
+    } else if(where.address < 0x8000) {
+        return 0x2000;
+    } else {
+        auto prg_bank = cartridge->GetProgramRomBank(where.prg_rom_bank);
+        return prg_bank->GetActualSize();
+    }
+}
+
 System::Information const* NESSystem::GetInformation()
 {
     return NESSystem::GetInformationStatic();

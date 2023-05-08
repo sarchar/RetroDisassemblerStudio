@@ -13,6 +13,8 @@
 #include "systems/nes/nes_cartridge.h"
 #include "systems/nes/nes_system.h"
 
+#define JUMP_TO_SELECTION_START_VALUE 3
+
 using namespace std;
 
 namespace NES {
@@ -23,9 +25,19 @@ shared_ptr<Listing> Listing::CreateWindow()
 }
 
 Listing::Listing()
-    : BaseWindow("NES::Listing")
+    : BaseWindow("NES::Listing"),
+      jump_to_selection(0)
 {
     SetTitle("Listing");
+    SetNav(false); // dsisable navigation
+
+    shared_ptr<NESSystem> system = dynamic_pointer_cast<NESSystem>(MyApp::Instance()->GetCurrentSystem());
+    if(system) {
+        system->GetEntryPoint(&selection);
+        jump_to_selection = JUMP_TO_SELECTION_START_VALUE; // TODO this is stupid, I wish I could scroll within one or two frames (given we have to calculate the row sizes at least once)
+    }
+
+    cout << "[NES::Listing] Program entry point at " << selection << endl;
 }
 
 Listing::~Listing()
@@ -50,6 +62,10 @@ void Listing::CheckInput()
             cout << "split data" << endl;
         }
     }
+
+    if(ImGui::IsKeyDown(ImGuiKey_Tab) && !(io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper)) {
+        jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+    }
 }
 
 void Listing::PreRenderContent()
@@ -63,27 +79,18 @@ void Listing::PreRenderContent()
 
 void Listing::RenderContent() 
 {
-    // Let's render some instructions
+    // All access goes through the system
     shared_ptr<NESSystem> system = dynamic_pointer_cast<NESSystem>(MyApp::Instance()->GetCurrentSystem());
     if(!system) return;
 
-    // If no cart is loaded, bail
-    auto cartridge = system->GetCartridge();
-    if(!cartridge) return;
+    // Need the program rom bank that is currently in the listing
+    u16 segment_base = system->GetSegmentBase(selection);
+    u16 segment_size = system->GetSegmentSize(selection);
 
-    auto prg_bank0 = cartridge->GetProgramRomBank(1);
-
-    ImVec2 window_size = ImGui::GetWindowSize();
-    float line_height = ImGui::GetTextLineHeightWithSpacing();
-    int num_lines = (int)((window_size.y / (float)line_height) + 0.5);
-    //cout << "[Listing::RenderContent] line height = " << dec << line_height << " num_lines = " << num_lines << endl;
-
-    //static ImGuiTableFlags flags = ImGuiTableFlags_ScrollY /* | ImGuiTableFlags_RowBg */ /* | ImGuiTableFlags_BordersOuter */
-    //                               /* | ImGuiTableFlags_BordersV */ | ImGuiTableFlags_Resizable /* | ImGuiTableFlags_Reorderable */ | ImGuiTableFlags_Hideable | ImGuiTableFlags_NoBordersInBody;
-
+    ImGuiTableFlags common_inner_table_flags = ImGuiTableFlags_NoPadOuterX;
     ImGuiTableFlags outer_table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoBordersInBody;
 
-    static int selected_row = 0;
+    ImGuiWindowFlags_NoNav;
 
     // We use nested tables so that each row can have its own layout. This will be useful when we can render
     // things like plate comments, labels, etc
@@ -91,12 +98,88 @@ void Listing::RenderContent()
         ImGui::TableSetupColumn("RowContent", ImGuiTableColumnFlags_WidthStretch);
 
         ImGuiListClipper clipper;
-        clipper.Begin(0x4010);
+        clipper.Begin(segment_size + 0x100); // TODO: get the current bank and determine the number of elements
+        
+        // Force the clipper to include a range that also includes the row we want to jump to
+        // we have a buffer of 100 lines so ImGui can calculate row heights
+        if(jump_to_selection > 0) clipper.ForceDisplayRangeByIndices(selection.address - segment_base - 25, selection.address - segment_base + 25); // TODO need listing item index
 
         while(clipper.Step()) {
             for(int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++) {
-                ImGuiTableFlags common_row_flags = ImGuiTableFlags_NoPadOuterX;
+                // Use 'row' to pick the row'th listing item from the bank.  
+                // It's not exactly the bank base address plus row
+                // because some rows don't increment the address (i.e., labels, comments, etc)
+                // TODO we need listing item counts in order to do this properly
+                GlobalMemoryLocation current_address = selection; // copy bank info
+                current_address.address = segment_base + row;
+                bool selected_row = (current_address.address == selection.address);
 
+                // Fetch the listing items that belong at this address (labels, comments, data, etc)
+                vector<shared_ptr<ListingItem>> items;
+                system->GetListingItems(current_address, items);
+
+                // Draw the items
+                for(auto& listing_item : items) {
+                    // Begin a new row and next column
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+
+                    // Create the hidden selectable item
+                    {
+                        ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
+                        char buf[32];
+                        sprintf(buf, "##selectable_row%d", row);
+                        if (ImGui::Selectable(buf, selected_row, selectable_flags)) {
+                            selection = current_address;
+                        }
+                        ImGui::SameLine();
+                    }
+
+                    switch(listing_item->GetType()) {
+                    case ListingItem::LISTING_ITEM_TYPE_UNKNOWN:
+                        //assert(false);
+                        break;
+
+                    case ListingItem::LISTING_ITEM_TYPE_DATA:
+                    {
+                        ImGuiTableFlags table_flags = common_inner_table_flags | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
+                        if(ImGui::BeginTable("listing_item_data", 3, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+                            ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
+                            ImGui::TableSetupColumn("DataType", ImGuiTableColumnFlags_WidthFixed);
+                            ImGui::TableSetupColumn("Content", ImGuiTableColumnFlags_WidthFixed);
+                            ImGui::TableNextRow();
+
+                            ImGui::TableNextColumn();
+                            ImGui::Text("$%02X:0x%04X", current_address.prg_rom_bank, current_address.address);
+
+                            //u8 data = prg_bank0->ReadByte(address);
+                            u8 data = 0xEA;
+
+                            ImGui::TableNextColumn();
+                            ImGui::Text(".DB");
+
+                            ImGui::TableNextColumn();
+                            ImGui::Text("$%02X", data);
+
+                            ImGui::EndTable();
+                        }
+
+                        break;
+                    }
+
+                    default:
+                        assert(false); // unhandled
+                    }
+                }
+                
+                // Only after the row has been rendered and it was the last element in the table,
+                // we can use ScrollToItem() to get the item focused in the middle of the view.
+                if(current_address.address == selection.address && jump_to_selection > 0) {
+                    ImGui::ScrollToItem(ImGuiScrollFlags_AlwaysCenterY);
+                    jump_to_selection -= 1;
+                }
+
+                /*
                 // Create a label at $3FFA
                 if(row == 0x3FFA) {
                     // Begin a new row and next column
@@ -114,7 +197,7 @@ void Listing::RenderContent()
                         ImGui::SameLine();
                     }
 
-                    ImGuiTableFlags label_table_flags = common_row_flags | ImGuiTableFlags_NoBordersInBody;
+                    ImGuiTableFlags label_table_flags = common_inner_table_flags | ImGuiTableFlags_NoBordersInBody;
                     if(ImGui::BeginTable("listing_label", 1, label_table_flags)) {
                         ImGui::TableNextRow();
                         ImGui::TableNextColumn();
@@ -125,7 +208,9 @@ void Listing::RenderContent()
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
                 }
+                */
 
+                /*
                 // Begin a new row and next column
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
@@ -142,7 +227,7 @@ void Listing::RenderContent()
                 }
 
                 // List code
-                ImGuiTableFlags code_row_flags = common_row_flags | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
+                ImGuiTableFlags code_row_flags = common_inner_table_flags | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
                 if(ImGui::BeginTable("listing_entry", 3, code_row_flags)) {
                     ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
                     ImGui::TableSetupColumn("Insn", ImGuiTableColumnFlags_WidthFixed);
@@ -154,7 +239,8 @@ void Listing::RenderContent()
                     ImGui::Text("0x%04X", address);
 
                     if(address <= 0x3FFF) {
-                        u8 data = prg_bank0->ReadByte(address);
+                        //u8 data = prg_bank0->ReadByte(address);
+                        u8 data = 0xEA;
 
                         ImGui::TableNextColumn();
                         ImGui::Text(".DB");
@@ -170,6 +256,7 @@ void Listing::RenderContent()
 
                     ImGui::EndTable();
                 }
+                */
             }
         }
         ImGui::EndTable();

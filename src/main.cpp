@@ -193,6 +193,8 @@ MyApp::WindowFromINI* MyApp::NewINIWindow()
 
 void MyApp::CreateINIWindows()
 {
+#if 0 // TODO temporarily disabling the creationg of the windows from the INI file.
+      // later, we will want to recreate the last open project. or not? let the user pick.
     // loop over all the INI windows and create them
     for(auto& wfini : ini_windows) {
         if(!create_window_functions.contains(wfini->window_class)) {
@@ -210,6 +212,7 @@ void MyApp::CreateINIWindows()
         // add it to the managed windows list
         AddWindow(wnd);
     }
+#endif
 
     // free memory
     ini_windows.clear();

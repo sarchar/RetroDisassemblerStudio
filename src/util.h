@@ -25,3 +25,7 @@ inline std::string StringLower(std::string const& s)
     return ret;
 }
 
+template<class T>
+inline void zero(T* mem) {
+    memset(mem, 0, sizeof(T));
+}

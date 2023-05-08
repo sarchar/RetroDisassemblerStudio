@@ -11,6 +11,7 @@ public:
     virtual ~BaseWindow();
 
     // Utility
+    void SetNav(bool _v) { enable_nav = _v; }
     void SetWindowless(bool _v) { windowless = _v; }
     bool IsWindowless() const { return windowless; }
     std::string const& GetTitle() const { return window_title; }
@@ -51,4 +52,5 @@ private:
     bool open;
     bool focused;
     bool docked;
+    bool enable_nav;
 };

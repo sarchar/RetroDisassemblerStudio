@@ -10,6 +10,8 @@
 
 using namespace std;
 
+static u64 base_window_next_id = 0;
+
 string BaseWindow::GetRandomID()
 {
     static char const CHARSET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-+?=";
@@ -23,11 +25,14 @@ string BaseWindow::GetRandomID()
     }
     buf[11] = 0;
 
-    return string(buf);
+    //return string(buf);
+    stringstream ss;
+    ss << base_window_next_id++;
+    return ss.str();
 }
 
 BaseWindow::BaseWindow(string const& tag)
-    : windowless(false), open(true), focused(false), docked(false), window_tag(tag)
+    : windowless(false), open(true), focused(false), docked(false), enable_nav(true), window_tag(tag)
 {
     // create the signals
     window_closed = make_shared<window_closed_t>();
@@ -86,7 +91,10 @@ void BaseWindow::RenderGUI()
     // TODO make this size configurable in BaseWindow
     ImGui::SetNextWindowSizeConstraints(ImVec2(250, 100),  ImVec2(1200, 800));
 
-    bool is_open = ImGui::Begin(window_title.c_str(), &local_open);
+    ImGuiWindowFlags window_flags = 0;
+    if(!enable_nav) window_flags |= ImGuiWindowFlags_NoNav;
+
+    bool is_open = ImGui::Begin(window_title.c_str(), &local_open, window_flags);
     focused = ImGui::IsWindowFocused();
     docked = ImGui::IsWindowDocked();
 

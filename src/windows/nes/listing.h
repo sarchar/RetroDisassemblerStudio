@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "signals.h"
+#include "systems/nes/nes_system.h"
 #include "windows/base_window.h"
 
 namespace NES {
@@ -25,6 +26,8 @@ protected:
     void CheckInput();
 
 private:
+    NES::GlobalMemoryLocation selection;
+    int                       jump_to_selection;
 
 public:
     static std::shared_ptr<Listing> CreateWindow();
