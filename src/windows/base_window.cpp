@@ -27,7 +27,7 @@ string BaseWindow::GetRandomID()
 }
 
 BaseWindow::BaseWindow(string const& tag)
-    : windowless(false), open(true), window_tag(tag)
+    : windowless(false), open(true), focused(false), docked(false), window_tag(tag)
 {
     // create the signals
     window_closed = make_shared<window_closed_t>();
@@ -52,7 +52,6 @@ void BaseWindow::SetTitle(std::string const& t)
         window_id = BaseWindow::GetRandomID();
     }
     ss << t << "###" << window_tag << "_" << window_id;
-    cout << GetWindowClass() << " title is " << ss.str() << endl;
     window_title = ss.str();
 }
 
@@ -71,6 +70,8 @@ void BaseWindow::Update(double deltaTime)
 
 void BaseWindow::RenderGUI()
 {
+    PreRenderContent();
+
     // 'windowless' windows are essentially background tasks that have no GUI window associated with them
     // but a GUI callback is called regardless for popups and more
     if(windowless) {
@@ -82,7 +83,14 @@ void BaseWindow::RenderGUI()
     bool local_open = open;
     if(!local_open) return;
 
-    if(ImGui::Begin(window_title.c_str(), &local_open)) {
+    // TODO make this size configurable in BaseWindow
+    ImGui::SetNextWindowSizeConstraints(ImVec2(250, 100),  ImVec2(1200, 800));
+
+    bool is_open = ImGui::Begin(window_title.c_str(), &local_open);
+    focused = ImGui::IsWindowFocused();
+    docked = ImGui::IsWindowDocked();
+
+    if(is_open) {
         RenderContent();
     }
 

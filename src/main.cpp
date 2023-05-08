@@ -18,28 +18,31 @@
 #include "dirent/dirent.h"
 
 #include "main.h"
-#include "systems/system.h"
+#include "systems/nes/nes_system.h"
 #include "systems/snes/snes_system.h"
 #include "windows/debugger.h"
 #include "windows/memory.h"
 #include "windows/rom_loader.h"
+#include "windows/nes/listing.h"
 
 #undef DISABLE_IMGUI_SAVE_LOAD_LAYOUT
 
 using namespace std;
 
 MyApp::MyApp(int argc, char* argv[])
-    : Application("Retro Disassembler Studio", 1000, 800),
+    : Application("Retro Disassembler Studio", 1600, 1000),
       request_exit(false), show_imgui_demo(false)
 {
     ((void)argc);
     ((void)argv);
-    ROMLoader::RegisterSystemInformation(SNESSystem::GetInformationStatic());
+    ProjectCreatorWindow::RegisterSystemInformation(NESSystem::GetInformationStatic());
+    ProjectCreatorWindow::RegisterSystemInformation(SNESSystem::GetInformationStatic());
     current_system_changed = make_shared<current_system_changed_t>();
 
     // register all the windows
 #   define REGISTER_WINDOW_TYPE(className) \
         create_window_functions[className::GetWindowClassStatic()] = std::bind(&className::CreateWindow);
+    REGISTER_WINDOW_TYPE(NES::Listing);
     REGISTER_WINDOW_TYPE(SNESMemory);
     REGISTER_WINDOW_TYPE(SNESDebugger);
 #   undef REGISTER_WINDOW_TYPE
@@ -106,6 +109,20 @@ bool MyApp::OnWindowCreated()
 
     // scale up some
     io.FontGlobalScale = 1.2f;
+
+    // Create a style
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowPadding.x    = 0;
+    style.WindowPadding.y    = 0;
+    style.FramePadding.x     = 3;
+    style.FramePadding.y     = 3;
+    style.CellPadding.x      = 2;
+    style.CellPadding.y      = 1;
+    style.ItemSpacing.x      = 8;
+    style.ItemSpacing.y      = 5;
+    style.ScrollbarSize      = 12;
+    style.GrabMinSize        = 13;
+    style.WindowTitleAlign.x = 0.5f;
 
     return true;
 }
@@ -204,7 +221,13 @@ void MyApp::AddWindow(shared_ptr<BaseWindow> window)
     *window->window_closed += std::bind(&MyApp::ManagedWindowClosedHandler, this, placeholders::_1);
 
     managed_windows.push_back(window);
-    cout << "[MyApp] managed window count = " << managed_windows.size() << endl;
+    cout << "[MyApp] Added window \"" << window->GetTitle() << "\" (managed window count = " << managed_windows.size() << ")" << endl;
+}
+
+void MyApp::ManagedWindowClosedHandler(std::shared_ptr<BaseWindow> window)
+{
+    cout << "[MyApp] \"" << window->GetTitle() << "\" closed (managed window count = " << managed_windows.size() + queued_windows_for_delete.size() - 1 << ")" << endl;
+    queued_windows_for_delete.push_back(window);
 }
 
 void MyApp::ProcessQueuedWindowsForDelete()
@@ -215,12 +238,6 @@ void MyApp::ProcessQueuedWindowsForDelete()
     }
 
     queued_windows_for_delete.resize(0);
-}
-
-void MyApp::ManagedWindowClosedHandler(std::shared_ptr<BaseWindow> window)
-{
-    cout << "[MyApp] got window closed handler for window " << window->GetTitle() << endl;
-    queued_windows_for_delete.push_back(window);
 }
 
 bool MyApp::Update(double deltaTime)
@@ -240,8 +257,19 @@ void MyApp::OpenROMInfosPane()
 {
     static string last_file_selection;
     static struct {
-        unsigned long rom_size;
-        unsigned long load_address;
+        u32 prg_rom;
+        u32 chr_rom;
+
+        u8 prg_rom_banks;
+        u8 chr_rom_banks;
+
+        u8 mapper;
+        bool vertical_mirroring;
+        bool four_screen;
+        bool has_sram;
+        bool has_trainer;
+
+        bool valid;
     } rom_info = { 0, };
 
     ImGui::PushFont(static_cast<ImFont*>(main_font_bold));
@@ -255,45 +283,99 @@ void MyApp::OpenROMInfosPane()
         if(file_path_name != last_file_selection) {
             ifstream rom_stream(file_path_name, ios::binary);
 
-            unsigned char buf[2];
-            rom_stream.read(reinterpret_cast<char*>(buf), 2);
-            rom_info.load_address = buf[0] | (buf[1] << 8);
+            unsigned char buf[16];
+            rom_stream.read(reinterpret_cast<char*>(buf), 16);
+            if(rom_stream && (buf[0] == 'N' && buf[1] == 'E' && buf[2] == 'S' && buf[3] == 0x1A)) {
+                rom_info.prg_rom_banks      = (u8)buf[4];
+                rom_info.prg_rom            = rom_info.prg_rom_banks * 16 * 1024;
+                rom_info.chr_rom_banks      = (u8)buf[5];
+                rom_info.chr_rom            = rom_info.chr_rom_banks * 8 * 1024;
 
-            rom_stream.read(reinterpret_cast<char*>(buf), 2);
-            rom_info.rom_size = buf[0] | (buf[1] << 8);
+                rom_info.mapper             = ((u8)buf[6] & 0xF0) >> 4 | ((u8)buf[7] & 0xF0);
+
+                rom_info.vertical_mirroring = (bool)((u8)buf[6] & 0x01);
+                rom_info.has_sram           = (bool)((u8)buf[6] & 0x02);
+                rom_info.has_trainer        = (bool)((u8)buf[6] & 0x04);
+                rom_info.four_screen        = (bool)((u8)buf[6] & 0x08);
+
+                rom_info.valid = true;
+            } else {
+                rom_info.valid = false;
+            }
 
             last_file_selection = file_path_name;
         }
 
 
-        stringstream ss;
-        ss.imbue(locale(""));
-        ss << fixed;
+        if(rom_info.valid) {
+            stringstream ss;
 
-        string mult;
-        if(rom_info.rom_size >= (1024*1024)) {
-            ss << (rom_info.rom_size / (1024 * 1024));
-            mult = " MiB";
-        } else if(rom_info.rom_size >= 1024) {
-            ss << (rom_info.rom_size / 1024);
-            mult = " KiB";
+            ////////////////////////////////////////////////////////////
+            ImGui::Text("Mapper: ");
+            ImGui::SameLine();
+            ImGui::Text("%d", rom_info.mapper);
+
+            ////////////////////////////////////////////////////////////
+            ss.imbue(locale(""));
+            ss << fixed;
+
+            if(rom_info.prg_rom >= (1024*1024)) {
+                ss << (rom_info.prg_rom / (1024 * 1024));
+                ss << " MiB";
+            } else if(rom_info.prg_rom >= 1024) {
+                ss << (rom_info.prg_rom / 1024);
+                ss << " KiB";
+            } else {
+                ss << rom_info.prg_rom;
+                ss << " B";
+            }
+
+            ss << " (" << (int)rom_info.prg_rom_banks << " banks)";
+
+            ImGui::Text("PRG: ");
+            ImGui::SameLine();
+            ImGui::Text("%s", ss.str().c_str());
+
+            ////////////////////////////////////////////////////////////
+            ss.str("");
+            ss.clear();
+            ss.imbue(locale(""));
+            ss << fixed;
+
+            if(rom_info.chr_rom >= (1024*1024)) {
+                ss << (rom_info.chr_rom / (1024 * 1024));
+                ss << " MiB";
+            } else if(rom_info.chr_rom >= 1024) {
+                ss << (rom_info.chr_rom / 1024);
+                ss << " KiB";
+            } else {
+                ss << rom_info.chr_rom;
+                ss << " B";
+            }
+
+            ss << " (" << (int)rom_info.chr_rom_banks << " banks)";
+
+            ImGui::Text("CHR: ");
+            ImGui::SameLine();
+            ImGui::Text("%s", ss.str().c_str());
+
+            ////////////////////////////////////////////////////////////
+            ImGui::Text("Mirroring: ");
+            ImGui::SameLine();
+            ImGui::Text(rom_info.four_screen ? "None" : (rom_info.vertical_mirroring ? "Vertical" : "Horizontal"));
+
+            ////////////////////////////////////////////////////////////
+            ImGui::Text("SRAM: ");
+            ImGui::SameLine();
+            ImGui::Text(rom_info.has_sram ? "Present" : "Not Present");
+
+            ////////////////////////////////////////////////////////////
+            ImGui::Text("Trainer: ");
+            ImGui::SameLine();
+            ImGui::Text(rom_info.has_trainer ? "Present" : "Not Present");
         } else {
-            ss << rom_info.rom_size;
-            mult = " B";
+            ImGui::Text("Not a valid ROM");
         }
-
-        ImGui::Text("Size: ");
-        ImGui::SameLine();
-        ImGui::Text(ss.str().c_str());
-        ImGui::SameLine();
-        ImGui::Text(mult.c_str());
-
-        ss.str(string());
-        ss.imbue(locale("C")); // don't print commas in hex strings
-        ss << "$" << uppercase << hex << rom_info.load_address;
-        ImGui::Text("Load: ");
-        ImGui::SameLine();
-        ImGui::Text(ss.str().c_str());
     }
 }
 
@@ -306,9 +388,10 @@ void MyApp::RenderMainMenuBar()
                     this->OpenROMInfosPane();
                 };
 
-                ImGuiFileDialog::Instance()->OpenModal("OpenROMFileDialog", "Choose ROM to disassemble", ".bin,.smc,.nes", ".", "",
+                ImGuiFileDialog::Instance()->OpenDialog("OpenROMFileDialog", "Choose ROM to disassemble", "NES ROMs (*.nes){.nes}", "./roms/", "",
                                                        bind(infos_pane_cb, placeholders::_1, placeholders::_2, placeholders::_3),
-                                                       250, 1, IGFDUserDatas("InfosPane"));
+                                                       250, 1, IGFDUserDatas("InfosPane"), ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_CaseInsensitiveExtention
+                                                                                           | ImGuiFileDialogFlags_DisableCreateDirectoryButton);
             }
 
             ImGui::Separator();
@@ -331,20 +414,17 @@ void MyApp::RenderMainMenuBar()
                     dirent* dirent;
                     while((dirent = readdir(dir)) != nullptr) {
                         string file_path_name = string("roms/") + string(dirent->d_name);
-                        if(ends_with(file_path_name, ".bin") || ends_with(file_path_name, ".smc")) {
+                        if(ends_with(file_path_name, ".nes")) {
                             test_roms.push_back(file_path_name);
                         }
                     }
                     closedir(dir);
                 }
-
-                // TODO remove me after a while
-                test_roms.push_back("roms/missing file");
             }
 
             for(auto &t : test_roms) {
                 if(ImGui::MenuItem(t.c_str())) {
-                    CreateROMLoader(t);
+                    CreateNewProject(t);
                 }
             }
 
@@ -381,7 +461,7 @@ void MyApp::RenderMainMenuBar()
                 auto selection = ImGuiFileDialog::Instance()->GetSelection();
                 if(selection.size() >  0) {
                     string file_path_name = (*selection.begin()).second;
-                    CreateROMLoader(file_path_name);
+                    CreateNewProject(file_path_name);
                 }
             }
 
@@ -397,35 +477,13 @@ void MyApp::RenderMainStatusBar()
 
 void MyApp::RenderGUI()
 {
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+
     // Only call ShowDockSpace if you want your main window to be a dockable workspace
     ShowDockSpace();
 
     // Show the ImGui demo window if requested
-    if (show_imgui_demo) ImGui::ShowDemoWindow(&show_imgui_demo);
-
-#if 0
-    // 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
-    {
-        static float f = 0.0f;
-        static int counter = 0;
-    
-        ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-    
-        ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-        ImGui::Checkbox("Demo Window", &show_imgui_demo);       // Edit bools storing our window open/close state
-    
-        ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-        ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-    
-        if (ImGui::Button("Button")) counter++;                 // Buttons return true when clicked (most widgets return true when edited/activated)
-
-        ImGui::SameLine();
-        ImGui::Text("counter = %d", counter);
-    
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-        ImGui::End();
-    }
-#endif
+    if(show_imgui_demo) ImGui::ShowDemoWindow(&show_imgui_demo);
 
     // Render all open windows
     for(auto &window : managed_windows) {
@@ -434,6 +492,9 @@ void MyApp::RenderGUI()
 
     // Remove any windows queued for deletion
     ProcessQueuedWindowsForDelete();
+
+    // CLean up style vars
+    ImGui::PopStyleVar(1);
 }
 
 bool MyApp::OKPopup(std::string const& title, std::string const& message)
@@ -488,33 +549,33 @@ void MyApp::OnKeyPress(int glfw_key, int scancode, int action, int mods)
     }
 }
 
-void MyApp::CreateROMLoader(string const& file_path_name)
+void MyApp::CreateNewProject(string const& file_path_name)
 {
-    cout << "[MyApp] CreateROMLoader(" << file_path_name << ")" << endl;
-    auto loader = ROMLoader::CreateWindow(file_path_name);
+    cout << "[MyApp] CreateNewProject(" << file_path_name << ")" << endl;
+
+    // TODO: close the current project and open windows
+    for(auto& window : managed_windows) {
+        window->CloseWindow();
+    }
+
+    auto loader = ProjectCreatorWindow::CreateWindow(file_path_name);
     *loader->system_loaded += std::bind(&MyApp::SystemLoadedHandler, this, placeholders::_1, placeholders::_2);
     AddWindow(loader);
 }
 
-void MyApp::SystemLoadedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<System> new_system)
+void MyApp::SystemLoadedHandler(std::shared_ptr<BaseWindow> project_creator_window, std::shared_ptr<System> new_system)
 {
+    project_creator_window->CloseWindow();
+
+    // TODO: create the default workspace and focus a source editor to the projects entry point
+
     current_system = new_system;
     cout << "[MyApp] new " << current_system->GetInformation()->full_name << " loaded." << endl;
     current_system_changed->emit();
 
-    // if there's no debugger in the list of windows, open one
-    for(auto& window : managed_windows) {
-        if(dynamic_pointer_cast<SNESDebugger>(window) != nullptr) goto skip_debug_window;
-    }
-
-    // if we get here, create the SNESDebugger window
-    {
-        auto wnd = SNESDebugger::CreateWindow();
-        AddWindow(wnd);
-    }
-
-skip_debug_window:
-    ;
+    // TODO Would be nice to look up the Listing window and not care which platform is loaded
+    auto wnd = NES::Listing::CreateWindow();
+    AddWindow(wnd);
 }
 
 int main(int argc, char* argv[])

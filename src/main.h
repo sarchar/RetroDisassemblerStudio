@@ -55,7 +55,7 @@ private:
     void ProcessQueuedWindowsForDelete();
     void ManagedWindowClosedHandler(std::shared_ptr<BaseWindow>);
 
-    void CreateROMLoader(std::string const&);
+    void CreateNewProject(std::string const&);
     void SystemLoadedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<System>);
 
     void OpenROMInfosPane();

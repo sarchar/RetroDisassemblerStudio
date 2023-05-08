@@ -1,11 +1,11 @@
 [submodule "imgui"]
-	path = imgui
+	path = libs/imgui
 	url = https://github.com/ocornut/imgui.git
 [submodule "glfw"]
-	path = glfw
+	path = libs/glfw
 	url = https://github.com/glfw/glfw
 [submodule "gl3w"]
-	path = gl3w
+	path = libs/gl3w
 	url = https://github.com/skaslev/gl3w
 [submodule "libs/ImGuiFileDialog"]
 	path = libs/ImGuiFileDialog

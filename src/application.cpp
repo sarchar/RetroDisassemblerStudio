@@ -16,6 +16,8 @@
 
 using namespace std::literals;
 
+static char const * const DOCKSPACE_NAME = "RootDockspace";
+
 // Boilerplate needed to wrap the glfw callback to our class method
 // thank you to https://stackoverflow.com/questions/1000663/using-a-c-class-member-function-as-a-c-callback-function
 template <typename T> struct GLFW3Callback;
@@ -35,7 +37,7 @@ std::function<RetType(ParamTypes...)> GLFW3Callback<RetType(ParamTypes...)>::cal
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 Application::Application(std::string const& _window_title, int _window_width, int _window_height)
-    : enable_toolbar(false), enable_statusbar(false)
+    : enable_toolbar(false), enable_statusbar(false), has_dock_builder(false)
 {
     window_title = _window_title;
     window_width = _window_width;
@@ -123,7 +125,7 @@ int Application::CreateWindow()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
     // Create window with graphics context
-    glfw_window = glfwCreateWindow(window_width, window_width, window_title.c_str(), NULL, NULL);
+    glfw_window = glfwCreateWindow(window_width, window_height, window_title.c_str(), NULL, NULL);
     if (glfw_window == NULL) return -2;
 
     // Bind the keypress handler
@@ -196,17 +198,25 @@ void Application::ShowDockSpace(bool dockSpaceHasBackground)
     // We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not dockable into,
     // because it would be confusing to have two docking targets within each others.
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-    
+
+    // Adjust for the status bar, if shown
+    float status_bar_height = 0;
+    if(enable_statusbar) {
+        status_bar_height = ImGui::GetFrameHeight();
+    }
+     
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->Pos);
-    ImGui::SetNextWindowSize(viewport->Size);
+    ImVec2 dockspace_size = viewport->Size;
+    dockspace_size.y -= status_bar_height;
+    ImGui::SetNextWindowSize(dockspace_size);
     ImGui::SetNextWindowViewport(viewport->ID);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
     window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
     
-    
+   
     // When using ImGuiDockNodeFlags_PassthruCentralNode, DockSpace() will render our background and 
     // handle the pass-thru hole, so we ask Begin() to not render a background.
     if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode) window_flags |= ImGuiWindowFlags_NoBackground;
@@ -225,29 +235,38 @@ void Application::ShowDockSpace(bool dockSpaceHasBackground)
     ImGuiIO& io = ImGui::GetIO();
     if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
 
-        ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
-        ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
+        imgui_dockspace_id = ImGui::GetID(DOCKSPACE_NAME);
+        ImGui::DockSpace(imgui_dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 
-        //!static auto first_time = true;
-        //!if (first_time)
-        //!{
-        //!    first_time = false;
+        if (!has_dock_builder)
+        {
+            ImGui::DockBuilderRemoveNode(imgui_dockspace_id); // clear any previous layout
 
-        //!    ImGui::DockBuilderRemoveNode(dockspace_id); // clear any previous layout
-        //!    ImGui::DockBuilderAddNode(dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
-        //!    ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
+            // Create the root node, which we can use to dock windows
+            imgui_dock_builder_root_id = ImGui::DockBuilderAddNode(imgui_dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
 
-        //!    //! // split the dockspace into 2 nodes -- DockBuilderSplitNode takes in the following args in the following order
-        //!    //! //   window ID to split, direction, fraction (between 0 and 1), the final two setting let's us choose which id we want (which ever one we DON'T set as NULL, will be returned by the function)
-        //!    //! //                                                              out_id_at_dir is the id of the node in the direction we specified earlier, out_id_at_opposite_dir is in the opposite direction
-        //!    //! auto dock_id_left = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.2f, nullptr, &dockspace_id);
-        //!    //! auto dock_id_down = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.25f, nullptr, &dockspace_id);
+            // And make it take the entire viewport
+            ImGui::DockBuilderSetNodeSize(imgui_dockspace_id, viewport->Size);
 
-        //!    //! // we now dock our windows into the docking node we made above
-        //!    //! ImGui::DockBuilderDockWindow("Down", dock_id_down);
-        //!    //! ImGui::DockBuilderDockWindow("Left", dock_id_left);
-        //!    //! ImGui::DockBuilderFinish(dockspace_id);
-        //!}
+            // split the dockspace into left and right, with the right side a temporary ID
+            ImGuiID right_id;
+            imgui_dock_builder_left_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_root_id, ImGuiDir_Left, 0.3f, nullptr, &right_id);
+
+            // split the right area, creating a temporary middle
+            ImGuiID middle_id;
+            imgui_dock_builder_right_id = ImGui::DockBuilderSplitNode(right_id, ImGuiDir_Right, 0.5f, nullptr, &middle_id);
+
+            // now split the middle area into a top and bottom
+            imgui_dock_builder_bottom_id = ImGui::DockBuilderSplitNode(middle_id, ImGuiDir_Down, 0.5f, nullptr, nullptr);
+
+            //! // we now dock our windows into the docking node we made above
+            //! ImGui::DockBuilderDockWindow("Down", dock_id_down);
+            //! ImGui::DockBuilderDockWindow("Left", dock_id_left);
+            ImGui::DockBuilderFinish(imgui_dockspace_id);
+
+            // do this last for race conditions
+            has_dock_builder = true;
+        }
     }
 
     RenderMainMenuBar();

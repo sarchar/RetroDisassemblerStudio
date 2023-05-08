@@ -24,7 +24,7 @@ public:
     virtual ~SNESSystem();
 
     System::Information const* GetInformation();
-    bool LoadROM(std::string const&);
+    bool CreateNewProjectFromFile(std::string const&);
 
     std::string const& GetROMFilePathName() const { return rom_file_path_name; }
 

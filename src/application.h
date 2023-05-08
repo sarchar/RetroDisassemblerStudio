@@ -29,6 +29,23 @@ public:
     void SetEnableToolBar(bool enabled) { enable_toolbar = enabled; }
     void SetWindowPos(int x, int y);
 
+    // Autodocking new windows requires these utility functions
+    // Do not save the ID return values, as they may change when the dockspace builder is recreated
+    bool HasDockBuilder() const { return has_dock_builder; }
+    unsigned int GetDockspaceImGuiID() const { return imgui_dockspace_id; }
+    unsigned int GetDockBuilderRootID() const { return imgui_dock_builder_root_id; }
+    unsigned int GetDockBuilderLeftID() const { return imgui_dock_builder_left_id; }
+    unsigned int GetDockBuilderRightID() const { return imgui_dock_builder_right_id; }
+    unsigned int GetDockBuilderBottomID() const { return imgui_dock_builder_bottom_id; }
+
+    unsigned int imgui_dockspace_id;
+    unsigned int imgui_dock_builder_root_id;
+    unsigned int imgui_dock_builder_left_id;
+    unsigned int imgui_dock_builder_right_id;
+    unsigned int imgui_dock_builder_bottom_id;
+
+    bool has_dock_builder;
+
 protected:
     Application(std::string const& _window_title, int _window_width, int _window_height);
 

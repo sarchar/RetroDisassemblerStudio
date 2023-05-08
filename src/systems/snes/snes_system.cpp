@@ -74,7 +74,7 @@ void SNESSystem::BuildSystemComponents()
     main_ram->pins.d.Connect(&address_decoder->pins.d);           // connect the data bus to the data transceiver
     main_ram->pins.rw_n.Connect(&cpu->pins.rw_n);                 // connect the read/write line from the cpu
 
-    // connect the main rom, which was created in LoadROM
+    // connect the main rom, which was created in CreateNewProjectFromFile
     main_rom = make_unique<ROM<u32, u8>>(15, true);               // 2^15 bits, 24-bit address space, latch on high clock signal
     main_rom->pins.clk.Connect(&peripheral_clock->pins.out);      // get the peripherals clocking at the end of phi2 high
     main_rom->pins.cs_n.Connect(&address_decoder->pins.rom_cs_n); // connect the CS line to the address decoder logic
@@ -247,7 +247,7 @@ void SNESSystem::SystemThreadMain()
     }
 }
 
-bool SNESSystem::LoadROM(string const& file_path_name)
+bool SNESSystem::CreateNewProjectFromFile(string const& file_path_name)
 {
     // TODO move the loader into its own class once it becomes complex enough
     // for now this basic image loader is fine

@@ -20,6 +20,9 @@ public:
 
     void CloseWindow(); // emit window_closed and stop rendering
 
+    bool IsFocused() const { return focused; }
+    bool IsDocked() const { return docked; }
+
     // Called from the main application
     void Update(double deltaTime);
     void RenderGUI();
@@ -32,6 +35,8 @@ public:
 protected:
     // Implemented by derived class
     virtual void UpdateContent(double deltaTime) {};
+
+    virtual void PreRenderContent() {};
     virtual void RenderContent() {};
 
     // Required in the derived class
@@ -44,4 +49,6 @@ private:
     std::string window_id;
     bool windowless;
     bool open;
+    bool focused;
+    bool docked;
 };
