@@ -17,7 +17,7 @@ public:
     static char const * const GetWindowClassStatic() { return "ProjectCreatorWindow"; }
 
     // signals
-    typedef signal<std::function<void(std::shared_ptr<BaseWindow>, std::shared_ptr<System>)>> system_loaded_t;
+    typedef signal<std::function<void(std::shared_ptr<BaseWindow>, std::shared_ptr<BaseSystem>)>> system_loaded_t;
     std::shared_ptr<system_loaded_t> system_loaded;
 
 protected:
@@ -28,7 +28,7 @@ protected:
 
 private:
     std::string file_path_name;
-    std::vector<System::Information const*> available_systems;
+    std::vector<BaseSystem::Information const*> available_systems;
 
     enum {
         LOADER_STATE_INIT = 0,
@@ -38,11 +38,11 @@ private:
         LOADER_STATE_CREATING_PROJECT
     } loader_state;
 
-    void CreateNewProject(System::Information const*);
-    void CreateNewProjectProgress(std::shared_ptr<System> system, bool error, u64 max_progress, u64 current_progress, std::string const& msg);
+    void CreateNewProject(BaseSystem::Information const*);
+    void CreateNewProjectProgress(std::shared_ptr<BaseSystem> system, bool error, u64 max_progress, u64 current_progress, std::string const& msg);
 
     std::unique_ptr<std::thread> create_project_thread;
-    std::shared_ptr<System> current_system;
+    std::shared_ptr<BaseSystem> current_system;
     u64         create_project_max_progress;
     u64         create_project_current_progress;
     std::string create_project_message;
@@ -50,9 +50,9 @@ private:
     bool        create_project_done;
 
 public:
-    static void RegisterSystemInformation(System::Information const*);
+    static void RegisterSystemInformation(BaseSystem::Information const*);
     static std::shared_ptr<ProjectCreatorWindow> CreateWindow(std::string const& _file_path_name);
 
 private:
-    static std::vector<System::Information const*> system_informations;
+    static std::vector<BaseSystem::Information const*> system_informations;
 };

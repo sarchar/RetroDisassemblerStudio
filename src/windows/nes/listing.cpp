@@ -31,7 +31,7 @@ Listing::Listing()
     SetTitle("Listing");
     SetNav(false); // dsisable navigation
 
-    shared_ptr<NESSystem> system = dynamic_pointer_cast<NESSystem>(MyApp::Instance()->GetCurrentSystem());
+    shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
     if(system) {
         system->GetEntryPoint(&selection);
         jump_to_selection = JUMP_TO_SELECTION_START_VALUE; // TODO this is stupid, I wish I could scroll within one or two frames (given we have to calculate the row sizes at least once)
@@ -61,7 +61,7 @@ void Listing::CheckInput()
         if(c == L'w') {
             cout << "input" << endl;
             // mark data as a word
-            shared_ptr<NESSystem> system = dynamic_pointer_cast<NESSystem>(MyApp::Instance()->GetCurrentSystem());
+            shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
             if(system) {
                 system->MarkContentAsData(selection, 2, CONTENT_BLOCK_DATA_TYPE_UWORD);
             }
@@ -85,7 +85,7 @@ void Listing::PreRenderContent()
 void Listing::RenderContent() 
 {
     // All access goes through the system
-    shared_ptr<NESSystem> system = dynamic_pointer_cast<NESSystem>(MyApp::Instance()->GetCurrentSystem());
+    shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
     if(!system) return;
 
     // Need the program rom bank that is currently in the listing

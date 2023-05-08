@@ -1,75 +1,48 @@
 #include <cassert>
 #include <chrono>
 #include <fstream>
+#include <iostream>
 #include <iomanip>
 #include <memory>
 
-#include "imgui.h"
-#include "imgui_internal.h"
-
 #include "systems/nes/nes_cartridge.h"
+#include "systems/nes/nes_content.h"
+#include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
 
 #include "util.h"
 
 using namespace std;
-using namespace NES;
 
-void ListingItemData::RenderContent(shared_ptr<NESSystem>& system)
+std::ostream& operator<<(std::ostream& stream, const NES::GlobalMemoryLocation& p) 
 {
-    ImGuiTableFlags common_inner_table_flags = ImGuiTableFlags_NoPadOuterX;
-    ImGuiTableFlags table_flags = common_inner_table_flags | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
-
-    if(ImGui::BeginTable("listing_item_data", 3, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
-        ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("DataType", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Content", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableNextRow();
-    
-        ImGui::TableNextColumn();
-        ImGui::Text("$%02X:0x%04X", global_memory_location.prg_rom_bank, global_memory_location.address);
-    
-        auto content_block = system->GetContentBlockAt(global_memory_location);
-        assert(content_block->type == CONTENT_BLOCK_TYPE_DATA);
-
-        //u8 data = prg_bank0->ReadByte(address);
-        //u8 data = 0xEA;
-    
-        ImGui::TableNextColumn();
-        ImGui::Text(content_block->FormatInstructionField().c_str());
-    
-        ImGui::TableNextColumn();
-        // TODO this 0xC000 subtraction should come from the bank knowing where it's loaded
-        // right now I only have the content block, which will need to know what bank it's in
-        // that can only happen once I abstract out memory regions and create program rom/character rom and 
-        // various memory banks derived from memory regions.
-        // Something like: content_block->GetContainingMemoryRegion()->ConvertToOffset(global address)
-        u16 n = (global_memory_location.address - 0xC000 - content_block->offset) / content_block->GetDataTypeSize();
-        ImGui::Text(content_block->FormatDataElement(n).c_str());
-    
-        ImGui::EndTable();
-    }
+    std::ios_base::fmtflags saveflags(stream.flags());
+    stream << "GlobalMemoryLocation(address=0x" << std::hex << std::setw(4) << std::setfill('0') << std::uppercase << p.address;
+    stream << ", prg_rom_bank=" << std::dec << std::setw(0) << p.prg_rom_bank;
+    stream << ", chr_rom_bank=" << std::dec << std::setw(0) << p.chr_rom_bank;
+    stream << ", is_chr=" << p.is_chr;
+    stream << ")";
+    stream.flags(saveflags);
+    return stream;
 }
 
-void ListingItemUnknown::RenderContent(shared_ptr<NESSystem>& system)
+namespace NES {
+
+System::System()
+    : ::BaseSystem()
 {
 }
 
-
-NESSystem::NESSystem()
+System::~System()
 {
 }
 
-NESSystem::~NESSystem()
+bool System::CreateNewProjectFromFile(string const& file_path_name)
 {
-}
-
-bool NESSystem::CreateNewProjectFromFile(string const& file_path_name)
-{
-    cout << "[NESSystem] CreateNewProjectFromFile begin" << endl;
+    cout << "[NES::System] CreateNewProjectFromFile begin" << endl;
     create_new_project_progress->emit(shared_from_this(), false, 0, 0, "Loading file...");
 
-    cartridge = make_shared<NES::Cartridge>();
+    cartridge = make_shared<Cartridge>();
 
     // Read in the iNES header
     ifstream rom_stream(file_path_name, ios::binary);
@@ -149,11 +122,11 @@ bool NESSystem::CreateNewProjectFromFile(string const& file_path_name)
     }
 
     create_new_project_progress->emit(shared_from_this(), false, num_steps, ++current_step, "Done");
-    cout << "[NESSystem] CreateNewProjectFromFile end" << endl;
+    cout << "[NES::System] CreateNewProjectFromFile end" << endl;
     return true;
 }
 
-bool NESSystem::IsROMValid(std::string const& file_path_name, std::istream& is)
+bool System::IsROMValid(std::string const& file_path_name, std::istream& is)
 {
     unsigned char buf[16];
     is.read(reinterpret_cast<char*>(buf), 16);
@@ -165,7 +138,7 @@ bool NESSystem::IsROMValid(std::string const& file_path_name, std::istream& is)
 }
 
 // Memory
-void NESSystem::GetEntryPoint(NES::GlobalMemoryLocation* out)
+void System::GetEntryPoint(GlobalMemoryLocation* out)
 {
     assert((bool)cartridge);
     zero(out);
@@ -173,7 +146,7 @@ void NESSystem::GetEntryPoint(NES::GlobalMemoryLocation* out)
     out->prg_rom_bank = cartridge->GetResetVectorBank();
 }
 
-shared_ptr<ContentBlock>& NESSystem::GetContentBlockAt(NES::GlobalMemoryLocation const& where)
+shared_ptr<ContentBlock>& System::GetContentBlockAt(GlobalMemoryLocation const& where)
 {
     if(where.address >= 0x8000) {
         return cartridge->GetContentBlockAt(where);
@@ -183,7 +156,7 @@ shared_ptr<ContentBlock>& NESSystem::GetContentBlockAt(NES::GlobalMemoryLocation
     return empty_ptr;
 }
 
-void NESSystem::MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE data_type)
+void System::MarkContentAsData(GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE data_type)
 {
     // TODO right now we only work with ROM banks
     if(where.address >= 0x8000) {
@@ -192,7 +165,7 @@ void NESSystem::MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 by
 }
 
 // Listings
-void NESSystem::GetListingItems(NES::GlobalMemoryLocation const& where, std::vector<std::shared_ptr<ListingItem>>& out)
+void System::GetListingItems(GlobalMemoryLocation const& where, std::vector<std::shared_ptr<ListingItem>>& out)
 {
     assert(!where.is_chr); // TODO support CHR
 
@@ -222,7 +195,7 @@ void NESSystem::GetListingItems(NES::GlobalMemoryLocation const& where, std::vec
     }
 }
 
-u16 NESSystem::GetSegmentBase(NES::GlobalMemoryLocation const& where)
+u16 System::GetSegmentBase(GlobalMemoryLocation const& where)
 {
     assert(!where.is_chr); // TODO
 
@@ -240,7 +213,7 @@ u16 NESSystem::GetSegmentBase(NES::GlobalMemoryLocation const& where)
     }
 }
 
-u32 NESSystem::GetSegmentSize(NES::GlobalMemoryLocation const& where)
+u32 System::GetSegmentSize(GlobalMemoryLocation const& where)
 {
     assert(!where.is_chr); // TODO
 
@@ -258,26 +231,27 @@ u32 NESSystem::GetSegmentSize(NES::GlobalMemoryLocation const& where)
     }
 }
 
-System::Information const* NESSystem::GetInformation()
+BaseSystem::Information const* System::GetInformation()
 {
-    return NESSystem::GetInformationStatic();
+    return System::GetInformationStatic();
 }
 
-System::Information const* NESSystem::GetInformationStatic()
+BaseSystem::Information const* System::GetInformationStatic()
 {
-    static System::Information information = {
+    static BaseSystem::Information information = {
         .abbreviation  = "NES",
         .full_name     = "Nintendo Entertainment System",
-        .is_rom_valid  = std::bind(&NESSystem::IsROMValid, placeholders::_1, placeholders::_2),
-        .create_system = std::bind(&NESSystem::CreateSystem)
+        .is_rom_valid  = std::bind(&System::IsROMValid, placeholders::_1, placeholders::_2),
+        .create_system = std::bind(&System::CreateSystem)
     };
 
     return &information;
 }
 
-shared_ptr<System> NESSystem::CreateSystem()
+shared_ptr<BaseSystem> System::CreateSystem()
 {
-    NESSystem* nes_system = new NESSystem();
-    return shared_ptr<System>(nes_system);
+    System* nes_system = new System();
+    return shared_ptr<BaseSystem>(nes_system);
 }
 
+}

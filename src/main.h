@@ -11,7 +11,7 @@
 #include "systems/system.h"
 #include "windows/base_window.h"
 
-class System;
+class BaseSystem;
 
 class MyApp : public Application {
 public:
@@ -38,7 +38,7 @@ public:
     std::shared_ptr<current_system_changed_t> current_system_changed;
 
     // System related
-    std::shared_ptr<System> GetCurrentSystem() { return current_system; }
+    std::shared_ptr<BaseSystem> GetCurrentSystem() { return current_system; }
 
 protected:
     MyApp(int argc, char* argv[]);
@@ -56,7 +56,7 @@ private:
     void ManagedWindowClosedHandler(std::shared_ptr<BaseWindow>);
 
     void CreateNewProject(std::string const&);
-    void SystemLoadedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<System>);
+    void SystemLoadedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<BaseSystem>);
 
     void OpenROMInfosPane();
 
@@ -74,7 +74,7 @@ private:
     std::vector<std::shared_ptr<BaseWindow>> queued_windows_for_delete;
 
 private:
-    std::shared_ptr<System> current_system;
+    std::shared_ptr<BaseSystem> current_system;
 
     typedef std::function<std::shared_ptr<BaseWindow>(void)> create_window_func;
     std::map<std::string, create_window_func> create_window_functions;

@@ -28,6 +28,7 @@ add_executable(${PROJECT_NAME}
 
                src/systems/system.cpp
                src/systems/nes/nes_cartridge.cpp
+               src/systems/nes/nes_content.cpp
                src/systems/nes/nes_system.cpp
                src/systems/snes/cpu65c816.cpp
                src/systems/snes/snes_address_decoder.cpp

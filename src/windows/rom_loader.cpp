@@ -15,7 +15,7 @@
 
 using namespace std;
 
-std::vector<System::Information const*> ProjectCreatorWindow::system_informations;
+std::vector<BaseSystem::Information const*> ProjectCreatorWindow::system_informations;
 
 shared_ptr<ProjectCreatorWindow> ProjectCreatorWindow::CreateWindow(string const& _file_path_name)
 {
@@ -54,7 +54,7 @@ void ProjectCreatorWindow::UpdateContent(double deltaTime)
         }
 
         // loop over all the loaders and accumuilate the valid ones
-        vector<System::Information const*> valid_systems;
+        vector<BaseSystem::Information const*> valid_systems;
         for(auto info : ProjectCreatorWindow::system_informations) {
             if(info->is_rom_valid(file_path_name, is)) {
                 valid_systems.push_back(info);
@@ -179,7 +179,7 @@ void ProjectCreatorWindow::RenderContent()
     }
 }
 
-void ProjectCreatorWindow::CreateNewProject(System::Information const* info)
+void ProjectCreatorWindow::CreateNewProject(BaseSystem::Information const* info)
 {
     current_system = info->create_system();
     *current_system->create_new_project_progress += std::bind(&ProjectCreatorWindow::CreateNewProjectProgress, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4, placeholders::_5);
@@ -192,7 +192,7 @@ void ProjectCreatorWindow::CreateNewProject(System::Information const* info)
     create_project_thread = make_unique<std::thread>(std::bind(&ProjectCreatorWindow::CreateProjectThreadMain, this));
 }
 
-void ProjectCreatorWindow::CreateNewProjectProgress(shared_ptr<System> system, bool error, u64 max_progress, u64 current_progress, std::string const& msg)
+void ProjectCreatorWindow::CreateNewProjectProgress(shared_ptr<BaseSystem> system, bool error, u64 max_progress, u64 current_progress, std::string const& msg)
 {
     cout << "[ProjectCreatorWindow] CreateNewProjectProgress: " << msg << " (" << current_progress << "/" << max_progress << ")" << endl;
 
@@ -202,7 +202,7 @@ void ProjectCreatorWindow::CreateNewProjectProgress(shared_ptr<System> system, b
     create_project_message          = msg;
 }
 
-void ProjectCreatorWindow::RegisterSystemInformation(System::Information const* info)
+void ProjectCreatorWindow::RegisterSystemInformation(BaseSystem::Information const* info)
 {
     ProjectCreatorWindow::system_informations.push_back(info);
 }

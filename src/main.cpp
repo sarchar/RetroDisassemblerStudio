@@ -35,7 +35,7 @@ MyApp::MyApp(int argc, char* argv[])
 {
     ((void)argc);
     ((void)argv);
-    ProjectCreatorWindow::RegisterSystemInformation(NESSystem::GetInformationStatic());
+    ProjectCreatorWindow::RegisterSystemInformation(NES::System::GetInformationStatic());
     ProjectCreatorWindow::RegisterSystemInformation(SNESSystem::GetInformationStatic());
     current_system_changed = make_shared<current_system_changed_t>();
 
@@ -566,7 +566,7 @@ void MyApp::CreateNewProject(string const& file_path_name)
     AddWindow(loader);
 }
 
-void MyApp::SystemLoadedHandler(std::shared_ptr<BaseWindow> project_creator_window, std::shared_ptr<System> new_system)
+void MyApp::SystemLoadedHandler(std::shared_ptr<BaseWindow> project_creator_window, std::shared_ptr<BaseSystem> new_system)
 {
     project_creator_window->CloseWindow();
 

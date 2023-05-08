@@ -4,12 +4,12 @@
 
 using namespace std;
 
-System::System() 
+BaseSystem::BaseSystem() 
 {
     create_new_project_progress = make_shared<create_new_project_progress_t>();
 }
 
-System::~System()
+BaseSystem::~BaseSystem()
 {
 }
 

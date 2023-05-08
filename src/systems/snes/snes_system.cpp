@@ -286,14 +286,14 @@ bool SNESSystem::IsROMValid(std::string const& file_path_name, std::istream& is)
     return false;
 }
 
-System::Information const* SNESSystem::GetInformation()
+BaseSystem::Information const* SNESSystem::GetInformation()
 {
     return SNESSystem::GetInformationStatic();
 }
 
-System::Information const* SNESSystem::GetInformationStatic()
+BaseSystem::Information const* SNESSystem::GetInformationStatic()
 {
-    static System::Information information = {
+    static BaseSystem::Information information = {
         .abbreviation = "SNES",
         .full_name = "Super Nintendo Entertainment System",
         .is_rom_valid = std::bind(&SNESSystem::IsROMValid, placeholders::_1, placeholders::_2),
@@ -302,9 +302,9 @@ System::Information const* SNESSystem::GetInformationStatic()
     return &information;
 }
 
-shared_ptr<System> SNESSystem::CreateSystem()
+shared_ptr<BaseSystem> SNESSystem::CreateSystem()
 {
     SNESSystem* snes_system = new SNESSystem();
-    return shared_ptr<System>(snes_system);
+    return shared_ptr<BaseSystem>(snes_system);
 }
 

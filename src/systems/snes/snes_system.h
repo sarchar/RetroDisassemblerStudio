@@ -18,20 +18,20 @@
 #define SNES_CLOCK_FREQUENCY 22477000
 #define SNES_CPU_CLOCK_DIVIDER 6
 
-class SNESSystem : public System {
+class SNESSystem : public BaseSystem {
 public:
     SNESSystem();
     virtual ~SNESSystem();
 
-    System::Information const* GetInformation();
+    BaseSystem::Information const* GetInformation();
     bool CreateNewProjectFromFile(std::string const&);
 
     std::string const& GetROMFilePathName() const { return rom_file_path_name; }
 
     // creation interface
-    static System::Information const* GetInformationStatic();
+    static BaseSystem::Information const* GetInformationStatic();
     static bool IsROMValid(std::string const& file_path_name, std::istream& is);
-    static std::shared_ptr<System> CreateSystem();
+    static std::shared_ptr<BaseSystem> CreateSystem();
 
     // Debugging interface
 public:
