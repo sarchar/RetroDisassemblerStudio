@@ -134,7 +134,7 @@ void System::GetEntryPoint(GlobalMemoryLocation* out)
     out->prg_rom_bank = cartridge->GetResetVectorBank();
 }
 
-shared_ptr<ContentBlock>& System::GetContentBlockAt(GlobalMemoryLocation const& where)
+shared_ptr<ContentBlock>  System::GetContentBlockAt(GlobalMemoryLocation const& where)
 {
     if(where.address >= 0x8000) {
         return cartridge->GetContentBlockAt(where);
@@ -183,7 +183,7 @@ void System::GetListingItems(GlobalMemoryLocation const& where, std::vector<std:
     }
 }
 
-u16 System::GetSegmentBase(GlobalMemoryLocation const& where)
+u16 System::GetMemoryRegionBaseAddress(GlobalMemoryLocation const& where)
 {
     assert(!where.is_chr); // TODO
 
@@ -201,7 +201,7 @@ u16 System::GetSegmentBase(GlobalMemoryLocation const& where)
     }
 }
 
-u32 System::GetSegmentSize(GlobalMemoryLocation const& where)
+u32 System::GetMemoryRegionSize(GlobalMemoryLocation const& where)
 {
     assert(!where.is_chr); // TODO
 
@@ -216,6 +216,24 @@ u32 System::GetSegmentSize(GlobalMemoryLocation const& where)
     } else {
         auto prg_bank = cartridge->GetProgramRomBank(where.prg_rom_bank);
         return prg_bank->GetRegionSize();
+    }
+}
+
+std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const& where)
+{
+    static shared_ptr<MemoryRegion> empty_ptr;
+    assert(!where.is_chr); // TODO
+
+    if(where.address < 0x2000) {
+        return empty_ptr;
+    } else if(where.address < 0x4020) {
+        return empty_ptr;
+    } else if(where.address < 0x6000) {
+        return empty_ptr;
+    } else if(where.address < 0x8000) {
+        return empty_ptr;
+    } else {
+        return cartridge->GetProgramRomBank(where.prg_rom_bank);
     }
 }
 

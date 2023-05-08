@@ -14,6 +14,7 @@ class ProgramRomBank;
 struct ContentBlock {
     CONTENT_BLOCK_TYPE type;    // CODE statement, DATA block, CHR, possibly other things
     u16                offset;  // Offset within the rom bank that this content block starts at
+    u16                num_listing_items; // number of listing items this ContentBlock produces in the Listing window
 
     union {
         struct {
@@ -23,6 +24,7 @@ struct ContentBlock {
         struct {
             CONTENT_BLOCK_DATA_TYPE type; // byte, word, pointer, user defined
             u16   count;   // Total number of elements
+            u8    elements_per_line; // When displaying the contents of this data, how many elements per line we should display
             void* ptr;     // TODO will need a structure to hold various content blocks
         } data;
 

@@ -90,7 +90,7 @@ u16 Cartridge::GetResetVectorBank()
     return 0;
 }
 
-std::shared_ptr<ContentBlock>& Cartridge::GetContentBlockAt(GlobalMemoryLocation const& where)
+std::shared_ptr<ContentBlock> Cartridge::GetContentBlockAt(GlobalMemoryLocation const& where)
 {
     return GetProgramRomBank(where.prg_rom_bank)->GetContentBlockAt(where);
 }

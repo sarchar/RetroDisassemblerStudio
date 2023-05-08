@@ -31,11 +31,13 @@ public:
 
     // Memory
     void GetEntryPoint(NES::GlobalMemoryLocation*);
-    u16  GetSegmentBase(NES::GlobalMemoryLocation const&);
-    u32  GetSegmentSize(NES::GlobalMemoryLocation const&);
+    u16  GetMemoryRegionBaseAddress(GlobalMemoryLocation const&);
+    u32  GetMemoryRegionSize(GlobalMemoryLocation const&);
+
+    std::shared_ptr<MemoryRegion> GetMemoryRegion(GlobalMemoryLocation const&);
 
     // Content
-    std::shared_ptr<ContentBlock>& GetContentBlockAt(GlobalMemoryLocation const&);
+    std::shared_ptr<ContentBlock>  GetContentBlockAt(GlobalMemoryLocation const&);
     void MarkContentAsData(NES::GlobalMemoryLocation const&, u32 byte_count, NES::CONTENT_BLOCK_DATA_TYPE data_type);
 
     // Listings
