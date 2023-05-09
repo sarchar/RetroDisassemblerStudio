@@ -54,16 +54,16 @@ void Listing::CheckInput()
     for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
         ImWchar c = io.InputQueueCharacters[i]; 
 
-        if(c == L'w') {
-            // mark data as a word
-            shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
-            if(system) {
-                system->MarkContentAsData(selection, 2, CONTENT_BLOCK_DATA_TYPE_UWORD);
-            }
-        } else if(c == 'l') {
-            // create a new label at the current address
-            create_new_label = true;
-        }
+//!        if(c == L'w') {
+//!            // mark data as a word
+//!            shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
+//!            if(system) {
+//!                system->MarkContentAsData(selection, 2, CONTENT_BLOCK_DATA_TYPE_UWORD);
+//!            }
+//!        } else if(c == 'l') {
+//!            // create a new label at the current address
+//!            create_new_label = true;
+//!        }
     }
 
     if(ImGui::IsKeyDown(ImGuiKey_Tab) && !(io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper)) {
@@ -111,48 +111,45 @@ void Listing::RenderContent()
         }
 
         while(clipper.Step()) {
-            for(int row = clipper.DisplayStart; row < clipper.DisplayEnd;) {
-                // Convert the listing index into the corresponding address
-                // then use the address to grab all the listing items belonging to the address
+            auto listing_item_iterator = memory_region->GetListingItemIterator(clipper.DisplayStart);
+            bool did_scroll = false;
+
+            for(int row = clipper.DisplayStart; row < clipper.DisplayEnd && listing_item_iterator; ++row, ++*listing_item_iterator) {
+                // get the listing item
+                auto& listing_item = listing_item_iterator->GetListingItem();
+
+                // Get the address this listing_item belongs to so we can highlight it when selected
                 GlobalMemoryLocation current_address(selection); // start with a copy since we're in the same memory region
-                current_address.address = memory_region->GetAddressForListingItemIndex(row);
+                current_address.address = listing_item_iterator->GetCurrentAddress();
+
+                // then use the address to grab all the listing items belonging to the address
                 //cout << "row = 0x" << row << " current_address.address = 0x" << hex << current_address.address << endl;
 
                 bool selected_row = (current_address.address == selection.address);
 
-                // Fetch the listing items that belong at this address (labels, comments, data, etc)
-                vector<shared_ptr<ListingItem>> items;
-                system->GetListingItems(current_address, items);
-                assert(items.size() > 0);
+                // Begin a new row and next column
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
 
-                // Draw the items
-                for(auto& listing_item : items) {
-                    // Begin a new row and next column
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-
-                    // Create the hidden selectable item
-                    {
-                        ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
-                        char buf[32];
-                        sprintf(buf, "##selectable_row%d", row);
-                        if (ImGui::Selectable(buf, selected_row, selectable_flags)) {
-                            selection = current_address;
-                        }
-                        ImGui::SameLine();
+                // Create the hidden selectable item
+                {
+                    ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
+                    char buf[32];
+                    sprintf(buf, "##selectable_row%d", row);
+                    if (ImGui::Selectable(buf, selected_row, selectable_flags)) {
+                        selection = current_address;
                     }
-
-                    listing_item->RenderContent(system);
-
-                    // keep track of how many rows we add
-                    if(++row >= clipper.DisplayEnd) break;
+                    ImGui::SameLine();
                 }
-                
+
+                listing_item->RenderContent(system, current_address);
+
                 // Only after the row has been rendered and it was the last element in the table,
                 // we can use ScrollToItem() to get the item focused in the middle of the view.
-                if(current_address.address == selection.address && jump_to_selection > 0) {
+                if(jump_to_selection > 0 && current_address.address == selection.address && !did_scroll) {
                     ImGui::ScrollToItem(ImGuiScrollFlags_AlwaysCenterY);
                     jump_to_selection -= 1;
+                    did_scroll = true;
                 }
             }
         }

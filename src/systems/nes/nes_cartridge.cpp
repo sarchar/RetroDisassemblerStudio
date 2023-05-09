@@ -90,18 +90,18 @@ u16 Cartridge::GetResetVectorBank()
     return 0;
 }
 
-std::shared_ptr<ContentBlock> Cartridge::GetContentBlockAt(GlobalMemoryLocation const& where)
-{
-    return GetProgramRomBank(where.prg_rom_bank)->GetContentBlockAt(where);
-}
+//!std::shared_ptr<ContentBlock> Cartridge::GetContentBlockAt(GlobalMemoryLocation const& where)
+//!{
+//!    return GetProgramRomBank(where.prg_rom_bank)->GetContentBlockAt(where);
+//!}
 
-void Cartridge::MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type)
-{
-    assert(where.address >= 0x8000); // TODO support SRAM etc
-
-    auto prg_bank = GetProgramRomBank(where.prg_rom_bank);
-    prg_bank->MarkContentAsData(where, byte_count, new_data_type);
-}
+//!void Cartridge::MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type)
+//!{
+//!    assert(where.address >= 0x8000); // TODO support SRAM etc
+//!
+//!    auto prg_bank = GetProgramRomBank(where.prg_rom_bank);
+//!    prg_bank->MarkContentAsData(where, byte_count, new_data_type);
+//!}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

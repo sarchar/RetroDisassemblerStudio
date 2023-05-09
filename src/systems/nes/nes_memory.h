@@ -11,7 +11,8 @@
 
 namespace NES {
 
-class ContentBlock;
+//!class ContentBlock;
+class ListingItem;
 
 // SystemMemoryLocation dials into a specific byte within the system. It has enough information to select which
 // segment of the system (RAM, SRAM, etc) as well as which ROM bank, overlay or any psuedo location that may exist.
@@ -61,37 +62,105 @@ struct GlobalMemoryLocation {
     }
 };
 
+class MemoryObject;
+class MemoryRegion;
+
+// The job of the tree is to keep memory objects ordered, provide iterators over objects
+// and keep track of listings
+struct MemoryObjectTreeNode {
+    std::weak_ptr<MemoryObjectTreeNode>   parent;
+    std::shared_ptr<MemoryObjectTreeNode> left  = nullptr;
+    std::shared_ptr<MemoryObjectTreeNode> right = nullptr;
+    std::shared_ptr<MemoryObject>         obj   = nullptr;
+
+    // sum of all listing items in the left, right, and obj pointers
+    u32 listing_item_count = 0;
+
+    // when is_object is set, left and right are not valid and obj is
+    bool is_object = false;
+
+    MemoryObjectTreeNode(std::shared_ptr<MemoryObjectTreeNode> p)
+        : parent(p) {}
+
+    struct iterator {
+        std::shared_ptr<MemoryRegion> memory_region;
+        std::shared_ptr<MemoryObject> memory_object;
+        u32 listing_item_index;                           
+        u32 region_offset;
+        
+        std::shared_ptr<ListingItem>& GetListingItem();
+        u32 GetCurrentAddress();
+
+        iterator& operator++();
+    };
+};
+
+struct MemoryObject {
+    enum TYPE {
+        TYPE_UNDEFINED, // for NES undefined data shows up as bytes
+        TYPE_BYTE,
+        TYPE_WORD,
+
+        // Even though LIST and ARRAY function interally very similarly,
+        // a LIST type is internal to the editor (it's a list of memory objects), whereas
+        // the ARRAY type is indexable in code statements.
+        TYPE_LIST,
+        TYPE_ARRAY
+    };
+    TYPE type = TYPE_UNDEFINED;
+
+    std::weak_ptr<MemoryObjectTreeNode> parent;
+
+    std::vector<std::shared_ptr<ListingItem>> listing_items;
+
+    union {
+        u8  bval;
+        u16 hval;
+        std::vector<std::shared_ptr<MemoryObject>> list = {};
+    };
+
+    MemoryObject() {}
+    ~MemoryObject() {}
+
+    u32 GetSize();
+    std::string FormatInstructionField();
+    std::string FormatDataField(u32);
+};
+
 // MemoryRegion represents a region of memory on the system
 // Memory regions are a list of content ordered by the contents offset in the block
 // But because lookups would be slow with blocks of content, we still have a pointer into the content table for each address in the region
-class MemoryRegion {
+class MemoryRegion : public std::enable_shared_from_this<MemoryRegion> {
 public:
-    typedef std::vector<std::shared_ptr<ContentBlock>> ContentBlockListType;
+    typedef std::vector<std::shared_ptr<MemoryObject>> ObjectRefListType;
 
-    MemoryRegion() 
-        : content_ptrs(NULL) { }
+    MemoryRegion();
     ~MemoryRegion();
 
     u32 GetBaseAddress()       const { return base_address; }
-    u16 GetRegionSize()        const { return region_size; }
-    u32 GetTotalListingItems() const { return total_listing_items; }
+    u32 GetRegionSize()        const { return region_size; }
+    u32 GetTotalListingItems() const { return object_tree_root ? object_tree_root->listing_item_count : 0; }
 
-    inline u32 ConvertToOffset(u32 address_in_region) { 
+    inline u32 ConvertToRegionOffset(u32 address_in_region) { 
         assert(address_in_region >= base_address && address_in_region < base_address + region_size);
         return address_in_region - base_address; 
     }
 
-    void                           InitializeWithData(u16 offset, u16 count, u8* data);
+    void                           InitializeFromData(u8* data, int count);
 
-    ContentBlockListType::iterator InsertContentBlock(ContentBlockListType::iterator, std::shared_ptr<ContentBlock>& content_block);
+//!    ContentBlockListType::iterator InsertContentBlock(ContentBlockListType::iterator, std::shared_ptr<ContentBlock>& content_block);
+//!
+//!    std::shared_ptr<ContentBlock>  GetContentBlockAt(GlobalMemoryLocation const& where);
+//!
+//!    std::shared_ptr<ContentBlock>  SplitContentBlock(GlobalMemoryLocation const& where);
+//!
+//!    void                           MarkContentAsData(GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type);
 
-    std::shared_ptr<ContentBlock>  GetContentBlockAt(GlobalMemoryLocation const& where);
-
-    std::shared_ptr<ContentBlock>  SplitContentBlock(GlobalMemoryLocation const& where);
-
-    void                           MarkContentAsData(GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type);
+    std::shared_ptr<MemoryObject>  GetMemoryObject(GlobalMemoryLocation const&);
 
     // Listing help
+    std::shared_ptr<MemoryObjectTreeNode::iterator> GetListingItemIterator(int listing_item_start_index);
+
     u32  GetListingIndexByAddress(GlobalMemoryLocation const&);
     u32  GetAddressForListingItemIndex(u32 listing_item_index);
 
@@ -102,21 +171,33 @@ public:
 protected:
     u32 base_address;
     u32 region_size;
-    u32 total_listing_items;
 
 private:
-
     void Erase();
-    ContentBlockListType content;
 
-    // an array mapping an address into its respective content block
-    //u16* content_ptrs;
-    std::shared_ptr<std::weak_ptr<ContentBlock>[]> content_ptrs;
+    // We need a list of all memory addresses pointing to objects
+    // This is initialized to byte objects for each address the memory is initialized with
+    ObjectRefListType object_refs;
 
-    // during emulation, we will want a cache for already translated code
-    // u8 opcode_cache[];
-    // and probably a bitmap indicating whether an address is valid in the cache
-    // u64 opcode_cache_valid[16 * 1024 / 64] // one bit per address using 64 bit ints
+    // And we need the Root of the object tree
+    std::shared_ptr<MemoryObjectTreeNode> object_tree_root = nullptr;
+
+    void _InitializeFromData(std::shared_ptr<MemoryObjectTreeNode>&, u32, u8*, int);
+
+    void RecalculateListingItemCounts();
+    void _RecalculateListingItemCounts(std::shared_ptr<MemoryObjectTreeNode>&);
+    void RecalculateListingItemCount(std::shared_ptr<MemoryObject>& obj);
+
+//!    ContentBlockListType content;
+//!
+//!    // an array mapping an address into its respective content block
+//!    //u16* content_ptrs;
+//!    std::shared_ptr<std::weak_ptr<ContentBlock>[]> content_ptrs;
+//!
+//!    // during emulation, we will want a cache for already translated code
+//!    // u8 opcode_cache[];
+//!    // and probably a bitmap indicating whether an address is valid in the cache
+//!    // u64 opcode_cache_valid[16 * 1024 / 64] // one bit per address using 64 bit ints
 };
 
 class ProgramRomBank : public MemoryRegion {

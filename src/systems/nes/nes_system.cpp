@@ -85,7 +85,7 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
         auto prg_bank = cartridge->GetProgramRomBank(i); // Bank should be empty with no content
 
         // Initialize the entire bank as just a series of bytes
-        prg_bank->InitializeWithData(0, sizeof(data), reinterpret_cast<u8*>(data)); // Mark content starting at offset 0 as data
+        prg_bank->InitializeFromData(reinterpret_cast<u8*>(data), sizeof(data)); // Initialize the memory region with bytes of data
     }
 
     // Load the CHR banks
@@ -106,7 +106,7 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
         auto chr_bank = cartridge->GetCharacterRomBank(i); // Bank should be empty with no content
 
         // Initialize the entire bank as just a series of bytes
-        chr_bank->InitializeWithData(0, sizeof(data), reinterpret_cast<u8*>(data)); // Mark content starting at offset 0 as data
+        chr_bank->InitializeFromData(reinterpret_cast<u8*>(data), sizeof(data)); // Mark content starting at offset 0 as data
     }
 
     create_new_project_progress->emit(shared_from_this(), false, num_steps, ++current_step, "Done");
@@ -134,59 +134,59 @@ void System::GetEntryPoint(GlobalMemoryLocation* out)
     out->prg_rom_bank = cartridge->GetResetVectorBank();
 }
 
-shared_ptr<ContentBlock>  System::GetContentBlockAt(GlobalMemoryLocation const& where)
-{
-    if(where.address >= 0x8000) {
-        return cartridge->GetContentBlockAt(where);
-    }
+//! shared_ptr<ContentBlock>  System::GetContentBlockAt(GlobalMemoryLocation const& where)
+//! {
+//!     if(where.address >= 0x8000) {
+//!         return cartridge->GetContentBlockAt(where);
+//!     }
+//! 
+//!     static shared_ptr<ContentBlock> empty_ptr;
+//!     return empty_ptr;
+//! }
+//! 
+//! void System::MarkContentAsData(GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE data_type)
+//! {
+//!     // TODO right now we only work with ROM banks
+//!     if(where.address >= 0x8000) {
+//!         cartridge->MarkContentAsData(where, byte_count, data_type);
+//!     }
+//! }
 
-    static shared_ptr<ContentBlock> empty_ptr;
-    return empty_ptr;
-}
-
-void System::MarkContentAsData(GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE data_type)
-{
-    // TODO right now we only work with ROM banks
-    if(where.address >= 0x8000) {
-        cartridge->MarkContentAsData(where, byte_count, data_type);
-    }
-}
-
-// Listings
-void System::GetListingItems(GlobalMemoryLocation const& where, std::vector<std::shared_ptr<ListingItem>>& out)
-{
-    assert(!where.is_chr); // TODO support CHR
-
-    if(where.address >= 0x8000) {
-        auto prg_bank = cartridge->GetProgramRomBank(where.prg_rom_bank);
-
-        auto content_block = prg_bank->GetContentBlockAt(where);
-        if(!content_block) {
-            // memory not present, add a ListingUnknown to out
-            auto unk = make_shared<ListingItemUnknown>(where);
-            out.push_back(unk);
-        }
-
-        switch(content_block->type) {
-        case CONTENT_BLOCK_TYPE_DATA:
-        {
-            if(where.address == 0xFFFC) {
-                auto dataitem = make_shared<ListingItemLabel>(where, "_reset");
-                out.push_back(dataitem);
-            }
-
-            auto dataitem = make_shared<ListingItemData>(where, prg_bank);
-            out.push_back(dataitem);
-            break;
-        }
-
-        case CONTENT_BLOCK_TYPE_CODE:
-        case CONTENT_BLOCK_TYPE_CHR:
-        default:
-            assert(false); // TODO block types
-        }
-    }
-}
+//! // Listings
+//! void System::GetListingItems(GlobalMemoryLocation const& where, std::vector<std::shared_ptr<ListingItem>>& out)
+//! {
+//!     assert(!where.is_chr); // TODO support CHR
+//! 
+//!     if(where.address >= 0x8000) {
+//!         auto prg_bank = cartridge->GetProgramRomBank(where.prg_rom_bank);
+//! 
+//!         auto content_block = prg_bank->GetContentBlockAt(where);
+//!         if(!content_block) {
+//!             // memory not present, add a ListingUnknown to out
+//!             auto unk = make_shared<ListingItemUnknown>(where);
+//!             out.push_back(unk);
+//!         }
+//! 
+//!         switch(content_block->type) {
+//!         case CONTENT_BLOCK_TYPE_DATA:
+//!         {
+//!             if(where.address == 0xFFFC) {
+//!                 auto dataitem = make_shared<ListingItemLabel>(where, "_reset");
+//!                 out.push_back(dataitem);
+//!             }
+//! 
+//!             auto dataitem = make_shared<ListingItemData>(where, prg_bank);
+//!             out.push_back(dataitem);
+//!             break;
+//!         }
+//! 
+//!         case CONTENT_BLOCK_TYPE_CODE:
+//!         case CONTENT_BLOCK_TYPE_CHR:
+//!         default:
+//!             assert(false); // TODO block types
+//!         }
+//!     }
+//! }
 
 u16 System::GetMemoryRegionBaseAddress(GlobalMemoryLocation const& where)
 {
