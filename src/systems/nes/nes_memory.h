@@ -171,6 +171,7 @@ public:
 
     u32 GetBaseAddress()       const { return base_address; }
     u32 GetRegionSize()        const { return region_size; }
+    u32 GetEndAddress()        const { return base_address + region_size; }
     u32 GetTotalListingItems() const { return object_tree_root ? object_tree_root->listing_item_count : 0; }
 
     inline u32 ConvertToRegionOffset(u32 address_in_region) { 

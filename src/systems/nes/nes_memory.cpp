@@ -217,6 +217,10 @@ bool MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte
             memory_object->type = MemoryObject::TYPE_WORD;
             memory_object->hval = (u16)memory_object->bval | ((u16)next_object->bval << 8);
 
+            // update the object_refs
+            u32 x = ConvertToRegionOffset((where + i + 1).address);
+            object_refs[x] = memory_object;
+
             // listings may have changed
             _UpdateMemoryObject(memory_object, ConvertToRegionOffset(where.address));
             break;
@@ -256,6 +260,10 @@ bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_
 
         // TODO steal data from operand_object
         inst->code.operands[i-1] = operand_object->bval;
+
+        // update the object_refs
+        u32 x = ConvertToRegionOffset((where + i).address);
+        object_refs[x] = inst;
     }
 
     // convert the inst to TYPE_CODE and update the tree

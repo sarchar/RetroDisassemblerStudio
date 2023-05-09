@@ -1,5 +1,6 @@
 #include <cassert>
 #include <chrono>
+#include <deque>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
@@ -79,7 +80,6 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
 
         // Read in the PRG rom data
         unsigned char data[16 * 1024];
-        cout << rom_stream.tellg() << endl;
         rom_stream.read(reinterpret_cast<char *>(data), sizeof(data));
         if(!rom_stream) {
             create_new_project_progress->emit(shared_from_this(), true, num_steps, current_step, "Error: file too short when reading PRG-ROM");
@@ -237,36 +237,76 @@ void System::BeginDisassembly(GlobalMemoryLocation const& where)
 
 int System::DisassemblyThread()
 {
-    auto memory_region = GetMemoryRegion(disassembly_address);
+    std::deque<GlobalMemoryLocation> locations;
+    locations.push_back(disassembly_address);
 
-    while(true) {
-        // give up if we can't even convert this data to code. the user must clear the data type first
-        auto memory_object = memory_region->GetMemoryObject(disassembly_address);
-        if(memory_object->type != MemoryObject::TYPE_UNDEFINED && memory_object->type != MemoryObject::TYPE_BYTE) {
-            cout << "[System::DisassemblyThread] stopping. cannot disassemble type " << memory_object->type << " at " << disassembly_address << endl;
-            break;
+    while(disassembling && locations.size()) {
+        GlobalMemoryLocation loc = locations.front();
+        locations.pop_front();
+
+        bool disassembling_inner = true;
+        while(disassembling_inner) {
+            auto memory_region = GetMemoryRegion(loc);
+
+            auto memory_object = memory_region->GetMemoryObject(loc);
+
+            // bail on this disassemble if we already know the location is code
+            if(memory_object->type == MemoryObject::TYPE_CODE) {
+                cout << "[NES::System::DisassemblyThread] address " << loc << " is already code" << endl;
+                break;
+            }
+
+            // give up if we can't even convert this data to code. the user must clear the data type first
+            if(memory_object->type != MemoryObject::TYPE_UNDEFINED && memory_object->type != MemoryObject::TYPE_BYTE) {
+                cout << "[NES::System::DisassemblyThread] cannot disassemble type " << memory_object->type << " at " << loc << endl;
+                break;
+            }
+
+            u8 op = memory_object->bval;
+            string inst = disassembler->GetInstruction(op);
+
+            int size = disassembler->GetInstructionSize(op);
+
+            // stop disassembling on unknown opcodes
+            if(size == 0) {
+                cout << "[NES::System::DisassemblyThread] stopping because invalid opcode $" << hex << uppercase << (int)memory_object->bval << " (" << inst << ") at "  << loc << endl;
+                break; // break on unimplemented opcodes (TODO remove me)
+            }
+
+            // convert the memory to code
+            if(!memory_region->MarkMemoryAsCode(loc, size)) {
+                assert(false); // this shouldn't happen
+                break;
+            }
+
+            // next PC
+            loc = loc + size;
+
+            // certain instructions must stop disassembly and others cause branches
+            switch(op) {
+            case 0x4C: // JMP absolute. the only difference with JSR is that we finish this line of disassembly
+                disassembling_inner = false;
+                // fall through
+            case 0x20: // JSR absolute
+            {
+                u16 target = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
+                if(target >= memory_region->GetBaseAddress() && target < memory_region->GetEndAddress()) {
+                    GlobalMemoryLocation newloc(loc);
+                    newloc.address = target;
+                    locations.push_back(newloc);
+                    cout << "[NES::System::DisassemblyThread] continuing disassembling at " << newloc << endl;
+                }
+                break;
+            }
+
+            case 0x60: // RTS
+            case 0x6C: // JMP indirect
+                disassembling_inner = false;
+                break;
+            }
         }
-
-        u8 op = memory_object->bval;
-        string inst = disassembler->GetInstruction(op);
-        cout << "D: got opcode: $" << hex << uppercase << (int)memory_object->bval << " (" << inst << ")" << endl;
-
-        int size = disassembler->GetInstructionSize(op);
-        if(size == 0) {
-            cout << "exiting because size is 0" << endl;
-            break; // break on unimplemented opcodes (TODO remove me)
-        }
-
-        // convert the memory to code
-        if(!memory_region->MarkMemoryAsCode(disassembly_address, size)) {
-            cout << "exiting because MarkMemoryAsCode failed" << endl;
-            break;
-        }
-
-        disassembly_address = disassembly_address + size;
     }
 
-    // done
     disassembling = false;
     return 0;
 }

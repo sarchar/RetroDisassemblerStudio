@@ -69,7 +69,6 @@ bool MyApp::OnWindowCreated()
     get_user_config_folder(cfgdir, sizeof(cfgdir), PROJECT_NAME);
     string config_dir(cfgdir);
     layout_file = config_dir + PATH_SEPARATOR_STRING + "imgui_layout.ini";
-    cout << layout_file << endl;
     io.IniFilename = layout_file.c_str();
 #endif
 

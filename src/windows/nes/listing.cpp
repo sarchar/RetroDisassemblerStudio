@@ -35,10 +35,6 @@ Listing::Listing()
     shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
     if(system) {
         system->GetEntryPoint(&selection);
-        // TEMP
-        selection.prg_rom_bank = 0;
-        selection.address = 0x8000;
-
         jump_to_selection = JUMP_TO_SELECTION_START_VALUE; // TODO this is stupid, I wish I could scroll within one or two frames (given we have to calculate the row sizes at least once)
     }
 
@@ -80,6 +76,38 @@ void Listing::CheckInput()
             // create a new label at the current address
             create_new_label = true;
             break;
+
+        case L'j':
+            selection = selection + 1;
+            break;
+
+        case L'k':
+            selection = selection + -1;
+            break;
+
+        case L'G': // very hacky (G)o to address button
+        {
+            // TODO this should be way more complicated, parsing operand types and all
+            auto memory_region = system->GetMemoryRegion(selection);
+            auto memory_object = memory_region->GetMemoryObject(selection);
+            u16 dest = 0;
+            if(memory_object->type == MemoryObject::TYPE_CODE) {
+                dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
+            } else if(memory_object->type == MemoryObject::TYPE_WORD) {
+                dest = memory_object->hval;
+            }
+
+            if(dest >= memory_region->GetBaseAddress() && dest < memory_region->GetEndAddress()) {
+                selection.address = dest;
+                jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+            }
+
+            break;
+        }
+
+        default:
+            break;
+
         }
     }
 
@@ -174,7 +202,8 @@ void Listing::RenderContent()
         ImGui::EndTable();
     }
 
-    if(IsFocused()) { // Things to do only if the window is receiving focus
+    // only scan input if the window is receiving focus
+    if(IsFocused() && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
         CheckInput();
     }
 
@@ -253,6 +282,7 @@ void Listing::DisassemblyPopup()
             disassembly_thread->join();
             disassembly_thread = nullptr;
             cout << "[Listing::DisassemblyPopup] disassembly thread exited" << endl;
+            jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
             ImGui::CloseCurrentPopup();
         }
 

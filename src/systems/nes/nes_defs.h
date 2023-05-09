@@ -3,6 +3,7 @@
 namespace NES {
 
 enum ADDRESSING_MODE {
+    AM_ACCUM,
     AM_IMPLIED, 
     AM_IMMEDIATE,
     AM_ZEROPAGE,

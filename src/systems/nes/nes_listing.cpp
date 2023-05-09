@@ -77,12 +77,11 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
 
         u8 op = memory_object->code.opcode;
         u8 sz = disassembler->GetInstructionSize(op);
-        if(ImGui::BeginTable(sz == 1 ? "listing_item_code" : "listing_item_code_op", sz == 1 ? 2 : 3, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+        if(ImGui::BeginTable("listing_item_code", 3, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
             ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
-            if(sz > 1) {
-                ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
-            }
+            ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
+
             ImGui::TableNextRow();
         
             ImGui::TableNextColumn();
@@ -91,8 +90,10 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
             ImGui::TableNextColumn();
             ImGui::Text("%s", memory_object->FormatInstructionField(disassembler).c_str());
 
-            if(sz > 1) {
-                ImGui::TableNextColumn();
+            ImGui::TableNextColumn();
+            if(sz == 1) {
+                ImGui::Text("");
+            } else {
                 ImGui::Text("%s", memory_object->FormatDataField(0, disassembler).c_str());
             }
         }

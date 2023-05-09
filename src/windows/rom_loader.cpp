@@ -126,7 +126,6 @@ void ProjectCreatorWindow::RenderContent()
                 stringstream ss;
                 ss << (i + 1) << ". " << info->full_name;
                 if (ImGui::RadioButton(ss.str().c_str(), current_selection == i)) { 
-                    cout << "selected " << i << endl;
                     current_selection = i; 
                 }
             }
