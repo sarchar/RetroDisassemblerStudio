@@ -53,6 +53,12 @@ void Listing::CheckInput()
 {
     ImGuiIO& io = ImGui::GetIO();
 
+    if(ImGui::IsKeyPressed(ImGuiKey_MouseX1) && location_history.size()) { // back pressed
+        selection = location_history.back();
+        location_history.pop_back();
+        jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+    }
+
     for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
         ImWchar c = io.InputQueueCharacters[i]; 
 
@@ -98,8 +104,29 @@ void Listing::CheckInput()
             }
 
             if(dest >= memory_region->GetBaseAddress() && dest < memory_region->GetEndAddress()) {
+                location_history.push_back(selection); // save the current location to the history
+                
                 selection.address = dest;
                 jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+            } else {
+                // destination is not in this memory region, see if we can find it
+                GlobalMemoryLocation guessed_address(selection);
+                guessed_address.address = dest;
+
+                vector<u16> possible_banks;
+                system->GetBanksForAddress(guessed_address, possible_banks);
+
+                if(possible_banks.size() == 1) {
+                    guessed_address.prg_rom_bank = possible_banks[0];
+                    memory_region = system->GetMemoryRegion(guessed_address);
+                    if(memory_region) {
+                        location_history.push_back(selection); // save the current location to the history
+                        selection = guessed_address;
+                        jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+                    }
+                } else {
+                    assert(false); // popup dialog and wait for selection of which bank to go to
+                }
             }
 
             break;

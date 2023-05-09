@@ -40,6 +40,7 @@ public:
     void GetEntryPoint(NES::GlobalMemoryLocation*);
     u16  GetMemoryRegionBaseAddress(GlobalMemoryLocation const&);
     u32  GetMemoryRegionSize(GlobalMemoryLocation const&);
+    void GetBanksForAddress(GlobalMemoryLocation const&, std::vector<u16>&);
 
     std::shared_ptr<MemoryRegion> GetMemoryRegion(GlobalMemoryLocation const&);
 

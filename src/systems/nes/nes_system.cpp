@@ -118,12 +118,15 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
     GlobalMemoryLocation vectors;
     GetEntryPoint(&vectors);
     CreateLabel(vectors, "_reset");
+    GetMemoryRegion(vectors)->MarkMemoryAsWords(vectors, 2);
 
     vectors.address -= 2;
     CreateLabel(vectors, "_nmi");
+    GetMemoryRegion(vectors)->MarkMemoryAsWords(vectors, 2);
 
     vectors.address += 4;
     CreateLabel(vectors, "_irqbrk");
+    GetMemoryRegion(vectors)->MarkMemoryAsWords(vectors, 2);
 
     create_new_project_progress->emit(shared_from_this(), false, num_steps, ++current_step, "Done");
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -150,6 +153,24 @@ void System::GetEntryPoint(GlobalMemoryLocation* out)
     zero(out);
     out->address      = 0xFFFC;
     out->prg_rom_bank = cartridge->GetResetVectorBank();
+}
+
+void System::GetBanksForAddress(GlobalMemoryLocation const& where, vector<u16>& out)
+{
+    assert(!where.is_chr);
+
+    out.clear();
+
+    if(where.address < 0x8000) {
+        out.push_back(0);
+    } else if(where.address >= 0x8000) {
+        for(u16 i = 0; i < cartridge->header.num_prg_rom_banks; i++) {
+            auto prg_bank = cartridge->GetProgramRomBank(i);
+            if(where.address >= prg_bank->GetBaseAddress() && where.address < prg_bank->GetEndAddress()) {
+                out.push_back(i);
+            }
+        }
+    }
 }
 
 u16 System::GetMemoryRegionBaseAddress(GlobalMemoryLocation const& where)

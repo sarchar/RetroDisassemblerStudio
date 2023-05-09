@@ -31,7 +31,8 @@ private:
     void DisassemblyPopup();
 
 private:
-    NES::GlobalMemoryLocation selection;
+    GlobalMemoryLocation selection;
+    std::vector<GlobalMemoryLocation> location_history;
 
     int    jump_to_selection    = 0;
     bool   create_new_label     = false;
