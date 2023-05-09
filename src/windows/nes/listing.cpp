@@ -1,9 +1,11 @@
 // TODO in the future will need a way to make windows only available to the currently loaded system
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -33,6 +35,10 @@ Listing::Listing()
     shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
     if(system) {
         system->GetEntryPoint(&selection);
+        // TEMP
+        selection.prg_rom_bank = 0;
+        selection.address = 0x8000;
+
         jump_to_selection = JUMP_TO_SELECTION_START_VALUE; // TODO this is stupid, I wish I could scroll within one or two frames (given we have to calculate the row sizes at least once)
     }
 
@@ -54,15 +60,26 @@ void Listing::CheckInput()
     for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
         ImWchar c = io.InputQueueCharacters[i]; 
 
-        if(c == L'w') {
+        shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
+        // TODO really should be using signals and emit to broadcast these messages
+        switch(c) {
+        case L'w':
             // mark data as a word
-            shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
+            if(system) system->MarkMemoryAsWords(selection, 2);
+            break;
+
+        case L'd':
+            // start disassembly
             if(system) {
-                system->MarkMemoryAsWords(selection, 2);
+                system->BeginDisassembly(selection);
+                show_disassembling_popup = true;
             }
-        } else if(c == 'l') {
+            break;
+
+        case L'l':
             // create a new label at the current address
             create_new_label = true;
+            break;
         }
     }
 
@@ -163,15 +180,14 @@ void Listing::RenderContent()
 
     // Render popups
     NewLabelPopup();
+    DisassemblyPopup();
 }
 
 void Listing::NewLabelPopup() 
 {
     static char title[] = "Create new label...";
 
-    if(!ImGui::IsPopupOpen(title)) {
-        if(!create_new_label) return;
-
+    if(!ImGui::IsPopupOpen(title) && create_new_label) {
         create_new_label = false;
         new_label_buffer[0] = '\0';
 
@@ -208,6 +224,39 @@ void Listing::NewLabelPopup()
         shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
         if(!system) return;
         system->CreateLabel(selection, lstr);
+    }
+}
+
+void Listing::DisassemblyPopup()
+{
+    static char title[] = "Disassembling...";
+
+    if(!ImGui::IsPopupOpen(title) && show_disassembling_popup) {
+        show_disassembling_popup = false;
+        ImGui::OpenPopup(title);
+
+        shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
+        disassembly_thread = make_unique<std::thread>(std::bind(&System::DisassemblyThread, system));
+        cout << "[Listing::DisassemblyPopup] started disassembly thread" << endl;
+    }
+
+    // center this window
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    bool ret = false;
+    if (ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::Text("Disassembling...");
+
+        shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
+        if(!system || !system->IsDisassembling()) {
+            disassembly_thread->join();
+            disassembly_thread = nullptr;
+            cout << "[Listing::DisassemblyPopup] disassembly thread exited" << endl;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
     }
 }
 

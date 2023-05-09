@@ -11,6 +11,7 @@
 
 namespace NES {
 
+class Disassembler;
 class ListingItem;
 class System;
 
@@ -48,6 +49,11 @@ struct GlobalMemoryLocation {
         GlobalMemoryLocation ret(*this);
         ret.address += v; // TODO wrap, increment banks, etc
         return ret;
+    }
+
+    GlobalMemoryLocation& operator++() {
+        address += 1; // TODO wrap
+        return *this;
     }
 
     bool operator==(GlobalMemoryLocation const& other) const {
@@ -100,6 +106,7 @@ struct MemoryObjectTreeNode {
         : parent(p) {}
 
     struct iterator {
+        std::shared_ptr<Disassembler> disassembler;
         std::shared_ptr<MemoryRegion> memory_region;
         std::shared_ptr<MemoryObject> memory_object;
         u32 listing_item_index;                           
@@ -117,6 +124,7 @@ struct MemoryObject {
         TYPE_UNDEFINED, // for NES undefined data shows up as bytes
         TYPE_BYTE,
         TYPE_WORD,
+        TYPE_CODE,
 
         // Even though LIST and ARRAY function interally very similarly,
         // a LIST type is internal to the editor (it's a list of memory objects), whereas
@@ -134,15 +142,21 @@ struct MemoryObject {
     union {
         u8  bval;
         u16 hval;
+
+        struct {
+            u8 opcode;
+            u8 operands[2]; // max 2 per opcode
+        } code;
+
         std::vector<std::shared_ptr<MemoryObject>> list = {};
     };
 
     MemoryObject() {}
     ~MemoryObject() {}
 
-    u32 GetSize();
-    std::string FormatInstructionField();
-    std::string FormatDataField(u32);
+    u32 GetSize(std::shared_ptr<Disassembler> disassembler = nullptr);
+    std::string FormatInstructionField(std::shared_ptr<Disassembler> disassembler = nullptr);
+    std::string FormatDataField(u32, std::shared_ptr<Disassembler> disassembler = nullptr);
 };
 
 // MemoryRegion represents a region of memory on the system
@@ -169,18 +183,23 @@ public:
     std::shared_ptr<MemoryObject>  GetMemoryObject(GlobalMemoryLocation const&);
     void                           UpdateMemoryObject(GlobalMemoryLocation const&);
 
+    MemoryObject::TYPE             GetMemoryObjectType(GlobalMemoryLocation const& where) { return GetMemoryObject(where)->type; }
+
     // Listing help
     std::shared_ptr<MemoryObjectTreeNode::iterator> GetListingItemIterator(int listing_item_start_index);
 
     u32  GetListingIndexByAddress(GlobalMemoryLocation const&);
 
-    virtual u8  ReadByte(GlobalMemoryLocation const&) = 0;
+    virtual u8  ReadByte(GlobalMemoryLocation const&);
 
     // Labels
     void CreateLabel(GlobalMemoryLocation const&, std::string const&);
 
     // Data
-    void MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count);
+    bool MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count);
+
+    // Code
+    bool MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_count);
 
 protected:
     u32 base_address;
@@ -219,7 +238,6 @@ public:
     ProgramRomBank(std::shared_ptr<System>&, PROGRAM_ROM_BANK_LOAD, PROGRAM_ROM_BANK_SIZE);
     virtual ~ProgramRomBank() {};
 
-    u8 ReadByte(GlobalMemoryLocation const&) override { return 0; }
 private:
     PROGRAM_ROM_BANK_LOAD bank_load;
     PROGRAM_ROM_BANK_SIZE bank_size;
@@ -229,8 +247,6 @@ class CharacterRomBank : public MemoryRegion {
 public:
     CharacterRomBank(std::shared_ptr<System>&, CHARACTER_ROM_BANK_LOAD, CHARACTER_ROM_BANK_SIZE);
     virtual ~CharacterRomBank() {}
-
-    u8 ReadByte(GlobalMemoryLocation const&) override { return 0; }
 
 private:
     CHARACTER_ROM_BANK_LOAD bank_load;

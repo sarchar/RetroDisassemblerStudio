@@ -46,6 +46,19 @@ private:
     u32 internal_offset;
 };
 
+class ListingItemCode : public ListingItem {
+public:
+    ListingItemCode(std::weak_ptr<MemoryRegion> _memory_region)
+        : ListingItem(), memory_region(_memory_region)
+    { }
+    virtual ~ListingItemCode() { }
+
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&) override;
+
+private:
+    std::weak_ptr<MemoryRegion> memory_region;
+};
+
 class ListingItemLabel : public ListingItem {
 public:
     ListingItemLabel(std::string const& _name)

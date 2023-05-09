@@ -7,6 +7,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
+#include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_system.h"
 
@@ -88,7 +89,21 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
         //}
     }
 
-    obj->listing_items.push_back(make_shared<ListingItemData>(shared_from_this(), 0));
+    switch(obj->type) {
+    case MemoryObject::TYPE_UNDEFINED:
+    case MemoryObject::TYPE_BYTE:
+    case MemoryObject::TYPE_WORD:
+        obj->listing_items.push_back(make_shared<ListingItemData>(shared_from_this(), 0));
+        break;
+
+    case MemoryObject::TYPE_CODE:
+        obj->listing_items.push_back(make_shared<ListingItemCode>(shared_from_this()));
+        break;
+
+    default:
+        assert(false);
+        break;
+    }
 
     //!if(i == 0x3FFC) {
     //!    obj->listing_items.push_back(make_shared<ListingItemLabel>("    ; this is a comment"));
@@ -151,164 +166,29 @@ void MemoryRegion::InitializeFromData(u8* data, int count)
          << " bytes of data for memory base 0x" << setw(4) << base_address << endl;
 }
 
-//! shared_ptr<ContentBlock> MemoryRegion::SplitContentBlock(GlobalMemoryLocation const& where)
-//! {
-//!     // Attempt to split the content block at `where`. It has to lie on a data type boundary
-//!     auto content_block = GetContentBlockAt(where);
-//!     cout << "Splitting block 0x" << hex << content_block->offset << endl;
-//!     if(content_block->type != CONTENT_BLOCK_TYPE_DATA) {
-//!         cout << "[MemoryRegion::SplitContentBlock] Unupported trying to split non-data block at " << where << endl;
-//!         return nullptr;
-//!     }
-//! 
-//!     // Make sure the split is aligned
-//!     u16 split_offset = ConvertToRegionOffset(where.address) - content_block->offset;
-//!     cout << "Split offset = 0x" << hex << split_offset << endl;
-//!     if((split_offset % content_block->GetDataTypeSize()) != 0) {
-//!         cout << "[MemoryRegion::SplitContentBlock] Illegal split at non-aligned boundary at " << where << " requiring alignment " << content_block->GetDataTypeSize() << endl;
-//!         return nullptr;
-//!     }
-//! 
-//!     // save the old data pointer
-//!     void* data_ptr = content_block->data.ptr;
-//!     assert(data_ptr != nullptr);
-//!     u32 old_count = content_block->data.count;
-//!     u32 old_num_listing_items = content_block->num_listing_items;
-//!     
-//!     // create a new one and copy the beginning data do it
-//!     u32 left_size = split_offset;
-//!     cout << "Left size = 0x" << left_size << endl;
-//!     content_block->data.count = left_size / content_block->GetDataTypeSize();
-//!     content_block->data.ptr = new u8[left_size];
-//!     memcpy(content_block->data.ptr, data_ptr, left_size);
-//! 
-//!     // update the number of listing items in this block
-//!     content_block->num_listing_items = content_block->data.count / content_block->data.elements_per_line;
-//!     if(content_block->num_listing_items * content_block->data.elements_per_line < content_block->data.count)  content_block->num_listing_items += 1; // non-full lines
-//! 
-//!     // update the global # of listing items
-//!     total_listing_items -= (old_num_listing_items - content_block->num_listing_items);
-//! 
-//!     // the remaining data has to go into a new content block
-//!     shared_ptr<ContentBlock> right_block = make_shared<ContentBlock>();
-//!     right_block->type = CONTENT_BLOCK_TYPE_DATA;
-//!     right_block->offset = content_block->offset + split_offset;
-//!     right_block->data.type = content_block->data.type;
-//!     right_block->data.count = old_count - content_block->data.count;
-//!     right_block->data.elements_per_line = 1;
-//! 
-//!     // count the number of listing items in this block
-//!     // but don't add them to the global yet, it will get added later in InsertContentBlock
-//!     right_block->num_listing_items = right_block->data.count / right_block->data.elements_per_line;
-//!     if(right_block->num_listing_items * right_block->data.elements_per_line < right_block->data.count)  right_block->num_listing_items += 1; // non-full lines
-//! 
-//!     // allocate the storage for the data and copy over the right side
-//!     u32 right_size = right_block->GetSize();
-//!     cout << "Right size = 0x" << right_size << endl;
-//!     right_block->data.ptr = new u8[right_size];
-//!     memcpy(right_block->data.ptr, (u8*)data_ptr + left_size, right_size);
-//! 
-//!     // free old memory
-//!     delete [] data_ptr;
-//! 
-//!     // return the new object (this leaves content_ptrs out of date, so you better fix them!)
-//!     return right_block;
-//! }
-//! 
-//! void MemoryRegion::MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type)
-//! {
-//!     auto content_block = GetContentBlockAt(where);
-//!     if(content_block->type != CONTENT_BLOCK_TYPE_DATA) {
-//!         cout << "[MemoryRegion::MarkContentAsData] TODO right now can only split other data blocks" << endl;
-//!         return;
-//!     }
-//! 
-//!     if(content_block->data.type == new_data_type) {
-//!         cout << "MemoryRegion::MarkContentAsData] Content is already of data type " << new_data_type << endl;
-//!         return;
-//!     }
-//! 
-//!     // Verify the region fits within this content block
-//!     u16 start_offset = ConvertToRegionOffset(where.address) - content_block->offset;
-//!     if(byte_count > (content_block->GetSize() - start_offset)) {
-//!         cout << "MemoryRegion::MarkContentAsData] Error trying to mark too much data" << endl;
-//!         return;
-//!     }
-//! 
-//!     // OK, this content block can have the data split. The first part is to split the bank at the start of the new data
-//!     cout << "Before split:" << endl;
-//!     PrintContentBlocks();
-//! 
-//!     ContentBlockListType::iterator it = find(content.begin(), content.end(), content_block); // look for the block with our data
-//!     assert(it != content.end());
-//! 
-//!     // Only split the left half if we're in the middle of the block
-//!     if(start_offset > 0) {
-//!         auto new_block = SplitContentBlock(where);
-//!         if(!new_block) return;
-//!         assert(start_offset == new_block->offset);
-//! 
-//!         // The new block needs to be added into the system right after the last block
-//!         it = InsertContentBlock(++it, new_block); // add the new block right after it
-//! 
-//!         // and now work with new_block
-//!         content_block = new_block;
-//!     }
-//! 
-//!     // This new block may need to be truncated!
-//!     if(byte_count < content_block->GetSize()) {
-//!         GlobalMemoryLocation end_where = where + byte_count;
-//!         shared_ptr<ContentBlock> next_block = SplitContentBlock(end_where);
-//!         if(!next_block) return;
-//! 
-//!         assert(ConvertToRegionOffset(end_where.address) - next_block->offset == 0);
-//! 
-//!         // This final block won't be changed, but needs to be added to the system right after content_block
-//!         InsertContentBlock(++it, next_block);
-//! 
-//!         // And let's just refetch the working block JIC
-//!         content_block = GetContentBlockAt(where);
-//!     }
-//! 
-//!     // now we can convert the data type and update count
-//!     u32 size = content_block->GetSize();
-//!     content_block->data.type = new_data_type;
-//!     content_block->data.count = size / content_block->GetDataTypeSize();
-//! 
-//!     // and then recalculate the number of listing items
-//!     int old_num_listing_items = (int)content_block->num_listing_items;
-//!     content_block->num_listing_items = content_block->data.count / content_block->data.elements_per_line;
-//!     if(content_block->num_listing_items * content_block->data.elements_per_line < content_block->data.count)  content_block->num_listing_items += 1; // non-full lines
-//!     total_listing_items -= (old_num_listing_items - content_block->num_listing_items);
-//! 
-//!     cout << "After split:" << endl;
-//!     PrintContentBlocks();
-//!     cout << "[MemoryRegion::MarkContentAsData] marked area " << endl; // TODO print some hex
-//! }
-
 shared_ptr<MemoryObject> MemoryRegion::GetMemoryObject(GlobalMemoryLocation const& where)
 {
     return object_refs[ConvertToRegionOffset(where.address)];
 }
 
-void MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count)
+bool MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count)
 {
     if((byte_count % 2) == 1) byte_count++;
 
     // Check to see if all selected memory can be converted
     for(u32 i = 0; i < byte_count; i += 2) {
-        auto memory_object = GetMemoryObject(where);
+        auto memory_object = GetMemoryObject(where + i);
         if(memory_object->type == MemoryObject::TYPE_WORD) continue;
 
         switch(memory_object->type) {
         case MemoryObject::TYPE_UNDEFINED:
         case MemoryObject::TYPE_BYTE:
         {
-            auto next_object = GetMemoryObject(where + 1);
+            auto next_object = GetMemoryObject(where + i + 1);
 
             if(next_object->type != MemoryObject::TYPE_UNDEFINED && next_object->type != MemoryObject::TYPE_BYTE) {
                 cout << "[MemoryRegion::MarkMemoryAsWords] address 0x" << (where.address + i) << "+1 cannot be converted to a word (currently type " << memory_object->type << ")" << endl;
-                return;
+                return false;
             }
 
             break;
@@ -316,20 +196,20 @@ void MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte
 
         default:
             cout << "[MemoryRegion::MarkMemoryAsWords] address 0x" << (where.address + i) << " cannot be converted to a word (currently type " << memory_object->type << ")" << endl;
-            return;
+            return false;
         }
     }
 
     // OK, convert them
     for(u32 i = 0; i < byte_count; i += 2) {
-        auto memory_object = GetMemoryObject(where);
+        auto memory_object = GetMemoryObject(where + i);
         if(memory_object->type == MemoryObject::TYPE_WORD) continue;
 
         switch(memory_object->type) {
         case MemoryObject::TYPE_UNDEFINED:
         case MemoryObject::TYPE_BYTE:
         {
-            auto next_object = GetMemoryObject(where + 1);
+            auto next_object = GetMemoryObject(where + i + 1);
 
             RemoveMemoryObjectFromTree(next_object);
 
@@ -343,11 +223,48 @@ void MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte
         }
 
         default:
-            cout << "[MemoryRegion::MarkMemoryAsWords] address 0x" << (where.address + i) << " cannot be converted to a word (currently type " << memory_object->type << ")" << endl;
-            return;
+            assert(false);
+            return false;
         }
     }
+
+    return true;
 }
+
+bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_count)
+{
+    // Check to see if all selected memory can be converted
+    for(u32 i = 0; i < byte_count; i++) {
+        auto memory_object = GetMemoryObject(where + i);
+        if(memory_object->type != MemoryObject::TYPE_BYTE && memory_object->type != MemoryObject::TYPE_UNDEFINED) {
+            cout << "[MemoryRegion::MarkMemoryAsWords] address " << (where + i) << " cannot be converted to code (currently type " << memory_object->type << ")" << endl;
+            return false;
+        }
+    }
+
+    // The first object will be changed into code
+    auto inst = GetMemoryObject(where);
+
+    // don't have to set the opcode because it's already the bval in the union
+    // inst->code.opcode = inst->bval;
+
+    // get the operand bytes and remove them
+    for(u32 i = 1; i < byte_count; i++) {
+        auto operand_object = GetMemoryObject(where + i);
+        assert(operand_object->type == MemoryObject::TYPE_BYTE || operand_object->type == MemoryObject::TYPE_UNDEFINED);
+        RemoveMemoryObjectFromTree(operand_object);
+
+        // TODO steal data from operand_object
+        inst->code.operands[i-1] = operand_object->bval;
+    }
+
+    // convert the inst to TYPE_CODE and update the tree
+    inst->type = MemoryObject::TYPE_CODE;
+    UpdateMemoryObject(where);
+
+    return true;
+}
+
 
 u32 MemoryRegion::GetListingIndexByAddress(GlobalMemoryLocation const& where)
 {
@@ -399,23 +316,26 @@ void MemoryRegion::UpdateMemoryObject(GlobalMemoryLocation const& where)
 void MemoryRegion::RemoveMemoryObjectFromTree(shared_ptr<MemoryObject>& memory_object)
 {
     // propagate up the tree the changes
-    auto object_node = memory_object->parent.lock();
+    auto last_node = memory_object->parent.lock();
+    auto current_node = last_node;
+
     memory_object->parent.reset();
 
     // clear the pointer to the memory_object
-    object_node->obj = nullptr;
+    last_node->obj = nullptr;
 
-    // clear the pointer to the is_object node
-    auto current_node = object_node->parent.lock();
-    if(current_node->left == object_node) {
-        current_node->left = nullptr;
-    } else {
-        current_node->right = nullptr;
-    }
+    do {
+        // clear the pointer to the is_object node
+        current_node = last_node->parent.lock();
+        assert(current_node);
+        if(current_node->left == last_node) {
+            current_node->left = nullptr;
+        } else {
+            current_node->right = nullptr;
+        }
 
-    if(!current_node->left && !current_node->right) { // uh-oh, need to remove this branch entirely
-        assert(false); //TODO
-    }
+        last_node = current_node;
+    } while(!current_node->left && !current_node->right); // uh-oh, need to remove this branch entirely
 
     // update the listing item count
     _SumListingItemCountsUp(current_node);
@@ -447,12 +367,15 @@ shared_ptr<MemoryObjectTreeNode::iterator> MemoryRegion::GetListingItemIterator(
     while(tree_node) {
         assert(listing_item_start_index < tree_node->listing_item_count);
 
-        if(listing_item_start_index < tree_node->left->listing_item_count) {
+        if(tree_node->left && listing_item_start_index < tree_node->left->listing_item_count) {
             // go left
             tree_node = tree_node->left;
         } else {
-            // subtract left count and go right
-            listing_item_start_index -= tree_node->left->listing_item_count;
+            // subtract left count (if any) and go right instead
+            if(tree_node->left) {
+                listing_item_start_index -= tree_node->left->listing_item_count;
+            }
+
             tree_node = tree_node->right;
         }
 
@@ -461,6 +384,7 @@ shared_ptr<MemoryObjectTreeNode::iterator> MemoryRegion::GetListingItemIterator(
             it->memory_region = shared_from_this();
             it->memory_object = tree_node->obj;
             it->listing_item_index = listing_item_start_index;
+            it->disassembler = parent_system.lock()->GetDisassembler();
 
             // TODO this sucks. I need a better way to find the current address of the listing item
             // and I don't want to keep an address in the MemoryObject because in the future I want to
@@ -503,7 +427,7 @@ MemoryObjectTreeNode::iterator& MemoryObjectTreeNode::iterator::operator++()
     auto current_node = last_node->parent.lock();
 
     // increment the region_offset by the size of the object
-    region_offset += memory_object->GetSize();
+    region_offset += memory_object->GetSize(disassembler);
 
     // go up until we're the left node and there's a right one to go down
     while(current_node) {
@@ -542,7 +466,7 @@ MemoryObjectTreeNode::iterator& MemoryObjectTreeNode::iterator::operator++()
     return *this;
 }
 
-u32 MemoryObject::GetSize()
+u32 MemoryObject::GetSize(shared_ptr<Disassembler> disassembler)
 {
     switch(type) {
     case MemoryObject::TYPE_BYTE:
@@ -552,13 +476,16 @@ u32 MemoryObject::GetSize()
     case MemoryObject::TYPE_WORD:
         return 2;
 
+    case MemoryObject::TYPE_CODE:
+        return disassembler->GetInstructionSize(code.opcode);
+
     default:
         assert(false);
         return 0;
     }
 }
 
-string MemoryObject::FormatInstructionField()
+string MemoryObject::FormatInstructionField(shared_ptr<Disassembler> disassembler)
 {
     stringstream ss;
 
@@ -572,6 +499,10 @@ string MemoryObject::FormatInstructionField()
         ss << ".DW";
         break;
 
+    case MemoryObject::TYPE_CODE:
+        ss << disassembler->GetInstruction(code.opcode);
+        break;
+
     default:
         assert(false);
         break;
@@ -580,7 +511,7 @@ string MemoryObject::FormatInstructionField()
     return ss.str();
 }
 
-string MemoryObject::FormatDataField(u32 /* internal_offset */)
+string MemoryObject::FormatDataField(u32 /* internal_offset */, shared_ptr<Disassembler> disassembler)
 {
     stringstream ss;
 
@@ -596,12 +527,21 @@ string MemoryObject::FormatDataField(u32 /* internal_offset */)
         ss << "$" << setw(4) << hval;
         break;
 
+    case MemoryObject::TYPE_CODE:
+        ss << disassembler->FormatOperand(code.opcode, code.operands);
+        break;
+
     default:
         assert(false);
         break;
     }
 
     return ss.str();
+}
+
+u8 MemoryRegion::ReadByte(GlobalMemoryLocation const& where)
+{
+    return 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

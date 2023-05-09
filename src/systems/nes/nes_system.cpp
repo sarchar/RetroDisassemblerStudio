@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "systems/nes/nes_cartridge.h"
+#include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
@@ -17,8 +18,9 @@ using namespace std;
 namespace NES {
 
 System::System()
-    : ::BaseSystem()
+    : ::BaseSystem(), disassembling(false)
 {
+    disassembler = make_shared<Disassembler>();
 }
 
 System::~System()
@@ -124,6 +126,8 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
     CreateLabel(vectors, "_irqbrk");
 
     create_new_project_progress->emit(shared_from_this(), false, num_steps, ++current_step, "Done");
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
     cout << "[NES::System] CreateNewProjectFromFile end" << endl;
     return true;
 }
@@ -222,6 +226,49 @@ void System::CreateLabel(GlobalMemoryLocation const& where, string const& label)
 //!    ll->append(label);
 //!
 //!    cout << "defined label " << label << " at " << where << endl;
+}
+
+void System::BeginDisassembly(GlobalMemoryLocation const& where)
+{
+    disassembly_address = where;
+
+    disassembling = true;
+}
+
+int System::DisassemblyThread()
+{
+    auto memory_region = GetMemoryRegion(disassembly_address);
+
+    while(true) {
+        // give up if we can't even convert this data to code. the user must clear the data type first
+        auto memory_object = memory_region->GetMemoryObject(disassembly_address);
+        if(memory_object->type != MemoryObject::TYPE_UNDEFINED && memory_object->type != MemoryObject::TYPE_BYTE) {
+            cout << "[System::DisassemblyThread] stopping. cannot disassemble type " << memory_object->type << " at " << disassembly_address << endl;
+            break;
+        }
+
+        u8 op = memory_object->bval;
+        string inst = disassembler->GetInstruction(op);
+        cout << "D: got opcode: $" << hex << uppercase << (int)memory_object->bval << " (" << inst << ")" << endl;
+
+        int size = disassembler->GetInstructionSize(op);
+        if(size == 0) {
+            cout << "exiting because size is 0" << endl;
+            break; // break on unimplemented opcodes (TODO remove me)
+        }
+
+        // convert the memory to code
+        if(!memory_region->MarkMemoryAsCode(disassembly_address, size)) {
+            cout << "exiting because MarkMemoryAsCode failed" << endl;
+            break;
+        }
+
+        disassembly_address = disassembly_address + size;
+    }
+
+    // done
+    disassembling = false;
+    return 0;
 }
 
 BaseSystem::Information const* System::GetInformation()

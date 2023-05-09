@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <thread>
 
 #include "signals.h"
 #include "systems/nes/nes_system.h"
@@ -27,13 +28,17 @@ protected:
 
 private:
     void NewLabelPopup();
+    void DisassemblyPopup();
 
 private:
     NES::GlobalMemoryLocation selection;
 
-    int                       jump_to_selection    = 0;
-    bool                      create_new_label     = false;
-    char                      new_label_buffer[64] = "";
+    int    jump_to_selection    = 0;
+    bool   create_new_label     = false;
+    char   new_label_buffer[64] = "";
+
+    bool   show_disassembling_popup = false;
+    std::unique_ptr<std::thread> disassembly_thread;
 
 public:
     static std::shared_ptr<Listing> CreateWindow();

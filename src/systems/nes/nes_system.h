@@ -15,6 +15,7 @@ class NESSystem; // TODO move into NES namespace
 namespace NES {
 
 class Cartridge;
+class Disassembler;
 class ProgramRomBank;
 
 class System : public ::BaseSystem {
@@ -50,6 +51,12 @@ public:
     // Labels
     void CreateLabel(GlobalMemoryLocation const&, std::string const&);
 
+    // Disassembly
+    std::shared_ptr<Disassembler> GetDisassembler() { return disassembler; }
+    void BeginDisassembly(GlobalMemoryLocation const&);
+    int  DisassemblyThread();
+    bool IsDisassembling() const { return disassembling; }
+
     //!std::shared_ptr<LabelList> GetLabels(GlobalMemoryLocation const& where) {
     //!    if(!label_database.contains(where)) return nullptr;
     //!    return label_database[where];
@@ -60,6 +67,11 @@ private:
 
     // label database
     //std::unordered_map<GlobalMemoryLocation, std::shared_ptr<LabelList>, GlobalMemoryLocation::HashFunction> label_database = {};
+
+    bool disassembling;
+    GlobalMemoryLocation disassembly_address;
+
+    std::shared_ptr<Disassembler> disassembler;
 };
 
 }
