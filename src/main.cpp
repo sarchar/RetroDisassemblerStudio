@@ -111,8 +111,8 @@ bool MyApp::OnWindowCreated()
 
     // Create a style
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowPadding.x    = 0;
-    style.WindowPadding.y    = 0;
+    style.WindowPadding.x    = 4;
+    style.WindowPadding.y    = 4;
     style.FramePadding.x     = 3;
     style.FramePadding.y     = 3;
     style.CellPadding.x      = 2;

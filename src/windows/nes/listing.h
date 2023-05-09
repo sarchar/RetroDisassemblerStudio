@@ -34,6 +34,8 @@ private:
     GlobalMemoryLocation selection;
     std::vector<GlobalMemoryLocation> location_history;
 
+    bool   adjust_columns = false;
+
     int    jump_to_selection    = 0;
     bool   create_new_label     = false;
     char   new_label_buffer[64] = "";

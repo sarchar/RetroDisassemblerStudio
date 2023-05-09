@@ -118,15 +118,13 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
     GlobalMemoryLocation vectors;
     GetEntryPoint(&vectors);
     CreateLabel(vectors, "_reset");
-    GetMemoryRegion(vectors)->MarkMemoryAsWords(vectors, 2);
 
     vectors.address -= 2;
     CreateLabel(vectors, "_nmi");
-    GetMemoryRegion(vectors)->MarkMemoryAsWords(vectors, 2);
+    GetMemoryRegion(vectors)->MarkMemoryAsWords(vectors, 6);
 
     vectors.address += 4;
     CreateLabel(vectors, "_irqbrk");
-    GetMemoryRegion(vectors)->MarkMemoryAsWords(vectors, 2);
 
     create_new_project_progress->emit(shared_from_this(), false, num_steps, ++current_step, "Done");
     std::this_thread::sleep_for(std::chrono::seconds(1));

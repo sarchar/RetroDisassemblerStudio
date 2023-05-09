@@ -18,10 +18,15 @@ using namespace std;
 
 namespace NES {
 
-void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where)
+unsigned long ListingItem::common_inner_table_flags = ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_Resizable;
+
+void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
 {
-    ImGuiTableFlags common_inner_table_flags = ImGuiTableFlags_NoPadOuterX;
-    ImGuiTableFlags table_flags = common_inner_table_flags | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
+    ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
+    if(flags) {
+        table_flags &= ~ImGuiTableFlags_NoBordersInBody;
+        table_flags |= ImGuiTableFlags_BordersInnerV;
+    }
 
     if(ImGui::BeginTable("listing_item_unknown", 1, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
         ImGui::TableNextRow();
@@ -31,19 +36,27 @@ void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryL
     }
 }
 
-void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where)
+void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
 {
-    ImGuiTableFlags common_inner_table_flags = ImGuiTableFlags_NoPadOuterX;
-    ImGuiTableFlags table_flags = common_inner_table_flags | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
+    ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
+    if(flags) {
+        table_flags &= ~ImGuiTableFlags_NoBordersInBody;
+        table_flags |= ImGuiTableFlags_BordersInnerV;
+    }
 
-    if(ImGui::BeginTable("listing_item_data", 3, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+    if(ImGui::BeginTable("listing_item_code", 4, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
         ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("DataType", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Content", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableNextRow();
     
         ImGui::TableNextColumn();
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200));
         ImGui::Text("$%02X:0x%04X", where.prg_rom_bank, where.address);
+
+        ImGui::TableNextColumn();
+        // nothing
     
         if(auto mr = memory_region.lock()) {
             auto memory_object = mr->GetMemoryObject(where);
@@ -66,10 +79,13 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
     }
 }
 
-void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where)
+void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
 {
-    ImGuiTableFlags common_inner_table_flags = ImGuiTableFlags_NoPadOuterX;
-    ImGuiTableFlags table_flags = common_inner_table_flags | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
+    ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
+    if(flags) {
+        table_flags &= ~ImGuiTableFlags_NoBordersInBody;
+        table_flags |= ImGuiTableFlags_BordersInnerV;
+    }
 
     if(auto mr = memory_region.lock()) {
         auto memory_object = mr->GetMemoryObject(where);
@@ -77,15 +93,20 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
 
         u8 op = memory_object->code.opcode;
         u8 sz = disassembler->GetInstructionSize(op);
-        if(ImGui::BeginTable("listing_item_code", 3, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+        if(ImGui::BeginTable("listing_item_code", 4, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
             ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
 
             ImGui::TableNextRow();
         
             ImGui::TableNextColumn();
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200));
             ImGui::Text("$%02X:0x%04X", where.prg_rom_bank, where.address);
+
+            ImGui::TableNextColumn();
+            // nothing
     
             ImGui::TableNextColumn();
             ImGui::Text("%s", memory_object->FormatInstructionField(disassembler).c_str());
@@ -103,10 +124,13 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
 }
 
 
-void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where)
+void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
 {
-    ImGuiTableFlags common_inner_table_flags = ImGuiTableFlags_NoPadOuterX;
-    ImGuiTableFlags table_flags = common_inner_table_flags | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
+    ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
+    if(flags) {
+        table_flags &= ~ImGuiTableFlags_NoBordersInBody;
+        table_flags |= ImGuiTableFlags_BordersInnerV;
+    }
 
     if(ImGui::BeginTable("listing_item_label", 2, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
         ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);

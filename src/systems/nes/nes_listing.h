@@ -12,12 +12,14 @@ class ProgramRomBank;
 // all sorts of row types: comments, labels, actual code, data, etc.
 class ListingItem {
 public:
+    static unsigned long common_inner_table_flags;
+
     ListingItem()
     { 
     }
     virtual ~ListingItem() { }
 
-    virtual void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&) = 0;
+    virtual void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) = 0;
 
 protected:
 };
@@ -29,7 +31,7 @@ public:
     { }
     virtual ~ListingItemUnknown() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
 };
 
 class ListingItemData : public ListingItem {
@@ -39,7 +41,7 @@ public:
     { }
     virtual ~ListingItemData() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
 
 private:
     std::weak_ptr<MemoryRegion> memory_region;
@@ -53,7 +55,7 @@ public:
     { }
     virtual ~ListingItemCode() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
 
 private:
     std::weak_ptr<MemoryRegion> memory_region;
@@ -66,7 +68,7 @@ public:
     { }
     virtual ~ListingItemLabel() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
 
 private:
     std::string label_name;

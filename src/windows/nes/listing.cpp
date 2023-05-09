@@ -158,12 +158,29 @@ void Listing::RenderContent()
     shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
     if(!system) return;
 
+    {
+        bool need_pop = false;
+        if(adjust_columns) {
+            ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor(255, 0, 0));
+            need_pop = true;
+        }
+
+        if(ImGui::SmallButton("R")) adjust_columns = !adjust_columns;
+
+        if(need_pop) ImGui::PopStyleColor(1);
+
+        ImGui::Separator();
+    }
+
     // Need the program rom bank that is currently in the listing
     auto memory_region = system->GetMemoryRegion(selection);
 
     ImGuiTableFlags outer_table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoBordersInBody;
 
     ImGuiWindowFlags_NoNav;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
 
     // We use nested tables so that each row can have its own layout. This will be useful when we can render
     // things like plate comments, labels, etc
@@ -215,7 +232,7 @@ void Listing::RenderContent()
                     ImGui::SameLine();
                 }
 
-                listing_item->RenderContent(system, current_address);
+                listing_item->RenderContent(system, current_address, adjust_columns);
 
                 // Only after the row has been rendered and it was the last element in the table,
                 // we can use ScrollToItem() to get the item focused in the middle of the view.
@@ -228,6 +245,8 @@ void Listing::RenderContent()
         }
         ImGui::EndTable();
     }
+
+    ImGui::PopStyleVar(2);
 
     // only scan input if the window is receiving focus
     if(IsFocused() && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
