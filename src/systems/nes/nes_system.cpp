@@ -314,6 +314,13 @@ int System::DisassemblyThread()
                     newloc.address = target;
                     locations.push_back(newloc);
                     cout << "[NES::System::DisassemblyThread] continuing disassembling at " << newloc << endl;
+
+                    // create a label at that address
+                    {
+                        stringstream ss;
+                        ss << "L_" << hex << setw(2) << setfill('0') << uppercase << newloc.prg_rom_bank << setw(4) << newloc.address;
+                        CreateLabel(newloc, ss.str());
+                    }
                 }
                 break;
             }

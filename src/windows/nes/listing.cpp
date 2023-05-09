@@ -78,6 +78,54 @@ void Listing::CheckInput()
             }
             break;
 
+        case L'r':
+        {
+            // convert operand to reference
+            // TODO this will be a larger task in the future
+            auto memory_region = system->GetMemoryRegion(selection);
+            auto memory_object = memory_region->GetMemoryObject(selection);
+
+            u16 dest = 0;
+            if(memory_object->type == MemoryObject::TYPE_CODE) {
+                dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
+            } else if(memory_object->type == MemoryObject::TYPE_WORD) {
+                dest = memory_object->hval;
+            } else if(memory_object->type == MemoryObject::TYPE_BYTE) {
+                dest = memory_object->bval;
+            } else if(memory_object->type == MemoryObject::TYPE_UNDEFINED) {
+                //TODO system->MarkMemoryAsBytes(selection, 1);
+                //dest = memory_object->bval;
+                assert(false);
+            } else {
+                assert(false);
+            }
+
+
+            GlobalMemoryLocation label_address(selection);
+            label_address.address = dest;
+            if(!(dest >= memory_region->GetBaseAddress() && dest < memory_region->GetEndAddress())) {
+                // destination is not in this memory region, see if we can find it
+                vector<u16> possible_banks;
+                system->GetBanksForAddress(label_address, possible_banks); // only uses the address field
+
+                if(possible_banks.size() == 1) {
+                    label_address.prg_rom_bank = possible_banks[0];
+                    memory_region = system->GetMemoryRegion(label_address);
+                } else {
+                    assert(false); // popup dialog and wait for selection of which bank to go to
+                }
+            }
+
+            cout << "Creating memory reference to " << label_address << endl;
+            {
+                stringstream ss;
+                ss << "L_" << hex << setw(2) << setfill('0') << uppercase << label_address.prg_rom_bank << setw(4) << label_address.address;
+                system->CreateLabel(label_address, ss.str());
+            }
+
+            break;
+        }
+
         case L'l':
             // create a new label at the current address
             create_new_label = true;
