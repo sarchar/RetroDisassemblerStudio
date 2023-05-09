@@ -9,8 +9,9 @@ using namespace std;
 
 namespace NES {
 
-Cartridge::Cartridge() 
+Cartridge::Cartridge(shared_ptr<System>& system) 
 {
+    parent_system = system;
 }
 
 Cartridge::~Cartridge() 
@@ -19,6 +20,9 @@ Cartridge::~Cartridge()
 
 void Cartridge::Prepare()
 {
+    auto system = parent_system.lock();
+    if(!system) return;
+
     assert(program_rom_banks.size() == 0);
 
     for(u32 i = 0; i < header.num_prg_rom_banks; i++) {
@@ -47,7 +51,7 @@ void Cartridge::Prepare()
             assert(false); // Unhandled mapper
         }
 
-        auto bank = make_shared<ProgramRomBank>(load_address, bank_size);
+        auto bank = make_shared<ProgramRomBank>(system, load_address, bank_size);
         program_rom_banks.push_back(bank);
     }
 
@@ -72,7 +76,7 @@ void Cartridge::Prepare()
             assert(false); // Unhandled mapper
         }
 
-        auto bank = make_shared<CharacterRomBank>(load_address, bank_size);
+        auto bank = make_shared<CharacterRomBank>(system, load_address, bank_size);
         character_rom_banks.push_back(bank);
     }
 }

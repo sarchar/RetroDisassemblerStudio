@@ -16,8 +16,10 @@ using namespace std;
 
 namespace NES {
 
-MemoryRegion::MemoryRegion() 
+MemoryRegion::MemoryRegion(shared_ptr<System>& _parent_system) 
 { 
+    // create a week reference to avoid cyclical refs
+    parent_system = _parent_system;
 }
 
 MemoryRegion::~MemoryRegion()
@@ -63,16 +65,17 @@ void MemoryRegion::RecalculateListingItemCounts()
 void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>& obj, u32 region_offset)
 {
     // NOTE: do NOT save region_offset in the memory object! It'll be wrong when objects in object_refs move around
-    // it's simply passed in for debugging purposes
 
     // For now, objects only have 1 listing item: the data itself
     // but in the future, we need to count up labels, comments, etc
     obj->listing_items.clear();
 
-    if(region_offset >= 0x3FF0) {
-        stringstream ss;
-        ss << "L_" << hex << setw(4) << uppercase << setfill('0') << region_offset;
-        obj->listing_items.push_back(make_shared<ListingItemLabel>(ss.str()));
+    for(auto& label : obj->labels) {
+        obj->listing_items.push_back(make_shared<ListingItemLabel>(label));
+        //    stringstream ss;
+        //    ss << "L_" << hex << setw(4) << uppercase << setfill('0') << region_offset;
+        //    obj->listing_items.push_back(make_shared<ListingItemLabel>(ss.str()));
+        //}
     }
 
     obj->listing_items.push_back(make_shared<ListingItemData>(shared_from_this(), 0));
@@ -306,6 +309,36 @@ u32 MemoryRegion::GetListingIndexByAddress(GlobalMemoryLocation const& where)
     return listing_item_index;
 }
 
+void MemoryRegion::UpdateMemoryObject(GlobalMemoryLocation const& where)
+{
+    u32 region_offset = ConvertToRegionOffset(where.address);
+    auto memory_object = object_refs[region_offset];
+
+    // recreate the listing items for this one object
+    RecreateListingItemsForMemoryObject(memory_object, region_offset);
+
+    // propagate up the tree the changes
+    auto current_node = memory_object->parent.lock();
+    current_node->listing_item_count = memory_object->listing_items.size(); // update the is_object node
+    current_node = current_node->parent.lock();
+    while(current_node) {
+        current_node->listing_item_count = current_node->left->listing_item_count + current_node->right->listing_item_count;
+        current_node = current_node->parent.lock();
+    }
+}
+
+void MemoryRegion::CreateLabel(GlobalMemoryLocation const& where, string const& label)
+{
+    u32 region_offset = ConvertToRegionOffset(where.address);
+    auto memory_object = object_refs[region_offset];
+
+    // add the label
+    memory_object->labels.push_back(label);
+
+    // update the object
+    UpdateMemoryObject(where);
+}
+
 // TODO use a binary search through the object_refs. will need another function that
 // determines the listing_item_index of the first listing item within a memoryobject
 //! u32 MemoryRegion::FindRegionOffsetForListingItem(int listing_item_index)
@@ -469,8 +502,8 @@ string MemoryObject::FormatDataField(u32 /* internal_offset */)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ProgramRomBank::ProgramRomBank(PROGRAM_ROM_BANK_LOAD _bank_load, PROGRAM_ROM_BANK_SIZE _bank_size) 
-    : MemoryRegion(), bank_load(_bank_load), bank_size(_bank_size) 
+ProgramRomBank::ProgramRomBank(shared_ptr<System>& system, PROGRAM_ROM_BANK_LOAD _bank_load, PROGRAM_ROM_BANK_SIZE _bank_size) 
+    : MemoryRegion(system), bank_load(_bank_load), bank_size(_bank_size) 
 {
 
     switch(bank_load) {
@@ -504,8 +537,8 @@ ProgramRomBank::ProgramRomBank(PROGRAM_ROM_BANK_LOAD _bank_load, PROGRAM_ROM_BAN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-CharacterRomBank::CharacterRomBank(CHARACTER_ROM_BANK_LOAD _bank_load, CHARACTER_ROM_BANK_SIZE _bank_size)
-    : MemoryRegion(), bank_load(_bank_load), bank_size(_bank_size)
+CharacterRomBank::CharacterRomBank(shared_ptr<System>& system, CHARACTER_ROM_BANK_LOAD _bank_load, CHARACTER_ROM_BANK_SIZE _bank_size)
+    : MemoryRegion(system), bank_load(_bank_load), bank_size(_bank_size)
 {
     switch(bank_load) {
     case CHARACTER_ROM_BANK_LOAD_LOW:

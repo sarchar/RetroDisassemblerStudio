@@ -1,5 +1,9 @@
 #pragma once
 
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "systems/system.h"
 
 #include "systems/nes/nes_listing.h"
@@ -15,6 +19,8 @@ class ProgramRomBank;
 
 class System : public ::BaseSystem {
 public:
+    typedef std::vector<std::string> LabelList;
+
     System();
     virtual ~System();
 
@@ -45,8 +51,16 @@ public:
     // Labels
     void CreateLabel(GlobalMemoryLocation const&, std::string const&);
 
+    //!std::shared_ptr<LabelList> GetLabels(GlobalMemoryLocation const& where) {
+    //!    if(!label_database.contains(where)) return nullptr;
+    //!    return label_database[where];
+    //!}
+
 private:
     std::string rom_file_path_name;
+
+    // label database
+    //std::unordered_map<GlobalMemoryLocation, std::shared_ptr<LabelList>, GlobalMemoryLocation::HashFunction> label_database = {};
 };
 
 }

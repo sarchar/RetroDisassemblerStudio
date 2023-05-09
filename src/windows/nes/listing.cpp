@@ -54,16 +54,16 @@ void Listing::CheckInput()
     for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
         ImWchar c = io.InputQueueCharacters[i]; 
 
-//!        if(c == L'w') {
-//!            // mark data as a word
-//!            shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
-//!            if(system) {
+        if(c == L'w') {
+            // mark data as a word
+            shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
+            if(system) {
 //!                system->MarkContentAsData(selection, 2, CONTENT_BLOCK_DATA_TYPE_UWORD);
-//!            }
-//!        } else if(c == 'l') {
-//!            // create a new label at the current address
-//!            create_new_label = true;
-//!        }
+            }
+        } else if(c == 'l') {
+            // create a new label at the current address
+            create_new_label = true;
+        }
     }
 
     if(ImGui::IsKeyDown(ImGuiKey_Tab) && !(io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper)) {

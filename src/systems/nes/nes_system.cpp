@@ -30,7 +30,10 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
     cout << "[NES::System] CreateNewProjectFromFile begin" << endl;
     create_new_project_progress->emit(shared_from_this(), false, 0, 0, "Loading file...");
 
-    cartridge = make_shared<Cartridge>();
+    shared_ptr<BaseSystem> base_system = shared_from_this();
+    auto selfptr = dynamic_pointer_cast<System>(base_system);
+    assert(selfptr);
+    cartridge = make_shared<Cartridge>(selfptr);
 
     // Read in the iNES header
     ifstream rom_stream(file_path_name, ios::binary);
@@ -108,6 +111,17 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
         // Initialize the entire bank as just a series of bytes
         chr_bank->InitializeFromData(reinterpret_cast<u8*>(data), sizeof(data)); // Mark content starting at offset 0 as data
     }
+
+    // Create the CPU vector labels
+    GlobalMemoryLocation vectors;
+    GetEntryPoint(&vectors);
+    CreateLabel(vectors, "_reset");
+
+    vectors.address -= 2;
+    CreateLabel(vectors, "_nmi");
+
+    vectors.address += 4;
+    CreateLabel(vectors, "_irqbrk");
 
     create_new_project_progress->emit(shared_from_this(), false, num_steps, ++current_step, "Done");
     cout << "[NES::System] CreateNewProjectFromFile end" << endl;
@@ -198,7 +212,18 @@ std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const
 
 void System::CreateLabel(GlobalMemoryLocation const& where, string const& label)
 {
-    cout << "defined label " << label << " at " << where << endl;
+    auto memory_region = GetMemoryRegion(where);
+    memory_region->CreateLabel(where, label);
+
+//!    LabelList ll = label_database[where];
+//!    if(!ll) {
+//!        ll = make_shared<LabelList>();
+//!        label_database[where] = ll;
+//!    }
+//!
+//!    ll->append(label);
+//!
+//!    cout << "defined label " << label << " at " << where << endl;
 }
 
 BaseSystem::Information const* System::GetInformation()

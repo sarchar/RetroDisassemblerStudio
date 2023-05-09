@@ -5,6 +5,8 @@
 
 namespace NES {
 
+class System;
+
 class Cartridge {
 public:
     struct {
@@ -21,7 +23,7 @@ public:
         bool has_trainer;
     } header;
 
-    Cartridge();
+    Cartridge(std::shared_ptr<System>&);
     ~Cartridge();
     void Prepare(void);
 
@@ -32,6 +34,8 @@ public:
 
 //!    void MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type);
 private:
+    std::weak_ptr<System> parent_system;
+
     std::vector<std::shared_ptr<ProgramRomBank>>   program_rom_banks;
     std::vector<std::shared_ptr<CharacterRomBank>> character_rom_banks;
 };

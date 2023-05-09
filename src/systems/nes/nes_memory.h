@@ -12,6 +12,7 @@
 namespace NES {
 
 class ListingItem;
+class System;
 
 // SystemMemoryLocation dials into a specific byte within the system. It has enough information to select which
 // segment of the system (RAM, SRAM, etc) as well as which ROM bank, overlay or any psuedo location that may exist.
@@ -48,6 +49,23 @@ struct GlobalMemoryLocation {
         ret.address += v; // TODO wrap, increment banks, etc
         return ret;
     }
+
+    bool operator==(GlobalMemoryLocation const& other) const {
+        return address == other.address &&
+            (is_chr ? ( other.is_chr && chr_rom_bank == other.chr_rom_bank)
+                    : (!other.is_chr && prg_rom_bank == other.prg_rom_bank)
+            );
+    }
+
+    struct HashFunction {
+        size_t operator()(GlobalMemoryLocation const& other) const {
+            u64 x = (u64)other.address;
+            x |= ((u64)other.is_chr)       << 16;
+            x |= ((u64)other.prg_rom_bank) << 32;
+            x |= ((u64)other.chr_rom_bank) << 48;
+            return std::hash<u64>()(x);
+        }
+    };
 
     friend std::ostream& operator<<(std::ostream& stream, const GlobalMemoryLocation& p) {
         std::ios_base::fmtflags saveflags(stream.flags());
@@ -110,6 +128,7 @@ struct MemoryObject {
 
     std::weak_ptr<MemoryObjectTreeNode> parent;
 
+    std::vector<std::string> labels;
     std::vector<std::shared_ptr<ListingItem>> listing_items;
 
     union {
@@ -133,7 +152,7 @@ class MemoryRegion : public std::enable_shared_from_this<MemoryRegion> {
 public:
     typedef std::vector<std::shared_ptr<MemoryObject>> ObjectRefListType;
 
-    MemoryRegion();
+    MemoryRegion(std::shared_ptr<System>&);
     ~MemoryRegion();
 
     u32 GetBaseAddress()       const { return base_address; }
@@ -152,6 +171,7 @@ public:
 //!    void                           MarkContentAsData(GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type);
 
     std::shared_ptr<MemoryObject>  GetMemoryObject(GlobalMemoryLocation const&);
+    void                           UpdateMemoryObject(GlobalMemoryLocation const&);
 
     // Listing help
     std::shared_ptr<MemoryObjectTreeNode::iterator> GetListingItemIterator(int listing_item_start_index);
@@ -160,11 +180,13 @@ public:
 
     virtual u8  ReadByte(GlobalMemoryLocation const&) = 0;
 
-    void PrintContentBlocks();
+    // Labels
+    void CreateLabel(GlobalMemoryLocation const&, std::string const&);
 
 protected:
     u32 base_address;
     u32 region_size;
+    std::weak_ptr<System> parent_system;
 
 private:
     void Erase();
@@ -191,7 +213,7 @@ private:
 
 class ProgramRomBank : public MemoryRegion {
 public:
-    ProgramRomBank(PROGRAM_ROM_BANK_LOAD, PROGRAM_ROM_BANK_SIZE);
+    ProgramRomBank(std::shared_ptr<System>&, PROGRAM_ROM_BANK_LOAD, PROGRAM_ROM_BANK_SIZE);
     virtual ~ProgramRomBank() {};
 
     u8 ReadByte(GlobalMemoryLocation const&) override { return 0; }
@@ -202,7 +224,7 @@ private:
 
 class CharacterRomBank : public MemoryRegion {
 public:
-    CharacterRomBank(CHARACTER_ROM_BANK_LOAD, CHARACTER_ROM_BANK_SIZE);
+    CharacterRomBank(std::shared_ptr<System>&, CHARACTER_ROM_BANK_LOAD, CHARACTER_ROM_BANK_SIZE);
     virtual ~CharacterRomBank() {}
 
     u8 ReadByte(GlobalMemoryLocation const&) override { return 0; }
