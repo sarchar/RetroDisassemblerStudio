@@ -7,7 +7,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include "systems/nes/nes_content.h"
+#include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_system.h"
 
 #include "util.h"
@@ -31,13 +31,10 @@ void MemoryRegion::Erase()
 }
 
 // Recalculate all the listing_item_count in the memory object tree
-int i;
 void MemoryRegion::_RecalculateListingItemCounts(shared_ptr<MemoryObjectTreeNode>& tree_node)
 {
     if(tree_node->is_object) {
-        RecalculateListingItemCount(tree_node->obj);
         tree_node->listing_item_count = tree_node->obj->listing_items.size();
-        i++;
     } else {
         _RecalculateListingItemCounts(tree_node->left);
         _RecalculateListingItemCounts(tree_node->right);
@@ -45,27 +42,44 @@ void MemoryRegion::_RecalculateListingItemCounts(shared_ptr<MemoryObjectTreeNode
     }
 }
 
+void MemoryRegion::RecreateListingItems()
+{
+    u32 region_offset = 0;
+    while(region_offset < region_size) {
+        shared_ptr<MemoryObject> obj = object_refs[region_offset];
+        RecreateListingItemsForMemoryObject(obj, region_offset);
+
+        // skip memory that points to the same object
+        region_offset += 1;
+        while(region_offset < region_size && object_refs[region_offset] == obj) ++region_offset;
+    }
+}
+
 void MemoryRegion::RecalculateListingItemCounts()
 {
-    i = 0;
     _RecalculateListingItemCounts(object_tree_root);
 }
 
-void MemoryRegion::RecalculateListingItemCount(shared_ptr<MemoryObject>& obj)
+void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>& obj, u32 region_offset)
 {
+    // NOTE: do NOT save region_offset in the memory object! It'll be wrong when objects in object_refs move around
+    // it's simply passed in for debugging purposes
+
     // For now, objects only have 1 listing item: the data itself
     // but in the future, we need to count up labels, comments, etc
     obj->listing_items.clear();
 
-    if(i == 0x3FFC) {
-        obj->listing_items.push_back(make_shared<ListingItemLabel>("_reset"));
+    if(region_offset >= 0x3FF0) {
+        stringstream ss;
+        ss << "L_" << hex << setw(4) << uppercase << setfill('0') << region_offset;
+        obj->listing_items.push_back(make_shared<ListingItemLabel>(ss.str()));
     }
 
     obj->listing_items.push_back(make_shared<ListingItemData>(shared_from_this(), 0));
 
-    if(i == 0x3FFC) {
-        obj->listing_items.push_back(make_shared<ListingItemLabel>("    ; this is a comment"));
-    }
+    //!if(i == 0x3FFC) {
+    //!    obj->listing_items.push_back(make_shared<ListingItemLabel>("    ; this is a comment"));
+    //!}
 }
 
 void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_node, u32 region_offset, u8* data, int count)
@@ -116,32 +130,14 @@ void MemoryRegion::InitializeFromData(u8* data, int count)
     _InitializeFromData(object_tree_root->left , 0        , &data[0]        , count / 2);
     _InitializeFromData(object_tree_root->right, count / 2, &data[count / 2], count / 2);
 
+    // first pass create listing items
+    RecreateListingItems();
     RecalculateListingItemCounts();
 
     cout << "[MemoryRegion::InitializeWithData] set 0x" << hex << uppercase << setfill('0') << setw(0) << count 
          << " bytes of data for memory base 0x" << setw(4) << base_address << endl;
 }
 
-//! MemoryRegion::ContentBlockListType::iterator MemoryRegion::InsertContentBlock(MemoryRegion::ContentBlockListType::iterator loc, shared_ptr<ContentBlock>& content_block)
-//! {
-//!     u16 ref = content.size();
-//!     ContentBlockListType::iterator it = content.insert(loc, content_block);
-//! 
-//!     u32 size = content_block->GetSize();
-//!     for(u32 s = content_block->offset; s < content_block->offset + size; s++) {
-//!         content_ptrs[s] = content_block;
-//!     }
-//! 
-//!     total_listing_items += content_block->num_listing_items;
-//!     return it;
-//! }
-//! 
-//! std::shared_ptr<ContentBlock> MemoryRegion::GetContentBlockAt(GlobalMemoryLocation const& where)
-//! {
-//!     u16 base = ConvertToRegionOffset(where.address);
-//!     return content_ptrs[base].lock();
-//! }
-//! 
 //! shared_ptr<ContentBlock> MemoryRegion::SplitContentBlock(GlobalMemoryLocation const& where)
 //! {
 //!     // Attempt to split the content block at `where`. It has to lie on a data type boundary
@@ -310,27 +306,6 @@ u32 MemoryRegion::GetListingIndexByAddress(GlobalMemoryLocation const& where)
     return listing_item_index;
 }
 
-u32 MemoryRegion::GetAddressForListingItemIndex(u32 listing_item_index)
-{
-//!    // this iterative approach is inefficient, and depends on the content blocks vector to be sorted
-//!    // but it'll do for now and should be optimized one day. plus, this listing items format is probably
-//!    // not even close to its final form
-//!    for(auto& blk : content) {
-//!        if(blk->type != CONTENT_BLOCK_TYPE_DATA) continue;
-//!
-//!        // Check if our listing item is in this content block
-//!        if(listing_item_index >= blk->num_listing_items) {
-//!            listing_item_index -= blk->num_listing_items;
-//!            continue;
-//!        }
-//!
-//!        // OK it's in this block, figure out the address
-//!        return base_address + blk->offset + listing_item_index * blk->GetDataTypeSize();
-//!    }
-
-    return 0;
-}
-
 // TODO use a binary search through the object_refs. will need another function that
 // determines the listing_item_index of the first listing item within a memoryobject
 //! u32 MemoryRegion::FindRegionOffsetForListingItem(int listing_item_index)
@@ -491,17 +466,6 @@ string MemoryObject::FormatDataField(u32 /* internal_offset */)
 
     return ss.str();
 }
-
-//! void MemoryRegion::PrintContentBlocks()
-//! {
-//!     int i = 0;
-//!     for(auto& blk : content) {
-//!         u32 size = blk->GetSize();
-//!         cout << "Block " << i << " offset = 0x" << hex << blk->offset << " type " << blk->type 
-//!              << " datatype " << blk->data.type 
-//!              << " size 0x" << size << endl;
-//!     }
-//! }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

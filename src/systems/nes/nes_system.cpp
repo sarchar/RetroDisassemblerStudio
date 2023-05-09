@@ -6,7 +6,7 @@
 #include <memory>
 
 #include "systems/nes/nes_cartridge.h"
-#include "systems/nes/nes_content.h"
+#include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
 
@@ -134,57 +134,11 @@ void System::GetEntryPoint(GlobalMemoryLocation* out)
     out->prg_rom_bank = cartridge->GetResetVectorBank();
 }
 
-//! shared_ptr<ContentBlock>  System::GetContentBlockAt(GlobalMemoryLocation const& where)
-//! {
-//!     if(where.address >= 0x8000) {
-//!         return cartridge->GetContentBlockAt(where);
-//!     }
-//! 
-//!     static shared_ptr<ContentBlock> empty_ptr;
-//!     return empty_ptr;
-//! }
-//! 
 //! void System::MarkContentAsData(GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE data_type)
 //! {
 //!     // TODO right now we only work with ROM banks
 //!     if(where.address >= 0x8000) {
 //!         cartridge->MarkContentAsData(where, byte_count, data_type);
-//!     }
-//! }
-
-//! // Listings
-//! void System::GetListingItems(GlobalMemoryLocation const& where, std::vector<std::shared_ptr<ListingItem>>& out)
-//! {
-//!     assert(!where.is_chr); // TODO support CHR
-//! 
-//!     if(where.address >= 0x8000) {
-//!         auto prg_bank = cartridge->GetProgramRomBank(where.prg_rom_bank);
-//! 
-//!         auto content_block = prg_bank->GetContentBlockAt(where);
-//!         if(!content_block) {
-//!             // memory not present, add a ListingUnknown to out
-//!             auto unk = make_shared<ListingItemUnknown>(where);
-//!             out.push_back(unk);
-//!         }
-//! 
-//!         switch(content_block->type) {
-//!         case CONTENT_BLOCK_TYPE_DATA:
-//!         {
-//!             if(where.address == 0xFFFC) {
-//!                 auto dataitem = make_shared<ListingItemLabel>(where, "_reset");
-//!                 out.push_back(dataitem);
-//!             }
-//! 
-//!             auto dataitem = make_shared<ListingItemData>(where, prg_bank);
-//!             out.push_back(dataitem);
-//!             break;
-//!         }
-//! 
-//!         case CONTENT_BLOCK_TYPE_CODE:
-//!         case CONTENT_BLOCK_TYPE_CHR:
-//!         default:
-//!             assert(false); // TODO block types
-//!         }
 //!     }
 //! }
 

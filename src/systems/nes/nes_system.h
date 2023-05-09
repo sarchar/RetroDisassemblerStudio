@@ -2,7 +2,7 @@
 
 #include "systems/system.h"
 
-#include "systems/nes/nes_content.h"
+#include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_defs.h"
 #include "systems/nes/nes_memory.h"
 
@@ -36,8 +36,7 @@ public:
 
     std::shared_ptr<MemoryRegion> GetMemoryRegion(GlobalMemoryLocation const&);
 
-    // Content
-//!    std::shared_ptr<ContentBlock>  GetContentBlockAt(GlobalMemoryLocation const&);
+//!    // Content
 //!    void MarkContentAsData(NES::GlobalMemoryLocation const&, u32 byte_count, NES::CONTENT_BLOCK_DATA_TYPE data_type);
 
     // Listings

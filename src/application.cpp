@@ -259,9 +259,6 @@ void Application::ShowDockSpace(bool dockSpaceHasBackground)
             // now split the middle area into a top and bottom
             imgui_dock_builder_bottom_id = ImGui::DockBuilderSplitNode(middle_id, ImGuiDir_Down, 0.5f, nullptr, nullptr);
 
-            //! // we now dock our windows into the docking node we made above
-            //! ImGui::DockBuilderDockWindow("Down", dock_id_down);
-            //! ImGui::DockBuilderDockWindow("Left", dock_id_left);
             ImGui::DockBuilderFinish(imgui_dockspace_id);
 
             // do this last for race conditions

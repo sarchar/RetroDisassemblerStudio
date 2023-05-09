@@ -7,7 +7,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include "systems/nes/nes_content.h"
+#include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
 
@@ -16,52 +16,6 @@
 using namespace std;
 
 namespace NES {
-
-//! std::string ContentBlock::FormatInstructionField() 
-//! {
-//!     switch(type) {
-//!     case CONTENT_BLOCK_TYPE_DATA:
-//!         switch(data.type) {
-//!         case CONTENT_BLOCK_DATA_TYPE_UBYTE:
-//!             return ".DB";
-//!         case CONTENT_BLOCK_DATA_TYPE_UWORD:
-//!             return ".DW";
-//!         default:
-//!             assert(false);
-//!             return "";
-//!         }
-//!         break;
-//! 
-//!     default:
-//!         assert(false);
-//!         return "";
-//!     }
-//! }
-//! 
-//! std::string ContentBlock::FormatDataElement(u16 n) 
-//! {
-//!     std::stringstream ss;
-//! 
-//!     assert(type == CONTENT_BLOCK_TYPE_DATA);
-//!     switch(data.type) {
-//!     case CONTENT_BLOCK_DATA_TYPE_UBYTE:
-//!         ss << "$" << std::hex << std::setfill('0') << std::setw(2) << (u16)((u8*)data.ptr)[n];
-//!         break;
-//! 
-//!     case CONTENT_BLOCK_DATA_TYPE_UWORD:
-//!     {
-//!         u8* p = (u8*)&((u16*)data.ptr)[n];
-//!         u16  v = p[0] | (p[1] << 8);
-//!         ss << "$" << std::hex << std::setfill('0') << std::setw(4) << v;
-//!         break;
-//!     }
-//! 
-//!     default:
-//!         break;
-//!     }
-//! 
-//!     return ss.str();
-//! }
 
 void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where)
 {

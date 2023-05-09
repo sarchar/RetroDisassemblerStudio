@@ -30,7 +30,6 @@ public:
 
     u16 GetResetVectorBank();
 
-//!    std::shared_ptr<ContentBlock>  GetContentBlockAt(GlobalMemoryLocation const&);
 //!    void MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type);
 private:
     std::vector<std::shared_ptr<ProgramRomBank>>   program_rom_banks;

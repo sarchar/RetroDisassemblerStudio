@@ -11,7 +11,6 @@
 
 namespace NES {
 
-//!class ContentBlock;
 class ListingItem;
 
 // SystemMemoryLocation dials into a specific byte within the system. It has enough information to select which
@@ -148,10 +147,6 @@ public:
 
     void                           InitializeFromData(u8* data, int count);
 
-//!    ContentBlockListType::iterator InsertContentBlock(ContentBlockListType::iterator, std::shared_ptr<ContentBlock>& content_block);
-//!
-//!    std::shared_ptr<ContentBlock>  GetContentBlockAt(GlobalMemoryLocation const& where);
-//!
 //!    std::shared_ptr<ContentBlock>  SplitContentBlock(GlobalMemoryLocation const& where);
 //!
 //!    void                           MarkContentAsData(GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type);
@@ -162,7 +157,6 @@ public:
     std::shared_ptr<MemoryObjectTreeNode::iterator> GetListingItemIterator(int listing_item_start_index);
 
     u32  GetListingIndexByAddress(GlobalMemoryLocation const&);
-    u32  GetAddressForListingItemIndex(u32 listing_item_index);
 
     virtual u8  ReadByte(GlobalMemoryLocation const&) = 0;
 
@@ -186,18 +180,13 @@ private:
 
     void RecalculateListingItemCounts();
     void _RecalculateListingItemCounts(std::shared_ptr<MemoryObjectTreeNode>&);
-    void RecalculateListingItemCount(std::shared_ptr<MemoryObject>& obj);
+    void RecreateListingItems();
+    void RecreateListingItemsForMemoryObject(std::shared_ptr<MemoryObject>&, u32);
 
-//!    ContentBlockListType content;
-//!
-//!    // an array mapping an address into its respective content block
-//!    //u16* content_ptrs;
-//!    std::shared_ptr<std::weak_ptr<ContentBlock>[]> content_ptrs;
-//!
-//!    // during emulation, we will want a cache for already translated code
-//!    // u8 opcode_cache[];
-//!    // and probably a bitmap indicating whether an address is valid in the cache
-//!    // u64 opcode_cache_valid[16 * 1024 / 64] // one bit per address using 64 bit ints
+    // during emulation, we will want a cache for already translated code
+    // u8 opcode_cache[];
+    // and probably a bitmap indicating whether an address is valid in the cache
+    // u64 opcode_cache_valid[16 * 1024 / 64] // one bit per address using 64 bit ints
 };
 
 class ProgramRomBank : public MemoryRegion {
