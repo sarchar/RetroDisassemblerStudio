@@ -42,11 +42,10 @@ public:
 
     std::shared_ptr<MemoryRegion> GetMemoryRegion(GlobalMemoryLocation const&);
 
-//!    // Content
-//!    void MarkContentAsData(NES::GlobalMemoryLocation const&, u32 byte_count, NES::CONTENT_BLOCK_DATA_TYPE data_type);
+    void MarkMemoryAsWords(GlobalMemoryLocation const&, u32 byte_count);
 
     // Listings
-    void GetListingItems(NES::GlobalMemoryLocation const&, std::vector<std::shared_ptr<NES::ListingItem>>& out);
+    void GetListingItems(GlobalMemoryLocation const&, std::vector<std::shared_ptr<NES::ListingItem>>& out);
 
     // Labels
     void CreateLabel(GlobalMemoryLocation const&, std::string const&);

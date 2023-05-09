@@ -166,10 +166,6 @@ public:
 
     void                           InitializeFromData(u8* data, int count);
 
-//!    std::shared_ptr<ContentBlock>  SplitContentBlock(GlobalMemoryLocation const& where);
-//!
-//!    void                           MarkContentAsData(GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type);
-
     std::shared_ptr<MemoryObject>  GetMemoryObject(GlobalMemoryLocation const&);
     void                           UpdateMemoryObject(GlobalMemoryLocation const&);
 
@@ -182,6 +178,9 @@ public:
 
     // Labels
     void CreateLabel(GlobalMemoryLocation const&, std::string const&);
+
+    // Data
+    void MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count);
 
 protected:
     u32 base_address;
@@ -199,11 +198,15 @@ private:
     std::shared_ptr<MemoryObjectTreeNode> object_tree_root = nullptr;
 
     void _InitializeFromData(std::shared_ptr<MemoryObjectTreeNode>&, u32, u8*, int);
+    void _UpdateMemoryObject(std::shared_ptr<MemoryObject>&, u32);
+    void RemoveMemoryObjectFromTree(std::shared_ptr<MemoryObject>&);
 
     void RecalculateListingItemCounts();
+    void _SumListingItemCountsUp(std::shared_ptr<MemoryObjectTreeNode>&);
     void _RecalculateListingItemCounts(std::shared_ptr<MemoryObjectTreeNode>&);
     void RecreateListingItems();
     void RecreateListingItemsForMemoryObject(std::shared_ptr<MemoryObject>&, u32);
+
 
     // during emulation, we will want a cache for already translated code
     // u8 opcode_cache[];

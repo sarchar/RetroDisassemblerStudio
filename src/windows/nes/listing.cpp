@@ -58,7 +58,7 @@ void Listing::CheckInput()
             // mark data as a word
             shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
             if(system) {
-//!                system->MarkContentAsData(selection, 2, CONTENT_BLOCK_DATA_TYPE_UWORD);
+                system->MarkMemoryAsWords(selection, 2);
             }
         } else if(c == 'l') {
             // create a new label at the current address
@@ -114,6 +114,7 @@ void Listing::RenderContent()
             auto listing_item_iterator = memory_region->GetListingItemIterator(clipper.DisplayStart);
             bool did_scroll = false;
 
+            //cout << "DisplayStart = " << hex << clipper.DisplayStart << " - " << clipper.DisplayEnd << endl;
             for(int row = clipper.DisplayStart; row < clipper.DisplayEnd && listing_item_iterator; ++row, ++*listing_item_iterator) {
                 // get the listing item
                 auto& listing_item = listing_item_iterator->GetListingItem();

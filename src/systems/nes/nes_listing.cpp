@@ -70,10 +70,14 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
     ImGuiTableFlags common_inner_table_flags = ImGuiTableFlags_NoPadOuterX;
     ImGuiTableFlags table_flags = common_inner_table_flags | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
 
-    if(ImGui::BeginTable("listing_item_label", 3, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+    if(ImGui::BeginTable("listing_item_label", 2, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+        ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableNextRow();
     
+        ImGui::TableNextColumn();
+        ImGui::Text("        ");
+
         ImGui::TableNextColumn();
         ImGui::Text("%s:", label_name.c_str());
     

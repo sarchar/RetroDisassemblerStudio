@@ -148,14 +148,6 @@ void System::GetEntryPoint(GlobalMemoryLocation* out)
     out->prg_rom_bank = cartridge->GetResetVectorBank();
 }
 
-//! void System::MarkContentAsData(GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE data_type)
-//! {
-//!     // TODO right now we only work with ROM banks
-//!     if(where.address >= 0x8000) {
-//!         cartridge->MarkContentAsData(where, byte_count, data_type);
-//!     }
-//! }
-
 u16 System::GetMemoryRegionBaseAddress(GlobalMemoryLocation const& where)
 {
     assert(!where.is_chr); // TODO
@@ -208,6 +200,12 @@ std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const
     } else {
         return cartridge->GetProgramRomBank(where.prg_rom_bank);
     }
+}
+
+void System::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count)
+{
+    auto memory_region = GetMemoryRegion(where);
+    memory_region->MarkMemoryAsWords(where, byte_count);
 }
 
 void System::CreateLabel(GlobalMemoryLocation const& where, string const& label)

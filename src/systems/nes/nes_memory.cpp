@@ -44,6 +44,16 @@ void MemoryRegion::_RecalculateListingItemCounts(shared_ptr<MemoryObjectTreeNode
     }
 }
 
+void MemoryRegion::_SumListingItemCountsUp(shared_ptr<MemoryObjectTreeNode>& tree_node)
+{
+    while(tree_node) {
+        tree_node->listing_item_count = 0;
+        if(tree_node->left) tree_node->listing_item_count += tree_node->left->listing_item_count;
+        if(tree_node->right) tree_node->listing_item_count += tree_node->right->listing_item_count;
+        tree_node = tree_node->parent.lock();
+    }
+}
+
 void MemoryRegion::RecreateListingItems()
 {
     u32 region_offset = 0;
@@ -281,6 +291,64 @@ shared_ptr<MemoryObject> MemoryRegion::GetMemoryObject(GlobalMemoryLocation cons
     return object_refs[ConvertToRegionOffset(where.address)];
 }
 
+void MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count)
+{
+    if((byte_count % 2) == 1) byte_count++;
+
+    // Check to see if all selected memory can be converted
+    for(u32 i = 0; i < byte_count; i += 2) {
+        auto memory_object = GetMemoryObject(where);
+        if(memory_object->type == MemoryObject::TYPE_WORD) continue;
+
+        switch(memory_object->type) {
+        case MemoryObject::TYPE_UNDEFINED:
+        case MemoryObject::TYPE_BYTE:
+        {
+            auto next_object = GetMemoryObject(where + 1);
+
+            if(next_object->type != MemoryObject::TYPE_UNDEFINED && next_object->type != MemoryObject::TYPE_BYTE) {
+                cout << "[MemoryRegion::MarkMemoryAsWords] address 0x" << (where.address + i) << "+1 cannot be converted to a word (currently type " << memory_object->type << ")" << endl;
+                return;
+            }
+
+            break;
+        }
+
+        default:
+            cout << "[MemoryRegion::MarkMemoryAsWords] address 0x" << (where.address + i) << " cannot be converted to a word (currently type " << memory_object->type << ")" << endl;
+            return;
+        }
+    }
+
+    // OK, convert them
+    for(u32 i = 0; i < byte_count; i += 2) {
+        auto memory_object = GetMemoryObject(where);
+        if(memory_object->type == MemoryObject::TYPE_WORD) continue;
+
+        switch(memory_object->type) {
+        case MemoryObject::TYPE_UNDEFINED:
+        case MemoryObject::TYPE_BYTE:
+        {
+            auto next_object = GetMemoryObject(where + 1);
+
+            RemoveMemoryObjectFromTree(next_object);
+
+            // change the current object to a word
+            memory_object->type = MemoryObject::TYPE_WORD;
+            memory_object->hval = (u16)memory_object->bval | ((u16)next_object->bval << 8);
+
+            // listings may have changed
+            _UpdateMemoryObject(memory_object, ConvertToRegionOffset(where.address));
+            break;
+        }
+
+        default:
+            cout << "[MemoryRegion::MarkMemoryAsWords] address 0x" << (where.address + i) << " cannot be converted to a word (currently type " << memory_object->type << ")" << endl;
+            return;
+        }
+    }
+}
+
 u32 MemoryRegion::GetListingIndexByAddress(GlobalMemoryLocation const& where)
 {
     // Get the MemoryObject at where
@@ -309,11 +377,8 @@ u32 MemoryRegion::GetListingIndexByAddress(GlobalMemoryLocation const& where)
     return listing_item_index;
 }
 
-void MemoryRegion::UpdateMemoryObject(GlobalMemoryLocation const& where)
+void MemoryRegion::_UpdateMemoryObject(shared_ptr<MemoryObject>& memory_object, u32 region_offset)
 {
-    u32 region_offset = ConvertToRegionOffset(where.address);
-    auto memory_object = object_refs[region_offset];
-
     // recreate the listing items for this one object
     RecreateListingItemsForMemoryObject(memory_object, region_offset);
 
@@ -321,11 +386,41 @@ void MemoryRegion::UpdateMemoryObject(GlobalMemoryLocation const& where)
     auto current_node = memory_object->parent.lock();
     current_node->listing_item_count = memory_object->listing_items.size(); // update the is_object node
     current_node = current_node->parent.lock();
-    while(current_node) {
-        current_node->listing_item_count = current_node->left->listing_item_count + current_node->right->listing_item_count;
-        current_node = current_node->parent.lock();
-    }
+    _SumListingItemCountsUp(current_node);
 }
+
+void MemoryRegion::UpdateMemoryObject(GlobalMemoryLocation const& where)
+{
+    u32 region_offset = ConvertToRegionOffset(where.address);
+    auto memory_object = object_refs[region_offset];
+    _UpdateMemoryObject(memory_object, region_offset);
+}
+
+void MemoryRegion::RemoveMemoryObjectFromTree(shared_ptr<MemoryObject>& memory_object)
+{
+    // propagate up the tree the changes
+    auto object_node = memory_object->parent.lock();
+    memory_object->parent.reset();
+
+    // clear the pointer to the memory_object
+    object_node->obj = nullptr;
+
+    // clear the pointer to the is_object node
+    auto current_node = object_node->parent.lock();
+    if(current_node->left == object_node) {
+        current_node->left = nullptr;
+    } else {
+        current_node->right = nullptr;
+    }
+
+    if(!current_node->left && !current_node->right) { // uh-oh, need to remove this branch entirely
+        assert(false); //TODO
+    }
+
+    // update the listing item count
+    _SumListingItemCountsUp(current_node);
+}
+
 
 void MemoryRegion::CreateLabel(GlobalMemoryLocation const& where, string const& label)
 {
@@ -410,9 +505,9 @@ MemoryObjectTreeNode::iterator& MemoryObjectTreeNode::iterator::operator++()
     // increment the region_offset by the size of the object
     region_offset += memory_object->GetSize();
 
-    // go up until we're the left node
+    // go up until we're the left node and there's a right one to go down
     while(current_node) {
-        if(current_node->left == last_node) break;
+        if(current_node->left == last_node && current_node->right) break;
         last_node = current_node;
         current_node = current_node->parent.lock();
     }
@@ -420,12 +515,21 @@ MemoryObjectTreeNode::iterator& MemoryObjectTreeNode::iterator::operator++()
     // only happens when we are coming up the right side of the tree
     if(!current_node) { // ran out of nodes
         memory_object = nullptr;
+        //cout << "ran out of objects, hopefully you aren't trying to show more, current region_offset = 0x" << hex << region_offset << endl;
     } else {
         // go right one
         current_node = current_node->right;
 
-        // and go all the way down the left side of the tree
-        while(current_node->left) current_node = current_node->left;
+        do {
+            // and go all the way down the left side of the tree
+            while(current_node->left) current_node = current_node->left;
+
+            // if we get to a null left child, go right one and repeat going left
+            if(!current_node->is_object) {
+                assert(current_node->right); // should never happen, one child should always be non-null, otherwise there was a bug in RemoveMemoryObjectFromTree
+                current_node = current_node->right;
+            }
+        } while(!current_node->is_object);
 
         // now we should be at a object node
         assert(current_node->is_object);
