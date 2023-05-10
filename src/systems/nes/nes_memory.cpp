@@ -90,6 +90,12 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
     // but in the future, we need to count up labels, comments, etc
     obj->listing_items.clear();
 
+    // create a blank line inbetween other memory and labels, unless at the start of the bank
+    // TODO or if it's a local label
+    if(obj->labels.size() && region_offset != 0) {
+        obj->listing_items.push_back(make_shared<ListingItemBlankLine>());
+    }
+
     for(auto& label : obj->labels) {
         obj->listing_items.push_back(make_shared<ListingItemLabel>(label));
     }

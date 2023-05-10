@@ -37,6 +37,25 @@ void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryL
     }
 }
 
+void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
+{
+    ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
+    if(flags) {
+        table_flags &= ~ImGuiTableFlags_NoBordersInBody;
+        table_flags |= ImGuiTableFlags_BordersInnerV;
+    }
+
+    if(ImGui::BeginTable("listing_item_blank", 1, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+        ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableNextRow();
+
+        ImGui::TableNextColumn();
+        ImGui::Text("");
+
+        ImGui::EndTable();
+    }
+}
+
 void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;

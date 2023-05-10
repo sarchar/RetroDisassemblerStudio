@@ -35,6 +35,16 @@ public:
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
 };
 
+class ListingItemBlankLine : public ListingItem {
+public:
+    ListingItemBlankLine()
+        : ListingItem()      
+    { }
+    virtual ~ListingItemBlankLine() { }
+
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
+};
+
 class ListingItemData : public ListingItem {
 public:
     ListingItemData(std::weak_ptr<MemoryRegion> _memory_region, u32 _internal_offset)

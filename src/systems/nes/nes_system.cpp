@@ -336,6 +336,7 @@ int System::DisassemblyThread()
                     stringstream ss;
                     ss << "L_" << hex << setw(2) << setfill('0') << uppercase << newloc.prg_rom_bank << setw(4) << newloc.address;
                     string label_str = ss.str();
+
                     if(auto label = CreateLabel(newloc, label_str)) {
                         auto expr         = make_shared<Expression>();
                         auto name         = expr->GetNodeCreator()->CreateName(label->GetString());
