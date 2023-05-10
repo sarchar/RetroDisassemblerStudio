@@ -278,7 +278,6 @@ int System::DisassemblyThread()
         bool disassembling_inner = true;
         while(disassembling_inner) {
             auto memory_region = GetMemoryRegion(loc);
-
             auto memory_object = memory_region->GetMemoryObject(loc);
 
             // bail on this disassemble if we already know the location is code
@@ -327,8 +326,9 @@ int System::DisassemblyThread()
                     locations.push_back(newloc);
                     //cout << "[NES::System::DisassemblyThread] continuing disassembling at " << newloc << endl;
 
-                    // create a label at that address
-                    {
+                    // create a label at that address if there isn't one yet
+                    auto destination_object = memory_region->GetMemoryObject(newloc);
+                    if(destination_object->labels.size() == 0) {
                         stringstream ss;
                         ss << "L_" << hex << setw(2) << setfill('0') << uppercase << newloc.prg_rom_bank << setw(4) << newloc.address;
                         CreateLabel(newloc, ss.str());
