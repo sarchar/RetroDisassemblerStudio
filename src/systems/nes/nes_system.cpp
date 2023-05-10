@@ -277,7 +277,7 @@ int System::DisassemblyThread()
 
             // bail on this disassemble if we already know the location is code
             if(memory_object->type == MemoryObject::TYPE_CODE) {
-                cout << "[NES::System::DisassemblyThread] address " << loc << " is already code" << endl;
+                //cout << "[NES::System::DisassemblyThread] address " << loc << " is already code" << endl;
                 break;
             }
 
@@ -319,7 +319,7 @@ int System::DisassemblyThread()
                     GlobalMemoryLocation newloc(loc);
                     newloc.address = target;
                     locations.push_back(newloc);
-                    cout << "[NES::System::DisassemblyThread] continuing disassembling at " << newloc << endl;
+                    //cout << "[NES::System::DisassemblyThread] continuing disassembling at " << newloc << endl;
 
                     // create a label at that address
                     {
