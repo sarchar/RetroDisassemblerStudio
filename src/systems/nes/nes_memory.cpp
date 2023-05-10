@@ -9,6 +9,7 @@
 
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_expressions.h"
+#include "systems/nes/nes_label.h"
 #include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_system.h"
 
@@ -91,10 +92,6 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
 
     for(auto& label : obj->labels) {
         obj->listing_items.push_back(make_shared<ListingItemLabel>(label));
-        //    stringstream ss;
-        //    ss << "L_" << hex << setw(4) << uppercase << setfill('0') << region_offset;
-        //    obj->listing_items.push_back(make_shared<ListingItemLabel>(ss.str()));
-        //}
     }
 
     switch(obj->type) {
@@ -113,9 +110,9 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
         break;
     }
 
-    //!if(i == 0x3FFC) {
-    //!    obj->listing_items.push_back(make_shared<ListingItemLabel>("    ; this is a comment"));
-    //!}
+    if(region_offset == 0) {
+        obj->comments.eol = make_shared<string>("this is the first comment of the bank");
+    }
 }
 
 void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_node, u32 region_offset, u8* data, int count)
@@ -411,8 +408,10 @@ void MemoryRegion::RemoveMemoryObjectFromTree(shared_ptr<MemoryObject>& memory_o
 }
 
 
-void MemoryRegion::CreateLabel(GlobalMemoryLocation const& where, string const& label)
+//void MemoryRegion::CreateLabel(GlobalMemoryLocation const& where, string const& label)
+void MemoryRegion::ApplyLabel(shared_ptr<Label>& label)
 {
+    auto where = label->GetMemoryLocation();
     u32 region_offset = ConvertToRegionOffset(where.address);
     auto memory_object = object_refs[region_offset];
 
@@ -638,7 +637,7 @@ string MemoryObject::FormatInstructionField(shared_ptr<Disassembler> disassemble
     return ss.str();
 }
 
-string MemoryObject::FormatDataField(u32 /* internal_offset */, shared_ptr<Disassembler> disassembler)
+string MemoryObject::FormatOperandField(u32 /* internal_offset */, shared_ptr<Disassembler> disassembler)
 {
     stringstream ss;
 

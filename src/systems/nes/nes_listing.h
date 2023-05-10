@@ -5,6 +5,7 @@
 
 namespace NES {
 
+class Label;
 class System;
 class ProgramRomBank;
 
@@ -63,15 +64,15 @@ private:
 
 class ListingItemLabel : public ListingItem {
 public:
-    ListingItemLabel(std::string const& _name)
-        : ListingItem(), label_name(_name) 
+    ListingItemLabel(std::shared_ptr<Label> const& _label)
+        : ListingItem(), label(_label) 
     { }
     virtual ~ListingItemLabel() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
 
 private:
-    std::string label_name;
+    std::shared_ptr<Label> const& label;
 };
 
 }

@@ -13,6 +13,7 @@ namespace NES {
 
 class Disassembler;
 class Expression;
+class Label;
 class ListingItem;
 class System;
 
@@ -137,10 +138,14 @@ struct MemoryObject {
 
     std::weak_ptr<MemoryObjectTreeNode> parent;
 
-    std::vector<std::string> labels;
+    std::vector<std::shared_ptr<Label>> labels;
     std::vector<std::shared_ptr<ListingItem>> listing_items;
 
     std::shared_ptr<Expression> operand_expression;
+
+    struct {
+        std::shared_ptr<std::string> eol;
+    } comments;
 
     union {
         u8  bval;
@@ -162,7 +167,7 @@ struct MemoryObject {
     void Read(u8*, int);
 
     std::string FormatInstructionField(std::shared_ptr<Disassembler> disassembler = nullptr);
-    std::string FormatDataField(u32, std::shared_ptr<Disassembler> disassembler = nullptr);
+    std::string FormatOperandField(u32, std::shared_ptr<Disassembler> disassembler = nullptr);
 };
 
 // MemoryRegion represents a region of memory on the system
@@ -200,7 +205,7 @@ public:
     virtual u8  ReadByte(GlobalMemoryLocation const&);
 
     // Labels
-    void CreateLabel(GlobalMemoryLocation const&, std::string const&);
+    void ApplyLabel(std::shared_ptr<Label>&);
 
     // Data
     bool MarkMemoryAsUndefined(GlobalMemoryLocation const& where);

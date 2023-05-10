@@ -9,6 +9,7 @@
 #include "systems/nes/nes_cartridge.h"
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_expressions.h"
+#include "systems/nes/nes_label.h"
 #include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
@@ -24,7 +25,7 @@ System::System()
 {
     disassembler = make_shared<Disassembler>();
 
-    user_label_created  = make_shared<user_label_created_t>();
+    label_created = make_shared<label_created_t>();
     disassembly_stopped = make_shared<disassembly_stopped_t>();
 }
 
@@ -241,23 +242,25 @@ void System::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count
     memory_region->MarkMemoryAsWords(where, byte_count);
 }
 
-void System::CreateLabel(GlobalMemoryLocation const& where, string const& label, bool was_user_created)
+shared_ptr<Label> System::CreateLabel(GlobalMemoryLocation const& where, string const& label_str, bool was_user_created)
 {
+    // lookup the label to see 
+    auto other = label_database[label_str];
+    if(other) {
+        cout << "[System::CreateLabel] label '" << label_str << "' already exists and points to " << where << endl;
+        return nullptr;
+    }
+
+    auto label = make_shared<Label>(where, label_str);
+    label_database[label_str] = label;
+
     auto memory_region = GetMemoryRegion(where);
-    memory_region->CreateLabel(where, label);
+    memory_region->ApplyLabel(label);
 
     // notify the system of new labels
-    if(was_user_created) user_label_created->emit(where, label);
+    label_created->emit(label, was_user_created);
 
-//!    LabelList ll = label_database[where];
-//!    if(!ll) {
-//!        ll = make_shared<LabelList>();
-//!        label_database[where] = ll;
-//!    }
-//!
-//!    ll->append(label);
-//!
-//!    cout << "defined label " << label << " at " << where << endl;
+    return label;
 }
 
 void System::InitDisassembly(GlobalMemoryLocation const& where)
@@ -329,15 +332,13 @@ int System::DisassemblyThread()
 
                     // create a label at that address if there isn't one yet
                     auto destination_object = memory_region->GetMemoryObject(newloc);
-                    if(destination_object->labels.size() == 0) {
-                        stringstream ss;
-                        ss << "L_" << hex << setw(2) << setfill('0') << uppercase << newloc.prg_rom_bank << setw(4) << newloc.address;
-                        string label = ss.str();
-                        CreateLabel(newloc, label);
 
+                    stringstream ss;
+                    ss << "L_" << hex << setw(2) << setfill('0') << uppercase << newloc.prg_rom_bank << setw(4) << newloc.address;
+                    string label_str = ss.str();
+                    if(auto label = CreateLabel(newloc, label_str)) {
                         auto expr         = make_shared<Expression>();
-                        auto node_creator = expr->GetNodeCreator();
-                        auto name         = node_creator->CreateName(label);
+                        auto name         = expr->GetNodeCreator()->CreateName(label->GetString());
                         expr->Set(name);
 
                         // set the expression for memory object at current_selection. it'll show up immediately

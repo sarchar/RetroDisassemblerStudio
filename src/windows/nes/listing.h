@@ -10,6 +10,7 @@
 namespace NES {
 
 class GlobalMemoryLocation;
+class Label;
 
 class Listing : public BaseWindow {
 public:
@@ -37,7 +38,7 @@ private:
     void ClearForwardHistory();
     void CheckInput();
 
-    void UserLabelCreated(GlobalMemoryLocation const&, std::string const&);
+    void LabelCreated(std::shared_ptr<Label> const&, bool);
     void DisassemblyStopped(GlobalMemoryLocation const&);
 
 private:
@@ -52,7 +53,7 @@ private:
     char   new_label_buffer[64] = "";
 
     // signal connections
-    System::user_label_created_t::signal_connection_t  user_label_created_connection;;
+    System::label_created_t::signal_connection_t label_created_connection;;
     System::disassembly_stopped_t::signal_connection_t disassembly_stopped_connection;
 
 public:

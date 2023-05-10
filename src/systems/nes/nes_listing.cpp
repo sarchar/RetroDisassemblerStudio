@@ -8,6 +8,7 @@
 #include "imgui_internal.h"
 
 #include "systems/nes/nes_disasm.h"
+#include "systems/nes/nes_label.h"
 #include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
@@ -44,11 +45,12 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         table_flags |= ImGuiTableFlags_BordersInnerV;
     }
 
-    if(ImGui::BeginTable("listing_item_code", 4, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+    if(ImGui::BeginTable("listing_item_code", 5, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
         ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableNextRow();
     
         ImGui::TableNextColumn();
@@ -72,7 +74,12 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
             //     $07
             //
             ImGui::TableNextColumn();
-            ImGui::Text("%s", memory_object->FormatDataField(internal_offset).c_str());
+            ImGui::Text("%s", memory_object->FormatOperandField(internal_offset).c_str());
+
+            ImGui::TableNextColumn();
+            if(auto eolc = memory_object->comments.eol) {
+                ImGui::Text("; %s", eolc->c_str()); // TODO multiline
+            }
         }
 
         ImGui::EndTable();
@@ -93,11 +100,12 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
 
         u8 op = memory_object->code.opcode;
         u8 sz = disassembler->GetInstructionSize(op);
-        if(ImGui::BeginTable("listing_item_code", 4, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+        if(ImGui::BeginTable("listing_item_code", 5, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
             ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthFixed);
 
             ImGui::TableNextRow();
         
@@ -115,7 +123,12 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
             if(sz == 1) {
                 ImGui::Text("");
             } else {
-                ImGui::Text("%s", memory_object->FormatDataField(0, disassembler).c_str());
+                ImGui::Text("%s", memory_object->FormatOperandField(0, disassembler).c_str());
+            }
+
+            ImGui::TableNextColumn();
+            if(auto eolc = memory_object->comments.eol) {
+                ImGui::Text("; %s", eolc->c_str()); // TODO multiline
             }
         }
 
@@ -141,7 +154,7 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
         ImGui::Text("        ");
 
         ImGui::TableNextColumn();
-        ImGui::Text("%s:", label_name.c_str());
+        ImGui::Text("%s:", label->GetString().c_str());
     
         ImGui::EndTable();
     }

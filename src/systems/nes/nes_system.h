@@ -16,20 +16,19 @@ namespace NES {
 
 class Cartridge;
 class Disassembler;
+class Label;
 class ProgramRomBank;
 
 class System : public ::BaseSystem {
 public:
-    typedef std::vector<std::string> LabelList;
-
     System();
     virtual ~System();
 
     System::Information const* GetInformation();
 
     // Signals
-    typedef signal<std::function<void(GlobalMemoryLocation const&, std::string const&)>> user_label_created_t;
-    std::shared_ptr<user_label_created_t> user_label_created;
+    typedef signal<std::function<void(std::shared_ptr<Label> const&, bool)>> label_created_t;
+    std::shared_ptr<label_created_t> label_created;
 
     typedef signal<std::function<void(GlobalMemoryLocation const&)>> disassembly_stopped_t;
     std::shared_ptr<disassembly_stopped_t> disassembly_stopped;
@@ -61,7 +60,12 @@ public:
     void GetListingItems(GlobalMemoryLocation const&, std::vector<std::shared_ptr<NES::ListingItem>>& out);
 
     // Labels
-    void CreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
+    std::shared_ptr<Label> FindLabel(std::string const& label_str) {
+        if(label_database.contains(label_str)) return label_database[label_str];
+        return nullptr;
+    }
+    
+    std::shared_ptr<Label> CreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
 
     // Disassembly
     std::shared_ptr<Disassembler> GetDisassembler() { return disassembler; }
@@ -78,7 +82,8 @@ private:
     std::string rom_file_path_name;
 
     // label database
-    //std::unordered_map<GlobalMemoryLocation, std::shared_ptr<LabelList>, GlobalMemoryLocation::HashFunction> label_database = {};
+    std::unordered_map<std::string, std::shared_ptr<Label>> label_database = {};
+    //!std::unordered_map<GlobalMemoryLocation, std::shared_ptr<LabelList>, GlobalMemoryLocation::HashFunction> label_database = {};
 
     bool disassembling;
     GlobalMemoryLocation disassembly_address;

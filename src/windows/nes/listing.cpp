@@ -14,6 +14,7 @@
 #include "windows/nes/listing.h"
 #include "systems/nes/nes_cartridge.h"
 #include "systems/nes/nes_expressions.h"
+#include "systems/nes/nes_label.h"
 #include "systems/nes/nes_system.h"
 
 #define JUMP_TO_SELECTION_START_VALUE 3
@@ -42,8 +43,8 @@ Listing::Listing()
         current_system = system;
 
         // after certain events, force the listing window back to where the cursor was
-        user_label_created_connection = 
-            system->user_label_created->connect(std::bind(&Listing::UserLabelCreated, this, placeholders::_1, placeholders::_2));
+        label_created_connection = 
+            system->label_created->connect(std::bind(&Listing::LabelCreated, this, placeholders::_1, placeholders::_2));
 
         disassembly_stopped_connection = 
             system->disassembly_stopped->connect(std::bind(&Listing::DisassemblyStopped, this, placeholders::_1));
@@ -205,16 +206,15 @@ void Listing::CheckInput()
             {
                 stringstream ss;
                 ss << "L_" << hex << setw(2) << setfill('0') << uppercase << label_address.prg_rom_bank << setw(4) << label_address.address;
-                string label = ss.str();
-                system->CreateLabel(label_address, label);
+                string label_str = ss.str();
+                if(auto label = system->CreateLabel(label_address, label_str)) {
+                    auto expr = make_shared<Expression>();
+                    auto name = expr->GetNodeCreator()->CreateName(label->GetString());
+                    expr->Set(name);
 
-                auto expr         = make_shared<Expression>();
-                auto node_creator = expr->GetNodeCreator();
-                auto name         = node_creator->CreateName(label);
-                expr->Set(name);
-
-                // set the expression for memory object at current_selection. it'll show up immediately
-                memory_object->operand_expression = expr;
+                    // set the expression for memory object at current_selection. it'll show up immediately
+                    memory_object->operand_expression = expr;
+                }
             }
 
 
@@ -363,9 +363,10 @@ void Listing::RenderContent()
     }
 }
 
-void Listing::UserLabelCreated(GlobalMemoryLocation const& where, std::string const& /* label */)
+void Listing::LabelCreated(shared_ptr<Label> const& label, bool was_user_created)
 {
-    current_selection = where;
+    if(!was_user_created) return;
+    current_selection = label->GetMemoryLocation();
     jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
 }
 
