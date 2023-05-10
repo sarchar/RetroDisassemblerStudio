@@ -19,6 +19,8 @@ public:
     virtual char const * const GetWindowClass() { return Listing::GetWindowClassStatic(); }
     static char const * const GetWindowClassStatic() { return "NES::Listing"; }
 
+    void GoToAddress(u32);
+
     // signals
     // listing_command is used to trigger events that are not immediate - things like opening popups or asking the user
     // for information. other things the listing window does that are immediate (like changing memory object types) are
@@ -39,6 +41,7 @@ private:
     void DisassemblyStopped(GlobalMemoryLocation const&);
 
 private:
+    std::weak_ptr<System>            current_system;
     GlobalMemoryLocation             current_selection;
     std::stack<GlobalMemoryLocation> selection_history_back;
     std::stack<GlobalMemoryLocation> selection_history_forward;
@@ -51,6 +54,7 @@ private:
     // signal connections
     System::user_label_created_t::signal_connection_t  user_label_created_connection;;
     System::disassembly_stopped_t::signal_connection_t disassembly_stopped_connection;
+
 public:
     static std::shared_ptr<Listing> CreateWindow();
 };

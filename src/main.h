@@ -68,6 +68,7 @@ private:
     void RenderPopups();
     void CreateLabelPopup();
     void DisassemblyPopup();
+    void GoToAddressPopup();
 
     bool request_exit;
     bool show_imgui_demo;
@@ -96,6 +97,13 @@ private:
             std::string title = "Disassembling...";
             bool        show  = false;
         } disassembly;
+
+        struct {
+            std::shared_ptr<BaseWindow> listing;
+            std::string title = "Go to address...";
+            char        buf[64];
+            bool        show = false;
+        } goto_address;
     } popups;
 
 private:

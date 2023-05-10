@@ -506,6 +506,7 @@ void MyApp::RenderPopups()
 {
     CreateLabelPopup();
     DisassemblyPopup();
+    GoToAddressPopup();
 
     if(ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         ImGui::CloseCurrentPopup();
@@ -612,6 +613,9 @@ void MyApp::ListingWindowCommand(shared_ptr<BaseWindow> const& wnd, string const
                 system->InitDisassembly(where);
                 popups.disassembly.show = true;
             }
+        } else if(cmd == "GoToAddress") {
+            popups.goto_address.listing = wnd;
+            popups.goto_address.show = true;
         }
     }
 }
@@ -699,6 +703,57 @@ void MyApp::DisassemblyPopup()
 
     ImGui::EndPopup();
 }
+
+void MyApp::GoToAddressPopup() 
+{
+    auto title = popups.goto_address.title.c_str();
+
+    // TODO this should be generic and we can use current_system->DisassemblyThread
+    auto system = dynamic_pointer_cast<NES::System>(current_system);
+    if(!system) return;
+
+    if(!ImGui::IsPopupOpen(title) && popups.goto_address.show) {
+        popups.goto_address.show = false;
+
+        popups.goto_address.buf[0] = '\0';
+
+        ImGui::OpenPopup(title);
+    }
+
+    // center this window
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    // return if the dialog isn't open
+    if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) return;
+
+    // focus on the text input if nothing else is selected
+    if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
+
+    // if either Enter is pressed or OK clicked, create the label
+    // TODO allow expressions
+    ImVec2 button_size(ImGui::GetFontSize() * 7.0f, 0.0f);
+    if(ImGui::InputText("Address (hex)", popups.goto_address.buf, sizeof(popups.goto_address.buf), 
+                ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CharsHexadecimal) || ImGui::Button("OK", button_size)) {
+
+        // parse the address given
+        stringstream ss;
+        ss << hex << popups.goto_address.buf;
+        u32 address;
+        ss >> address;
+
+        // let Listing do the heavy work of interpreting the address and which bank it would be in
+        // call listing directly rather than use a signal, since it's not really a global event -- it's specific to the
+        // listing window that requested the goto address
+        shared_ptr<NES::Listing> listing = dynamic_pointer_cast<NES::Listing>(popups.goto_address.listing);
+        if(listing) listing->GoToAddress(address);
+
+        ImGui::CloseCurrentPopup(); 
+    }
+
+    ImGui::EndPopup();
+}
+
 
 
 int main(int argc, char* argv[])

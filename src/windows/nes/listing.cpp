@@ -37,6 +37,9 @@ Listing::Listing()
 
     shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
     if(system) {
+        // grab a weak_ptr so we don't have to continually use dynamic_pointer_cast
+        current_system = system;
+
         // after certain events, force the listing window back to where the cursor was
         user_label_created_connection = 
             system->user_label_created->connect(std::bind(&Listing::UserLabelCreated, this, placeholders::_1, placeholders::_2));
@@ -58,6 +61,42 @@ Listing::~Listing()
 {
 }
 
+void Listing::GoToAddress(u32 address)
+{
+    auto system = current_system.lock();
+    if(!system) return;
+
+    auto memory_region = system->GetMemoryRegion(current_selection);
+
+    if(address >= memory_region->GetBaseAddress() && address < memory_region->GetEndAddress()) {
+        selection_history_back.push(current_selection); // save the current location to the history
+        ClearForwardHistory();                          // and clear the forward history
+        
+        current_selection.address = address;
+    } else {
+        // destination is not in this memory region, see if we can find it
+        GlobalMemoryLocation guessed_address(current_selection);
+        guessed_address.address = address;
+
+        vector<u16> possible_banks;
+        system->GetBanksForAddress(guessed_address, possible_banks);
+
+        if(possible_banks.size() == 1) {
+            guessed_address.prg_rom_bank = possible_banks[0];
+            memory_region = system->GetMemoryRegion(guessed_address);
+            if(memory_region) {
+                selection_history_back.push(current_selection); // save the current location to the history
+                ClearForwardHistory();                          // and clear the forward history
+                current_selection = guessed_address;
+            }
+        } else {
+            assert(false); // popup dialog and wait for selection of which bank to go to
+        }
+    }
+
+    jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+}
+
 void Listing::UpdateContent(double deltaTime) 
 {
 }
@@ -70,6 +109,9 @@ void Listing::ClearForwardHistory()
 void Listing::CheckInput()
 {
     ImGuiIO& io = ImGui::GetIO();
+
+    auto system = current_system.lock();
+    if(!system) return;
 
     // handle back button
     if(ImGui::IsKeyPressed(ImGuiKey_MouseX1) && selection_history_back.size()) {
@@ -90,7 +132,6 @@ void Listing::CheckInput()
     for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
         ImWchar c = io.InputQueueCharacters[i]; 
 
-        shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
         // TODO really should be using signals and emit to broadcast these messages
         switch(c) {
         case L'j': // move current_selection down
@@ -111,6 +152,10 @@ void Listing::CheckInput()
 
         case L'd': // start disassembly
             listing_command->emit(shared_from_this(), "DisassemblyRequested", current_selection);
+            break;
+
+        case L'g': // go to address
+            listing_command->emit(shared_from_this(), "GoToAddress", current_selection);
             break;
 
         case L'r': // convert operand to reference
@@ -159,46 +204,23 @@ void Listing::CheckInput()
             break;
         }
 
-        case L'F': // very hacky (F)ollow to address button
+        case L'F': // very hacky (F)ollow address button
         {
             // TODO this should be way more complicated, parsing operand types and all
             auto memory_region = system->GetMemoryRegion(current_selection);
-            auto memory_object = memory_region->GetMemoryObject(current_selection);
-            u16 dest = 0;
-            if(memory_object->type == MemoryObject::TYPE_CODE) {
-                dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
-            } else if(memory_object->type == MemoryObject::TYPE_WORD) {
-                dest = memory_object->hval;
-            }
-
-            if(dest >= memory_region->GetBaseAddress() && dest < memory_region->GetEndAddress()) {
-                selection_history_back.push(current_selection); // save the current location to the history
-                ClearForwardHistory();                          // and clear the forward history
-                
-                current_selection.address = dest;
-                jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
-            } else {
-                // destination is not in this memory region, see if we can find it
-                GlobalMemoryLocation guessed_address(current_selection);
-                guessed_address.address = dest;
-
-                vector<u16> possible_banks;
-                system->GetBanksForAddress(guessed_address, possible_banks);
-
-                if(possible_banks.size() == 1) {
-                    guessed_address.prg_rom_bank = possible_banks[0];
-                    memory_region = system->GetMemoryRegion(guessed_address);
-                    if(memory_region) {
-                        selection_history_back.push(current_selection); // save the current location to the history
-                        ClearForwardHistory();                          // and clear the forward history
-                        current_selection = guessed_address;
-                        jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+            if(memory_region) {
+                auto memory_object = memory_region->GetMemoryObject(current_selection);
+                if(memory_object) {
+                    u16 dest = 0;
+                    if(memory_object->type == MemoryObject::TYPE_CODE) {
+                        dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
+                    } else if(memory_object->type == MemoryObject::TYPE_WORD) {
+                        dest = memory_object->hval;
                     }
-                } else {
-                    assert(false); // popup dialog and wait for selection of which bank to go to
+
+                    GoToAddress(dest);
                 }
             }
-
             break;
         }
 
@@ -225,7 +247,7 @@ void Listing::PreRenderContent()
 void Listing::RenderContent() 
 {
     // All access goes through the system
-    shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
+    auto system = current_system.lock();
     if(!system) return;
 
     {
