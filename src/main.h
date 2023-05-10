@@ -4,10 +4,12 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "application.h"
 #include "signals.h"
+#include "systems/nes/nes_memory.h"
 #include "systems/system.h"
 #include "windows/base_window.h"
 
@@ -60,6 +62,13 @@ private:
 
     void OpenROMInfosPane();
 
+    void ListingWindowCommand(std::shared_ptr<BaseWindow> const&, std::string const&, NES::GlobalMemoryLocation const&);
+
+    // Popups. Each of these are called every frame
+    void RenderPopups();
+    void CreateLabelPopup();
+    void DisassemblyPopup();
+
     bool request_exit;
     bool show_imgui_demo;
 
@@ -72,6 +81,22 @@ private:
     // Managed child windows
     std::vector<std::shared_ptr<BaseWindow>> managed_windows;
     std::vector<std::shared_ptr<BaseWindow>> queued_windows_for_delete;
+
+    // Global popups
+    struct {
+        struct {
+            std::string title = "Create new label...";
+            bool        show  = false;
+            char        buf[64];
+            std::shared_ptr<void> uhg; // TODO need a base class for GlobalMemoryLocation
+        } create_label;
+
+        struct {
+            std::shared_ptr<std::thread> thread = nullptr;
+            std::string title = "Disassembling...";
+            bool        show  = false;
+        } disassembly;
+    } popups;
 
 private:
     std::shared_ptr<BaseSystem> current_system;

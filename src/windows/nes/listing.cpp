@@ -31,11 +31,24 @@ Listing::Listing()
 {
     SetTitle("Listing");
     SetNav(false); // dsisable navigation
+    
+    // create internal signals
+    listing_command = make_shared<listing_command_t>();
 
     shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
     if(system) {
+        // after certain events, force the listing window back to where the cursor was
+        user_label_created_connection = 
+            system->user_label_created->connect(std::bind(&Listing::UserLabelCreated, this, placeholders::_1, placeholders::_2));
+
+        disassembly_stopped_connection = 
+            system->disassembly_stopped->connect(std::bind(&Listing::DisassemblyStopped, this, placeholders::_1));
+
+        // initialize the first selection to the entry point of the program
+        // TODO save last location as well as location history?
         system->GetEntryPoint(&selection);
-        jump_to_selection = JUMP_TO_SELECTION_START_VALUE; // TODO this is stupid, I wish I could scroll within one or two frames (given we have to calculate the row sizes at least once)
+        jump_to_selection = JUMP_TO_SELECTION_START_VALUE; // TODO this is stupid, I wish I could scroll within one or 
+                                                           // two frames (given we have to calculate the row sizes at least once)
     }
 
     cout << "[NES::Listing] Program entry point at " << selection << endl;
@@ -65,22 +78,28 @@ void Listing::CheckInput()
         shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
         // TODO really should be using signals and emit to broadcast these messages
         switch(c) {
-        case L'w':
-            // mark data as a word
+        case L'j': // move selection down
+            selection = selection + 1;
+            break;
+
+        case L'k': // move selection up
+            selection = selection + -1;
+            break;
+
+        case L'w': // mark data as a word
             if(system) system->MarkMemoryAsWords(selection, 2);
             break;
 
-        case L'd':
-            // start disassembly
-            if(system) {
-                system->BeginDisassembly(selection);
-                show_disassembling_popup = true;
-            }
+        case L'l': // create a label
+            listing_command->emit(shared_from_this(), "CreateLabel", selection);
             break;
 
-        case L'r':
+        case L'd': // start disassembly
+            listing_command->emit(shared_from_this(), "DisassemblyRequested", selection);
+            break;
+
+        case L'r': // convert operand to reference
         {
-            // convert operand to reference
             // TODO this will be a larger task in the future
             auto memory_region = system->GetMemoryRegion(selection);
             auto memory_object = memory_region->GetMemoryObject(selection);
@@ -99,7 +118,6 @@ void Listing::CheckInput()
             } else {
                 assert(false);
             }
-
 
             GlobalMemoryLocation label_address(selection);
             label_address.address = dest;
@@ -126,20 +144,7 @@ void Listing::CheckInput()
             break;
         }
 
-        case L'l':
-            // create a new label at the current address
-            create_new_label = true;
-            break;
-
-        case L'j':
-            selection = selection + 1;
-            break;
-
-        case L'k':
-            selection = selection + -1;
-            break;
-
-        case L'G': // very hacky (G)o to address button
+        case L'F': // very hacky (F)ollow to address button
         {
             // TODO this should be way more complicated, parsing operand types and all
             auto memory_region = system->GetMemoryRegion(selection);
@@ -297,91 +302,21 @@ void Listing::RenderContent()
     ImGui::PopStyleVar(2);
 
     // only scan input if the window is receiving focus
-    if(IsFocused() && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+    if(IsFocused()) {
         CheckInput();
     }
-
-    // Render popups
-    NewLabelPopup();
-    DisassemblyPopup();
 }
 
-void Listing::NewLabelPopup() 
+void Listing::UserLabelCreated(GlobalMemoryLocation const& where, std::string const& /* label */)
 {
-    static char title[] = "Create new label...";
-
-    if(!ImGui::IsPopupOpen(title) && create_new_label) {
-        create_new_label = false;
-        new_label_buffer[0] = '\0';
-
-        ImGui::OpenPopup(title);
-    }
-
-    // center this window
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    bool ret = false;
-    if (ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
-        // focus on the text input if nothing else is selected
-        if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
-
-        ImVec2 button_size(ImGui::GetFontSize() * 7.0f, 0.0f);
-        if(ImGui::InputText("Label", new_label_buffer, sizeof(new_label_buffer), ImGuiInputTextFlags_EnterReturnsTrue)
-                || ImGui::Button("OK", button_size)) {
-            ret = true;
-            ImGui::CloseCurrentPopup(); 
-        }
-
-        if(ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-            ImGui::CloseCurrentPopup();
-        }
-
-        ImGui::EndPopup();
-    }
-
-    if(ret) {
-        // create the label
-        string lstr(new_label_buffer);
-
-        shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
-        if(!system) return;
-        system->CreateLabel(selection, lstr);
-    }
+    selection = where;
+    jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
 }
 
-void Listing::DisassemblyPopup()
+void Listing::DisassemblyStopped(GlobalMemoryLocation const& start_location)
 {
-    static char title[] = "Disassembling...";
-
-    if(!ImGui::IsPopupOpen(title) && show_disassembling_popup) {
-        show_disassembling_popup = false;
-        ImGui::OpenPopup(title);
-
-        shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
-        disassembly_thread = make_unique<std::thread>(std::bind(&System::DisassemblyThread, system));
-        cout << "[Listing::DisassemblyPopup] started disassembly thread" << endl;
-    }
-
-    // center this window
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    bool ret = false;
-    if (ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
-        ImGui::Text("Disassembling...");
-
-        shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
-        if(!system || !system->IsDisassembling()) {
-            disassembly_thread->join();
-            disassembly_thread = nullptr;
-            cout << "[Listing::DisassemblyPopup] disassembly thread exited" << endl;
-            jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
-            ImGui::CloseCurrentPopup();
-        }
-
-        ImGui::EndPopup();
-    }
+    selection = start_location;
+    jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
 }
 
 }

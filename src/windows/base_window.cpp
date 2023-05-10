@@ -95,10 +95,12 @@ void BaseWindow::RenderGUI()
     if(!enable_nav) window_flags |= ImGuiWindowFlags_NoNav;
 
     bool is_open = ImGui::Begin(window_title.c_str(), &local_open, window_flags);
-    focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    focused = false;
     docked = ImGui::IsWindowDocked();
 
     if(is_open) {
+        focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) 
+            && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId);
         RenderContent();
     }
 

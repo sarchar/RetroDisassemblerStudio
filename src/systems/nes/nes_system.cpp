@@ -22,6 +22,9 @@ System::System()
     : ::BaseSystem(), disassembling(false)
 {
     disassembler = make_shared<Disassembler>();
+
+    user_label_created  = make_shared<user_label_created_t>();
+    disassembly_stopped = make_shared<disassembly_stopped_t>();
 }
 
 System::~System()
@@ -231,10 +234,13 @@ void System::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count
     memory_region->MarkMemoryAsWords(where, byte_count);
 }
 
-void System::CreateLabel(GlobalMemoryLocation const& where, string const& label)
+void System::CreateLabel(GlobalMemoryLocation const& where, string const& label, bool was_user_created)
 {
     auto memory_region = GetMemoryRegion(where);
     memory_region->CreateLabel(where, label);
+
+    // notify the system of new labels
+    if(was_user_created) user_label_created->emit(where, label);
 
 //!    LabelList ll = label_database[where];
 //!    if(!ll) {
@@ -247,7 +253,7 @@ void System::CreateLabel(GlobalMemoryLocation const& where, string const& label)
 //!    cout << "defined label " << label << " at " << where << endl;
 }
 
-void System::BeginDisassembly(GlobalMemoryLocation const& where)
+void System::InitDisassembly(GlobalMemoryLocation const& where)
 {
     disassembly_address = where;
 
@@ -333,7 +339,11 @@ int System::DisassemblyThread()
         }
     }
 
+    // leave the dialog up for at least a moment
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
     disassembling = false;
+    disassembly_stopped->emit(disassembly_address);
     return 0;
 }
 

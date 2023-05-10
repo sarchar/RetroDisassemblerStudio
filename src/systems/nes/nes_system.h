@@ -26,6 +26,15 @@ public:
     virtual ~System();
 
     System::Information const* GetInformation();
+
+    // Signals
+    typedef signal<std::function<void(GlobalMemoryLocation const&, std::string const&)>> user_label_created_t;
+    std::shared_ptr<user_label_created_t> user_label_created;
+
+    typedef signal<std::function<void(GlobalMemoryLocation const&)>> disassembly_stopped_t;
+    std::shared_ptr<disassembly_stopped_t> disassembly_stopped;
+
+    // Project
     bool CreateNewProjectFromFile(std::string const&);
 
     // creation interface
@@ -33,6 +42,7 @@ public:
     static bool IsROMValid(std::string const& file_path_name, std::istream& is);
     static std::shared_ptr<BaseSystem> CreateSystem();
 
+    // Cartridge
     std::shared_ptr<NES::Cartridge>& GetCartridge() { return cartridge; }
     std::shared_ptr<NES::Cartridge> cartridge;
 
@@ -50,11 +60,11 @@ public:
     void GetListingItems(GlobalMemoryLocation const&, std::vector<std::shared_ptr<NES::ListingItem>>& out);
 
     // Labels
-    void CreateLabel(GlobalMemoryLocation const&, std::string const&);
+    void CreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
 
     // Disassembly
     std::shared_ptr<Disassembler> GetDisassembler() { return disassembler; }
-    void BeginDisassembly(GlobalMemoryLocation const&);
+    void InitDisassembly(GlobalMemoryLocation const&);
     int  DisassemblyThread();
     bool IsDisassembling() const { return disassembling; }
 

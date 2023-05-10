@@ -492,11 +492,24 @@ void MyApp::RenderGUI()
         window->RenderGUI();
     }
 
+    // Process all popups here
+    RenderPopups();
+
     // Remove any windows queued for deletion
     ProcessQueuedWindowsForDelete();
 
     // CLean up style vars
     ImGui::PopStyleVar(1);
+}
+
+void MyApp::RenderPopups()
+{
+    CreateLabelPopup();
+    DisassemblyPopup();
+
+    if(ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        ImGui::CloseCurrentPopup();
+    }
 }
 
 bool MyApp::OKPopup(std::string const& title, std::string const& message)
@@ -577,8 +590,116 @@ void MyApp::SystemLoadedHandler(std::shared_ptr<BaseWindow> project_creator_wind
 
     // TODO Would be nice to look up the Listing window and not care which platform is loaded
     auto wnd = NES::Listing::CreateWindow();
+    *wnd->listing_command      += std::bind(&MyApp::ListingWindowCommand, this, placeholders::_1, placeholders::_2, placeholders::_3);
+
     AddWindow(wnd);
 }
+
+void MyApp::ListingWindowCommand(shared_ptr<BaseWindow> const& wnd, string const& cmd, NES::GlobalMemoryLocation const& where)
+{
+    // TODO this should be generic
+    if(auto system = dynamic_pointer_cast<NES::System>(current_system)) {
+        if(cmd == "CreateLabel") {
+            popups.create_label.uhg = make_shared<NES::GlobalMemoryLocation>(where);
+            popups.create_label.show = true;
+
+        } else if(cmd == "DisassemblyRequested") {
+            // if currently disassembling, ignore the request
+            if(popups.disassembly.thread) return;
+        
+            // TODO this should be generic
+            if(auto system = dynamic_pointer_cast<NES::System>(current_system)) {
+                system->InitDisassembly(where);
+                popups.disassembly.show = true;
+            }
+        }
+    }
+}
+
+void MyApp::CreateLabelPopup() 
+{
+    auto title = popups.create_label.title.c_str();
+
+    // TODO this should be generic and we can use current_system->DisassemblyThread
+    auto system = dynamic_pointer_cast<NES::System>(current_system);
+    if(!system) return;
+
+    if(!ImGui::IsPopupOpen(title) && popups.create_label.show) {
+        popups.create_label.show = false;
+
+        popups.create_label.buf[0] = '\0';
+
+        ImGui::OpenPopup(title);
+    }
+
+    // center this window
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    // return if the dialog isn't open
+    if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) return;
+
+    // focus on the text input if nothing else is selected
+    if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
+
+    // if either Enter is pressed or OK clicked, create the label
+    ImVec2 button_size(ImGui::GetFontSize() * 7.0f, 0.0f);
+    if(ImGui::InputText("Label", popups.create_label.buf, sizeof(popups.create_label.buf), ImGuiInputTextFlags_EnterReturnsTrue)
+       || ImGui::Button("OK", button_size)) {
+        // create the label
+        string lstr(popups.create_label.buf);
+        NES::GlobalMemoryLocation* where = static_cast<NES::GlobalMemoryLocation*>(popups.create_label.uhg.get());
+        system->CreateLabel(*where, lstr, true);
+        ImGui::CloseCurrentPopup(); 
+    }
+
+    ImGui::EndPopup();
+}
+
+
+void MyApp::DisassemblyPopup()
+{
+    auto title = popups.disassembly.title.c_str();
+    
+    // TODO this should be generic and we can use current_system->DisassemblyThread
+    auto system = dynamic_pointer_cast<NES::System>(current_system);
+    if(!system) return;
+
+    // Check if the dialog needs to be opened
+    if(!ImGui::IsPopupOpen(title) && popups.disassembly.show) {
+        ImGui::OpenPopup(title);
+        popups.disassembly.show = false;
+
+        // create the disassembly thread
+        popups.disassembly.thread = make_unique<std::thread>(std::bind(&NES::System::DisassemblyThread, system));
+        cout << "[Listing::DisassemblyPopup] started disassembly thread" << endl;
+    }
+
+    // center this window
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // center on the current Listing window?
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    // Return if the dialog isn't open
+    ImGuiWindowFlags popup_flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings; // TODO generate better flags
+    if(!ImGui::BeginPopupModal(title, nullptr, popup_flags)) return;
+
+    // Render the content of the dialog
+    ImGui::Text("Disassembling...");
+
+    // Check if the disassembly is done
+    if(!system->IsDisassembling()) {
+        if(popups.disassembly.thread) {
+            popups.disassembly.thread->join();
+            popups.disassembly.thread = nullptr;
+            cout << "[Listing::DisassemblyPopup] disassembly thread exited" << endl;
+        }
+        
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+}
+
 
 int main(int argc, char* argv[])
 {
