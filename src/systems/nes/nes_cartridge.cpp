@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <iomanip>
 #include <iostream>
@@ -43,7 +44,8 @@ void Cartridge::Prepare()
         }
 
         case 1: { // MMC1
-            assert(false);
+            assert(header.num_prg_rom_banks >= 2);
+            load_address = ((i == 15 || i == (header.num_prg_rom_banks - 1)) ? PROGRAM_ROM_BANK_LOAD_HIGH_16K : PROGRAM_ROM_BANK_LOAD_LOW_16K);
             break;
         }
         
@@ -68,7 +70,13 @@ void Cartridge::Prepare()
         }
 
         case 1: { // MMC1
-            assert(false);
+            // TODO MMC1 also supports 4K CHR banks that can be loaded into *either* low or high
+            // will have to support memory regions that can change their base? or at least, leave 
+            // it unset until the user specifies the base_address. but for now, we assume they're 
+            // swapped at 8K and always in the full memory
+            cout << "[NES::Cartridge::Prepare] warning: MMC1 cartridge has CHR ROM banks that aren't handled well" << endl;
+            load_address = CHARACTER_ROM_BANK_LOAD_LOW;
+            bank_size    = CHARACTER_ROM_BANK_SIZE_8K;
             break;
         }
         
@@ -88,7 +96,8 @@ u16 Cartridge::GetResetVectorBank()
         return header.num_prg_rom_banks == 2 ? 1 : 0;
 
     case 1:
-        assert(false); // TODO
+        // lower 256KiB starts selected, so limit to the 16th bank
+        return min((u16)16, (u16)header.num_prg_rom_banks) - 1;
     }
 
     return 0;
