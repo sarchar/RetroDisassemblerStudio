@@ -46,12 +46,12 @@ Listing::Listing()
 
         // initialize the first selection to the entry point of the program
         // TODO save last location as well as location history?
-        system->GetEntryPoint(&selection);
+        system->GetEntryPoint(&current_selection);
         jump_to_selection = JUMP_TO_SELECTION_START_VALUE; // TODO this is stupid, I wish I could scroll within one or 
                                                            // two frames (given we have to calculate the row sizes at least once)
     }
 
-    cout << "[NES::Listing] Program entry point at " << selection << endl;
+    cout << "[NES::Listing] Program entry point at " << current_selection << endl;
 }
 
 Listing::~Listing()
@@ -62,13 +62,28 @@ void Listing::UpdateContent(double deltaTime)
 {
 }
 
+void Listing::ClearForwardHistory()
+{
+    while(selection_history_forward.size()) selection_history_forward.pop();
+}
+
 void Listing::CheckInput()
 {
     ImGuiIO& io = ImGui::GetIO();
 
-    if(ImGui::IsKeyPressed(ImGuiKey_MouseX1) && location_history.size()) { // back pressed
-        selection = location_history.back();
-        location_history.pop_back();
+    // handle back button
+    if(ImGui::IsKeyPressed(ImGuiKey_MouseX1) && selection_history_back.size()) {
+        selection_history_forward.push(current_selection);
+        current_selection = selection_history_back.top();
+        selection_history_back.pop();
+        jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+    }
+
+    // handle forward button
+    if(ImGui::IsKeyPressed(ImGuiKey_MouseX2) && selection_history_forward.size()) {
+        selection_history_back.push(current_selection);
+        current_selection = selection_history_forward.top();
+        selection_history_forward.pop();
         jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
     }
 
@@ -78,31 +93,31 @@ void Listing::CheckInput()
         shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
         // TODO really should be using signals and emit to broadcast these messages
         switch(c) {
-        case L'j': // move selection down
-            selection = selection + 1;
+        case L'j': // move current_selection down
+            current_selection = current_selection + 1;
             break;
 
-        case L'k': // move selection up
-            selection = selection + -1;
+        case L'k': // move current_selection up
+            current_selection = current_selection + -1;
             break;
 
         case L'w': // mark data as a word
-            if(system) system->MarkMemoryAsWords(selection, 2);
+            if(system) system->MarkMemoryAsWords(current_selection, 2);
             break;
 
         case L'l': // create a label
-            listing_command->emit(shared_from_this(), "CreateLabel", selection);
+            listing_command->emit(shared_from_this(), "CreateLabel", current_selection);
             break;
 
         case L'd': // start disassembly
-            listing_command->emit(shared_from_this(), "DisassemblyRequested", selection);
+            listing_command->emit(shared_from_this(), "DisassemblyRequested", current_selection);
             break;
 
         case L'r': // convert operand to reference
         {
             // TODO this will be a larger task in the future
-            auto memory_region = system->GetMemoryRegion(selection);
-            auto memory_object = memory_region->GetMemoryObject(selection);
+            auto memory_region = system->GetMemoryRegion(current_selection);
+            auto memory_object = memory_region->GetMemoryObject(current_selection);
 
             u16 dest = 0;
             if(memory_object->type == MemoryObject::TYPE_CODE) {
@@ -119,7 +134,7 @@ void Listing::CheckInput()
                 assert(false);
             }
 
-            GlobalMemoryLocation label_address(selection);
+            GlobalMemoryLocation label_address(current_selection);
             label_address.address = dest;
             if(!(dest >= memory_region->GetBaseAddress() && dest < memory_region->GetEndAddress())) {
                 // destination is not in this memory region, see if we can find it
@@ -147,8 +162,8 @@ void Listing::CheckInput()
         case L'F': // very hacky (F)ollow to address button
         {
             // TODO this should be way more complicated, parsing operand types and all
-            auto memory_region = system->GetMemoryRegion(selection);
-            auto memory_object = memory_region->GetMemoryObject(selection);
+            auto memory_region = system->GetMemoryRegion(current_selection);
+            auto memory_object = memory_region->GetMemoryObject(current_selection);
             u16 dest = 0;
             if(memory_object->type == MemoryObject::TYPE_CODE) {
                 dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
@@ -157,13 +172,14 @@ void Listing::CheckInput()
             }
 
             if(dest >= memory_region->GetBaseAddress() && dest < memory_region->GetEndAddress()) {
-                location_history.push_back(selection); // save the current location to the history
+                selection_history_back.push(current_selection); // save the current location to the history
+                ClearForwardHistory();                          // and clear the forward history
                 
-                selection.address = dest;
+                current_selection.address = dest;
                 jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
             } else {
                 // destination is not in this memory region, see if we can find it
-                GlobalMemoryLocation guessed_address(selection);
+                GlobalMemoryLocation guessed_address(current_selection);
                 guessed_address.address = dest;
 
                 vector<u16> possible_banks;
@@ -173,8 +189,9 @@ void Listing::CheckInput()
                     guessed_address.prg_rom_bank = possible_banks[0];
                     memory_region = system->GetMemoryRegion(guessed_address);
                     if(memory_region) {
-                        location_history.push_back(selection); // save the current location to the history
-                        selection = guessed_address;
+                        selection_history_back.push(current_selection); // save the current location to the history
+                        ClearForwardHistory();                          // and clear the forward history
+                        current_selection = guessed_address;
                         jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
                     }
                 } else {
@@ -226,7 +243,7 @@ void Listing::RenderContent()
     }
 
     // Need the program rom bank that is currently in the listing
-    auto memory_region = system->GetMemoryRegion(selection);
+    auto memory_region = system->GetMemoryRegion(current_selection);
 
     ImGuiTableFlags outer_table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoBordersInBody;
 
@@ -248,7 +265,7 @@ void Listing::RenderContent()
         // Force the clipper to include a range that also includes the row we want to jump to
         // we have a buffer of 100 lines so ImGui can calculate row heights
         if(jump_to_selection > 0) {
-            u32 listing_item_index = memory_region->GetListingIndexByAddress(selection);
+            u32 listing_item_index = memory_region->GetListingIndexByAddress(current_selection);
             clipper.ForceDisplayRangeByIndices(listing_item_index - 25, listing_item_index + 25);
         }
 
@@ -262,13 +279,13 @@ void Listing::RenderContent()
                 auto& listing_item = listing_item_iterator->GetListingItem();
 
                 // Get the address this listing_item belongs to so we can highlight it when selected
-                GlobalMemoryLocation current_address(selection); // start with a copy since we're in the same memory region
+                GlobalMemoryLocation current_address(current_selection); // start with a copy since we're in the same memory region
                 current_address.address = listing_item_iterator->GetCurrentAddress();
 
                 // then use the address to grab all the listing items belonging to the address
                 //cout << "row = 0x" << row << " current_address.address = 0x" << hex << current_address.address << endl;
 
-                bool selected_row = (current_address.address == selection.address);
+                bool selected_row = (current_address.address == current_selection.address);
 
                 // Begin a new row and next column
                 ImGui::TableNextRow();
@@ -280,7 +297,7 @@ void Listing::RenderContent()
                     char buf[32];
                     sprintf(buf, "##selectable_row%d", row);
                     if (ImGui::Selectable(buf, selected_row, selectable_flags)) {
-                        selection = current_address;
+                        current_selection = current_address;
                     }
                     ImGui::SameLine();
                 }
@@ -289,7 +306,7 @@ void Listing::RenderContent()
 
                 // Only after the row has been rendered and it was the last element in the table,
                 // we can use ScrollToItem() to get the item focused in the middle of the view.
-                if(jump_to_selection > 0 && current_address.address == selection.address && !did_scroll) {
+                if(jump_to_selection > 0 && current_address.address == current_selection.address && !did_scroll) {
                     ImGui::ScrollToItem(ImGuiScrollFlags_AlwaysCenterY);
                     jump_to_selection -= 1;
                     did_scroll = true;
@@ -309,13 +326,13 @@ void Listing::RenderContent()
 
 void Listing::UserLabelCreated(GlobalMemoryLocation const& where, std::string const& /* label */)
 {
-    selection = where;
+    current_selection = where;
     jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
 }
 
 void Listing::DisassemblyStopped(GlobalMemoryLocation const& start_location)
 {
-    selection = start_location;
+    current_selection = start_location;
     jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
 }
 

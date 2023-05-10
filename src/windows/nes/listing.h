@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <stack>
 
 #include "signals.h"
 #include "systems/nes/nes_system.h"
@@ -30,15 +31,17 @@ protected:
     void PreRenderContent() override;
     void RenderContent() override;
 
+private:
+    void ClearForwardHistory();
     void CheckInput();
 
-private:
     void UserLabelCreated(GlobalMemoryLocation const&, std::string const&);
     void DisassemblyStopped(GlobalMemoryLocation const&);
 
 private:
-    GlobalMemoryLocation selection;
-    std::vector<GlobalMemoryLocation> location_history;
+    GlobalMemoryLocation             current_selection;
+    std::stack<GlobalMemoryLocation> selection_history_back;
+    std::stack<GlobalMemoryLocation> selection_history_forward;
 
     bool   adjust_columns = false;
 
