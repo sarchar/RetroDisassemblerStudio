@@ -8,6 +8,7 @@
 #include "imgui_internal.h"
 
 #include "systems/nes/nes_disasm.h"
+#include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_system.h"
 
@@ -641,25 +642,30 @@ string MemoryObject::FormatDataField(u32 /* internal_offset */, shared_ptr<Disas
 {
     stringstream ss;
 
-    ss << hex << setfill('0') << uppercase;
+    // if there's an operand expression, display that, otherwise format a default expression
+    if(operand_expression) {
+        ss << *operand_expression;
+    } else {
+        ss << hex << setfill('0') << uppercase;
 
-    switch(type) {
-    case MemoryObject::TYPE_UNDEFINED:
-    case MemoryObject::TYPE_BYTE:
-        ss << "$" << setw(2) << (int)bval;
-        break;
+        switch(type) {
+        case MemoryObject::TYPE_UNDEFINED:
+        case MemoryObject::TYPE_BYTE:
+            ss << "$" << setw(2) << (int)bval;
+            break;
 
-    case MemoryObject::TYPE_WORD:
-        ss << "$" << setw(4) << hval;
-        break;
+        case MemoryObject::TYPE_WORD:
+            ss << "$" << setw(4) << hval;
+            break;
 
-    case MemoryObject::TYPE_CODE:
-        ss << disassembler->FormatOperand(code.opcode, code.operands);
-        break;
+        case MemoryObject::TYPE_CODE:
+            ss << disassembler->FormatOperand(code.opcode, code.operands);
+            break;
 
-    default:
-        assert(false);
-        break;
+        default:
+            assert(false);
+            break;
+        }
     }
 
     return ss.str();

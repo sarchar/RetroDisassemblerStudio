@@ -12,6 +12,7 @@
 namespace NES {
 
 class Disassembler;
+class Expression;
 class ListingItem;
 class System;
 
@@ -138,6 +139,8 @@ struct MemoryObject {
 
     std::vector<std::string> labels;
     std::vector<std::shared_ptr<ListingItem>> listing_items;
+
+    std::shared_ptr<Expression> operand_expression;
 
     union {
         u8  bval;

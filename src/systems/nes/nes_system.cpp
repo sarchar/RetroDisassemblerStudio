@@ -8,6 +8,7 @@
 
 #include "systems/nes/nes_cartridge.h"
 #include "systems/nes/nes_disasm.h"
+#include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
@@ -331,7 +332,16 @@ int System::DisassemblyThread()
                     if(destination_object->labels.size() == 0) {
                         stringstream ss;
                         ss << "L_" << hex << setw(2) << setfill('0') << uppercase << newloc.prg_rom_bank << setw(4) << newloc.address;
-                        CreateLabel(newloc, ss.str());
+                        string label = ss.str();
+                        CreateLabel(newloc, label);
+
+                        auto expr         = make_shared<Expression>();
+                        auto node_creator = expr->GetNodeCreator();
+                        auto name         = node_creator->CreateName(label);
+                        expr->Set(name);
+
+                        // set the expression for memory object at current_selection. it'll show up immediately
+                        memory_object->operand_expression = expr;
                     }
                 }
                 break;

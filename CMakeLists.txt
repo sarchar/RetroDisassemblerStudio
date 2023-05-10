@@ -30,6 +30,7 @@ add_executable(${PROJECT_NAME}
                src/systems/system.cpp
                src/systems/nes/nes_cartridge.cpp
                src/systems/nes/nes_disasm.cpp
+               src/systems/nes/nes_expressions.cpp
                src/systems/nes/nes_listing.cpp
                src/systems/nes/nes_memory.cpp
                src/systems/nes/nes_system.cpp

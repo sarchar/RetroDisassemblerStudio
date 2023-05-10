@@ -13,6 +13,7 @@
 #include "main.h"
 #include "windows/nes/listing.h"
 #include "systems/nes/nes_cartridge.h"
+#include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_system.h"
 
 #define JUMP_TO_SELECTION_START_VALUE 3
@@ -204,8 +205,18 @@ void Listing::CheckInput()
             {
                 stringstream ss;
                 ss << "L_" << hex << setw(2) << setfill('0') << uppercase << label_address.prg_rom_bank << setw(4) << label_address.address;
-                system->CreateLabel(label_address, ss.str());
+                string label = ss.str();
+                system->CreateLabel(label_address, label);
+
+                auto expr         = make_shared<Expression>();
+                auto node_creator = expr->GetNodeCreator();
+                auto name         = node_creator->CreateName(label);
+                expr->Set(name);
+
+                // set the expression for memory object at current_selection. it'll show up immediately
+                memory_object->operand_expression = expr;
             }
+
 
             break;
         }
