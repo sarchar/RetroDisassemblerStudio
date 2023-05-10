@@ -23,6 +23,7 @@ add_executable(${PROJECT_NAME}
                libs/ImGuiFileDialog/ImGuiFileDialog.cpp
 
                src/application.cpp
+               src/systems/expressions.cpp
                src/main.cpp
                src/system_clock.cpp
 

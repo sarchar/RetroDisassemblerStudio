@@ -25,6 +25,8 @@
 #include "windows/rom_loader.h"
 #include "windows/nes/listing.h"
 
+#include "systems/expressions.h" // TODO temp
+
 #undef DISABLE_IMGUI_SAVE_LOAD_LAYOUT
 
 using namespace std;
@@ -452,6 +454,55 @@ void MyApp::RenderMainMenuBar()
         if(ImGui::BeginMenu("Debug")) {
             if(ImGui::MenuItem("Show ImGui Demo", "ctrl+d")) {
                 show_imgui_demo = true;
+            }
+
+            if(ImGui::MenuItem("Expressions test", "")) {
+                // create an expression of the form "Label-1"
+                shared_ptr<BaseExpression> expr = make_shared<Expression>();
+                auto node_creator = expr->GetNodeCreator();
+
+                // Try to fully represent the following:
+                // 3 * ((1 + myFunc)-( $10*otherFunc ))
+                // and have it should evaluate to -126
+
+                auto constant_one = node_creator->CreateConstantU8("1");
+                auto label = node_creator->CreateName("myFunc");
+                auto add = node_creator->CreateAddOp(constant_one, label, " + ");
+                auto paren1 = node_creator->CreateParens("(", add, ")");
+                auto constant_two = node_creator->CreateConstantU8("$10");
+                auto label2 = node_creator->CreateName("otherFunc");
+                auto mul = node_creator->CreateMultiplyOp(constant_two, label2, "*");
+                auto paren2 = node_creator->CreateParens("( ", mul, " )");
+                auto sub = node_creator->CreateSubtractOp(paren1, paren2, "-");
+                auto paren3 = node_creator->CreateParens("(", sub, ")");
+                auto constant_three = node_creator->CreateConstantU8("3");
+                auto mul2 = node_creator->CreateMultiplyOp(constant_three, paren3, " * ");
+                expr->Set(mul2);
+
+                class ExpressionHelper : public BaseExpressionHelper {
+                public:
+                    ExpressionHelper(shared_ptr<BaseExpressionNodeCreator>& nc) 
+                        : node_creator(nc) {}
+
+                    shared_ptr<BaseExpressionNode> ResolveName(string const& name) override {
+                        if(name == "myFunc") return node_creator->CreateConstantU8("5");
+                        if(name == "otherFunc") return node_creator->CreateConstantU8("3");
+                        return nullptr;
+                    }
+
+                    shared_ptr<BaseExpressionNodeCreator> node_creator;
+                };
+
+                shared_ptr<ExpressionHelper> helper = make_shared<ExpressionHelper>(node_creator);
+
+                // and print it
+                cout << "made expression: " << *expr << endl;
+                s64 result;
+                if(expr->Evaluate(helper, &result)) {
+                    cout << "evaluated: " << result << endl;
+                } else {
+                    cout << "failed evaluation" << endl;
+                }
             }
             ImGui::EndMenu();
         }
