@@ -148,6 +148,7 @@ struct MemoryObject {
             u8 operands[2]; // max 2 per opcode
         } code;
 
+        // TODO block of data?
         std::vector<std::shared_ptr<MemoryObject>> list = {};
     };
 
@@ -155,6 +156,8 @@ struct MemoryObject {
     ~MemoryObject() {}
 
     u32 GetSize(std::shared_ptr<Disassembler> disassembler = nullptr);
+    void Read(u8*, int);
+
     std::string FormatInstructionField(std::shared_ptr<Disassembler> disassembler = nullptr);
     std::string FormatDataField(u32, std::shared_ptr<Disassembler> disassembler = nullptr);
 };
@@ -197,6 +200,7 @@ public:
     void CreateLabel(GlobalMemoryLocation const&, std::string const&);
 
     // Data
+    bool MarkMemoryAsUndefined(GlobalMemoryLocation const& where);
     bool MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count);
 
     // Code
@@ -219,7 +223,7 @@ private:
 
     void _InitializeFromData(std::shared_ptr<MemoryObjectTreeNode>&, u32, u8*, int);
     void _UpdateMemoryObject(std::shared_ptr<MemoryObject>&, u32);
-    void RemoveMemoryObjectFromTree(std::shared_ptr<MemoryObject>&);
+    void RemoveMemoryObjectFromTree(std::shared_ptr<MemoryObject>&, bool save_tree_node = false);
 
     void RecalculateListingItemCounts();
     void _SumListingItemCountsUp(std::shared_ptr<MemoryObjectTreeNode>&);
@@ -227,6 +231,9 @@ private:
     void RecreateListingItems();
     void RecreateListingItemsForMemoryObject(std::shared_ptr<MemoryObject>&, u32);
 
+    // Utility for GetListingItemIterator to find region offsets based on listing item index
+    u32 FindRegionOffsetForListingItem(int);
+    u32 GetListingItemIndexForMemoryObject(std::shared_ptr<MemoryObject> const&);
 
     // during emulation, we will want a cache for already translated code
     // u8 opcode_cache[];

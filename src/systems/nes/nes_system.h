@@ -54,6 +54,7 @@ public:
 
     std::shared_ptr<MemoryRegion> GetMemoryRegion(GlobalMemoryLocation const&);
 
+    void MarkMemoryAsUndefined(GlobalMemoryLocation const&);
     void MarkMemoryAsWords(GlobalMemoryLocation const&, u32 byte_count);
 
     // Listings

@@ -129,6 +129,12 @@ void Listing::CheckInput()
         jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
     }
 
+    // handle delete button
+    if(ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        // TODO open dialog and ask what to clear - data type, labels, etc
+        system->MarkMemoryAsUndefined(current_selection);
+    }
+
     for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
         ImWchar c = io.InputQueueCharacters[i]; 
 
@@ -143,7 +149,7 @@ void Listing::CheckInput()
             break;
 
         case L'w': // mark data as a word
-            if(system) system->MarkMemoryAsWords(current_selection, 2);
+            system->MarkMemoryAsWords(current_selection, 2);
             break;
 
         case L'l': // create a label

@@ -39,10 +39,22 @@ void MemoryRegion::_RecalculateListingItemCounts(shared_ptr<MemoryObjectTreeNode
     if(tree_node->is_object) {
         tree_node->listing_item_count = tree_node->obj->listing_items.size();
     } else {
-        _RecalculateListingItemCounts(tree_node->left);
-        _RecalculateListingItemCounts(tree_node->right);
-        tree_node->listing_item_count = tree_node->left->listing_item_count + tree_node->right->listing_item_count;
+        tree_node->listing_item_count = 0;
+        if(tree_node->left) {
+            _RecalculateListingItemCounts(tree_node->left);
+            tree_node->listing_item_count += tree_node->left->listing_item_count;
+        }
+
+        if(tree_node->right) {
+            _RecalculateListingItemCounts(tree_node->right);
+            tree_node->listing_item_count += tree_node->right->listing_item_count;
+        }
     }
+}
+
+void MemoryRegion::RecalculateListingItemCounts()
+{
+    _RecalculateListingItemCounts(object_tree_root);
 }
 
 void MemoryRegion::_SumListingItemCountsUp(shared_ptr<MemoryObjectTreeNode>& tree_node)
@@ -66,11 +78,6 @@ void MemoryRegion::RecreateListingItems()
         region_offset += 1;
         while(region_offset < region_size && object_refs[region_offset] == obj) ++region_offset;
     }
-}
-
-void MemoryRegion::RecalculateListingItemCounts()
-{
-    _RecalculateListingItemCounts(object_tree_root);
 }
 
 void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>& obj, u32 region_offset)
@@ -132,9 +139,12 @@ void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_no
     } else {
         // initialize the tree by splitting the data into left and right halves
         tree_node->left  = make_shared<MemoryObjectTreeNode>(tree_node);
+        _InitializeFromData(tree_node->left , region_offset, &data[0], count / 2);
+
+        // handle odd number of elements by putting the odd one on the right side
         tree_node->right = make_shared<MemoryObjectTreeNode>(tree_node);
-        _InitializeFromData(tree_node->left , region_offset            , &data[0]        , count / 2);
-        _InitializeFromData(tree_node->right, region_offset + count / 2, &data[count / 2], count / 2);
+        int fixed_count = (count / 2) + (count % 2);
+        _InitializeFromData(tree_node->right, region_offset + count / 2, &data[count / 2], fixed_count);
     }
 }
 
@@ -152,11 +162,11 @@ void MemoryRegion::InitializeFromData(u8* data, int count)
     object_tree_root = make_shared<MemoryObjectTreeNode>(nullptr);
 
     // initialize the tree by splitting the data into left and right halves
-    assert((count % 2) == 0);
+    assert(count >= 2); // minimum region size, albeit silly
     object_tree_root->left  = make_shared<MemoryObjectTreeNode>(object_tree_root);
     object_tree_root->right = make_shared<MemoryObjectTreeNode>(object_tree_root);
     _InitializeFromData(object_tree_root->left , 0        , &data[0]        , count / 2);
-    _InitializeFromData(object_tree_root->right, count / 2, &data[count / 2], count / 2);
+    _InitializeFromData(object_tree_root->right, count / 2, &data[count / 2], (count / 2) + (count % 2));
 
     // first pass create listing items
     RecreateListingItems();
@@ -169,6 +179,52 @@ void MemoryRegion::InitializeFromData(u8* data, int count)
 shared_ptr<MemoryObject> MemoryRegion::GetMemoryObject(GlobalMemoryLocation const& where)
 {
     return object_refs[ConvertToRegionOffset(where.address)];
+}
+
+// to mark data as undefined, we just delete the current node and recreate new bytes in its place
+bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where)
+{
+    auto memory_object = GetMemoryObject(where);
+    assert(memory_object);
+
+    int size = memory_object->GetSize();
+    u8* tmp = (u8*)_alloca(size);
+    memory_object->Read(tmp, size);
+
+    // save the is_object tree node before clearing memory_object from the tree
+    auto tree_node = memory_object->parent.lock();
+
+    // save this objects labels
+    auto& labels = memory_object->labels;
+
+    // remove memory_object from the tree first, this will correct listing item counts
+    RemoveMemoryObjectFromTree(memory_object, true);
+
+    // clear the is_object status of the tree node and build a tree with the data under it
+    // this will update the object_refs[] array
+    tree_node->is_object = false;
+    u32 region_offset = ConvertToRegionOffset(where.address);
+    _InitializeFromData(tree_node, region_offset, tmp, size);
+
+    // copy the labels to the new object
+    auto new_object = object_refs[region_offset];
+    new_object->labels = labels;
+
+    // recreate the listing items for each of the new memory objects
+    for(u32 i = region_offset; i < region_offset + size; i++) {
+        new_object = object_refs[i];
+        RecreateListingItemsForMemoryObject(new_object, i);
+    }
+
+    // fix up this tree_node's listing item count
+    _RecalculateListingItemCounts(tree_node);
+
+    // and update the rest of the tree
+    tree_node = tree_node->parent.lock();
+    _SumListingItemCountsUp(tree_node);
+
+    // the old memory_object will go out of scope here
+    return true;
 }
 
 bool MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count)
@@ -321,7 +377,8 @@ void MemoryRegion::UpdateMemoryObject(GlobalMemoryLocation const& where)
     _UpdateMemoryObject(memory_object, region_offset);
 }
 
-void MemoryRegion::RemoveMemoryObjectFromTree(shared_ptr<MemoryObject>& memory_object)
+// save_tree_node means we don't delete the is_object tree node, so that the caller can use it to build a new subtree
+void MemoryRegion::RemoveMemoryObjectFromTree(shared_ptr<MemoryObject>& memory_object, bool save_tree_node)
 {
     // propagate up the tree the changes
     auto last_node = memory_object->parent.lock();
@@ -332,18 +389,21 @@ void MemoryRegion::RemoveMemoryObjectFromTree(shared_ptr<MemoryObject>& memory_o
     // clear the pointer to the memory_object
     last_node->obj = nullptr;
 
-    do {
-        // clear the pointer to the is_object node
-        current_node = last_node->parent.lock();
-        assert(current_node);
-        if(current_node->left == last_node) {
-            current_node->left = nullptr;
-        } else {
-            current_node->right = nullptr;
-        }
+    // sometimes we don't want to free the tree node
+    if(!save_tree_node) {
+        do {
+            // clear the pointer to the is_object node
+            current_node = last_node->parent.lock();
+            assert(current_node);
+            if(current_node->left == last_node) {
+                current_node->left = nullptr;
+            } else {
+                current_node->right = nullptr;
+            }
 
-        last_node = current_node;
-    } while(!current_node->left && !current_node->right); // uh-oh, need to remove this branch entirely
+            last_node = current_node;
+        } while(!current_node->left && !current_node->right); // uh-oh, need to remove this branch entirely
+    }
 
     // update the listing item count
     _SumListingItemCountsUp(current_node);
@@ -362,26 +422,72 @@ void MemoryRegion::CreateLabel(GlobalMemoryLocation const& where, string const& 
     UpdateMemoryObject(where);
 }
 
-// TODO use a binary search through the object_refs. will need another function that
-// determines the listing_item_index of the first listing item within a memoryobject
-//! u32 MemoryRegion::FindRegionOffsetForListingItem(int listing_item_index)
-//! {
-//! }
+// Returns the listing item index in the whole tree given the memory object
+// Trivally, go up the whole tree adding left nodes
+u32 MemoryRegion::GetListingItemIndexForMemoryObject(shared_ptr<MemoryObject> const& memory_object)
+{
+    u32 index = 0;
+
+    auto previous_node = memory_object->parent.lock();
+    auto current_node = previous_node->parent.lock();
+
+    do {
+        if(current_node->left && current_node->left != previous_node) index += current_node->left->listing_item_count;
+        previous_node = current_node;
+        current_node = current_node->parent.lock();
+    } while(current_node);
+
+    return index;
+}
+
+// use a binary search through the object_refs to find the first region_offset where listing_item_index is located
+u32 MemoryRegion::FindRegionOffsetForListingItem(int listing_item_index)
+{
+    // binary search object_refs[] for the object node that contains listing_item_index
+    u32 low = 0, high = GetRegionSize();
+    u32 region_offset;
+
+    do {
+        region_offset = low + (high - low) / 2;
+
+        auto memory_object = object_refs[region_offset];
+        u32 i = GetListingItemIndexForMemoryObject(memory_object); // kinda heavy but oh well
+
+        // if the listing_item_index is in this memory object, break out
+        if(listing_item_index >= i && listing_item_index < (i + memory_object->listing_items.size())) break;
+
+        // otherwise, go lower or higher
+        if(listing_item_index < i) {
+            high = region_offset;
+        } else {
+            low = region_offset;
+        }
+    } while(high != low);
+
+    // but some addresses point to the same object, so we need to back up until we get the
+    // first address that points to the object
+    auto memory_object = object_refs[region_offset]; // this is the correct object, but maybe not the correct region_offset
+    while(region_offset != 0 && object_refs[region_offset-1].get() == memory_object.get()) --region_offset;
+
+    return region_offset;
+}
 
 shared_ptr<MemoryObjectTreeNode::iterator> MemoryRegion::GetListingItemIterator(int listing_item_start_index)
 {
+    u32 listing_item_index = listing_item_start_index;
+
     // find the starting item by searching through the object tree
     auto tree_node = object_tree_root;
     while(tree_node) {
-        assert(listing_item_start_index < tree_node->listing_item_count);
+        assert(listing_item_index < tree_node->listing_item_count);
 
-        if(tree_node->left && listing_item_start_index < tree_node->left->listing_item_count) {
+        if(tree_node->left && listing_item_index < tree_node->left->listing_item_count) {
             // go left
             tree_node = tree_node->left;
         } else {
             // subtract left count (if any) and go right instead
             if(tree_node->left) {
-                listing_item_start_index -= tree_node->left->listing_item_count;
+                listing_item_index -= tree_node->left->listing_item_count;
             }
 
             tree_node = tree_node->right;
@@ -391,7 +497,7 @@ shared_ptr<MemoryObjectTreeNode::iterator> MemoryRegion::GetListingItemIterator(
             shared_ptr<MemoryObjectTreeNode::iterator> it = make_shared<MemoryObjectTreeNode::iterator>();
             it->memory_region = shared_from_this();
             it->memory_object = tree_node->obj;
-            it->listing_item_index = listing_item_start_index;
+            it->listing_item_index = listing_item_index;
             it->disassembler = parent_system.lock()->GetDisassembler();
 
             // TODO this sucks. I need a better way to find the current address of the listing item
@@ -399,12 +505,7 @@ shared_ptr<MemoryObjectTreeNode::iterator> MemoryRegion::GetListingItemIterator(
             // be able to insert new objects inbetween others, which would shift addresses around
             // for now, I know that I can determine MemoryObject sizes so we have to look up
             // the first object's address and save it in the iterator, then increment as necessary
-            for(u32 region_offset = 0; region_offset < region_size; region_offset++) {
-                if(object_refs[region_offset] == it->memory_object) {
-                    it->region_offset = region_offset;
-                    break;
-                }
-            }
+            it->region_offset = FindRegionOffsetForListingItem(listing_item_start_index);
 
             return it;
         }
@@ -490,6 +591,23 @@ u32 MemoryObject::GetSize(shared_ptr<Disassembler> disassembler)
     default:
         assert(false);
         return 0;
+    }
+}
+
+void MemoryObject::Read(u8* buf, int count)
+{
+    assert(count <= GetSize());
+    switch(type) {
+    case MemoryObject::TYPE_BYTE:
+    case MemoryObject::TYPE_UNDEFINED:
+    case MemoryObject::TYPE_WORD:
+    case MemoryObject::TYPE_CODE:
+        memcpy(buf, (void*)&bval, count);
+        break;
+
+    default:
+        assert(false);
+        break;
     }
 }
 

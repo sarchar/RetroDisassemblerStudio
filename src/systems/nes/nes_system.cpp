@@ -228,6 +228,12 @@ std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const
     }
 }
 
+void System::MarkMemoryAsUndefined(GlobalMemoryLocation const& where)
+{
+    auto memory_region = GetMemoryRegion(where);
+    memory_region->MarkMemoryAsUndefined(where);
+}
+
 void System::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count)
 {
     auto memory_region = GetMemoryRegion(where);
