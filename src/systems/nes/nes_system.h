@@ -24,8 +24,6 @@ public:
     System();
     virtual ~System();
 
-    System::Information const* GetInformation();
-
     // Signals
     typedef signal<std::function<void(std::shared_ptr<Label> const&, bool)>> label_created_t;
     std::shared_ptr<label_created_t> label_created;
@@ -33,19 +31,11 @@ public:
     typedef signal<std::function<void(GlobalMemoryLocation const&)>> disassembly_stopped_t;
     std::shared_ptr<disassembly_stopped_t> disassembly_stopped;
 
-    // Project
-    bool CreateNewProjectFromFile(std::string const&);
-
-    // creation interface
-    static System::Information const* GetInformationStatic();
-    static bool IsROMValid(std::string const& file_path_name, std::istream& is);
-    static std::shared_ptr<BaseSystem> CreateSystem();
-
     // Cartridge
     std::shared_ptr<NES::Cartridge>& GetCartridge() { return cartridge; }
 
     // Memory
-    void CreateDefaultMemoryRegions();
+    void CreateMemoryRegions();
     void GetEntryPoint(NES::GlobalMemoryLocation*);
     bool CanBank(GlobalMemoryLocation const&);
     void GetBanksForAddress(GlobalMemoryLocation const&, std::vector<u16>&);

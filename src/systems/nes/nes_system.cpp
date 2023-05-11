@@ -33,112 +33,8 @@ System::~System()
 {
 }
 
-bool System::CreateNewProjectFromFile(string const& file_path_name)
-{
-    cout << "[NES::System] CreateNewProjectFromFile begin" << endl;
-    create_new_project_progress->emit(shared_from_this(), false, 0, 0, "Loading file...");
-
-    // Before we can read ROM, we need a place to store it
-    CreateDefaultMemoryRegions();
-
-    // Read in the iNES header
-    ifstream rom_stream(file_path_name, ios::binary);
-    if(!rom_stream) {
-        create_new_project_progress->emit(shared_from_this(), true, 0, 0, "Error: Could not open file");
-        return false;
-    }
-
-    unsigned char buf[16];
-    rom_stream.read(reinterpret_cast<char*>(buf), 16);
-    if(!rom_stream || !(buf[0] == 'N' && buf[1] == 'E' && buf[2] == 'S' && buf[3] == 0x1A)) {
-        create_new_project_progress->emit(shared_from_this(), true, 0, 0, "Error: Not an NES ROM file");
-        return false;
-    }
- 
-    // Parse the iNES header
-    cartridge->header.num_prg_rom_banks = (u8)buf[4];
-    cartridge->header.num_chr_rom_banks = (u8)buf[5];
-    cartridge->header.prg_rom_size      = cartridge->header.num_prg_rom_banks * 16 * 1024;
-    cartridge->header.chr_rom_size      = cartridge->header.num_chr_rom_banks *  8 * 1024;
-    cartridge->header.mapper            = ((u8)buf[6] & 0xF0) >> 4 | ((u8)buf[7] & 0xF0);
-    cartridge->header.mirroring         = ((u8)buf[6] & 0x08) ? MIRRORING_FOUR_SCREEN : ((bool)((u8)buf[6] & 0x01) ? MIRRORING_VERTICAL : MIRRORING_HORIZONTAL);
-    cartridge->header.has_sram          = (bool)((u8)buf[6] & 0x02);
-    cartridge->header.has_trainer       = (bool)((u8)buf[6] & 0x04);
-
-    // Finish creating the cartridge based on mapper information
-    cartridge->Prepare();
-
-    // skip the trainer if present
-    if(cartridge->header.has_trainer) rom_stream.seekg(512, rom_stream.cur);
-
-    // we now know how many things we need to load
-    u32 num_steps = cartridge->header.num_prg_rom_banks + cartridge->header.num_chr_rom_banks + 1;
-    u32 current_step = 0;
-
-    // Load the PRG banks
-    for(u32 i = 0; i < cartridge->header.num_prg_rom_banks; i++) {
-        stringstream ss;
-        ss << "Loading PRG ROM bank " << i;
-        create_new_project_progress->emit(shared_from_this(), false, num_steps, ++current_step, ss.str());
-
-        // Read in the PRG rom data
-        unsigned char data[16 * 1024];
-        rom_stream.read(reinterpret_cast<char *>(data), sizeof(data));
-        if(!rom_stream) {
-            create_new_project_progress->emit(shared_from_this(), true, num_steps, current_step, "Error: file too short when reading PRG-ROM");
-            return false;
-        }
-
-        // Get the PRG-ROM bank
-        auto prg_bank = cartridge->GetProgramRomBank(i); // Bank should be empty with no content
-
-        // Initialize the entire bank as just a series of bytes
-        prg_bank->InitializeFromData(reinterpret_cast<u8*>(data), sizeof(data)); // Initialize the memory region with bytes of data
-    }
-
-    // Load the CHR banks
-    for(u32 i = 0; i < cartridge->header.num_chr_rom_banks; i++) {
-        stringstream ss;
-        ss << "Loading CHR ROM bank " << i;
-        create_new_project_progress->emit(shared_from_this(), false, num_steps, ++current_step, ss.str());
-
-        // Read in the CHR rom data
-        unsigned char data[8 * 1024]; // TODO read 4K banks with other mappers (check chr_bank first!)
-        rom_stream.read(reinterpret_cast<char *>(data), sizeof(data));
-        if(!rom_stream) {
-            create_new_project_progress->emit(shared_from_this(), true, num_steps, current_step, "Error: file too short when reading CHR-ROM");
-            return false;
-        }
-
-        // Get the CHR bank
-        auto chr_bank = cartridge->GetCharacterRomBank(i); // Bank should be empty with no content
-
-        // Initialize the entire bank as just a series of bytes
-        chr_bank->InitializeFromData(reinterpret_cast<u8*>(data), sizeof(data)); // Mark content starting at offset 0 as data
-    }
-
-    // Create the CPU vector labels
-    GlobalMemoryLocation vectors;
-    GetEntryPoint(&vectors);
-    CreateLabel(vectors, "_reset");
-
-    vectors.address -= 2;
-    CreateLabel(vectors, "_nmi");
-    GetMemoryRegion(vectors)->MarkMemoryAsWords(vectors, 6);
-
-    vectors.address += 4;
-    CreateLabel(vectors, "_irqbrk");
-
-    CreateDefaultLabels();
-
-    create_new_project_progress->emit(shared_from_this(), false, num_steps, ++current_step, "Done");
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    cout << "[NES::System] CreateNewProjectFromFile end" << endl;
-    return true;
-}
-
-void System::CreateDefaultMemoryRegions()
+// Can't be called from the constructor, so call it after creating the system
+void System::CreateMemoryRegions()
 {
     shared_ptr<BaseSystem> base_system = shared_from_this();
     auto selfptr = dynamic_pointer_cast<System>(base_system);
@@ -157,6 +53,20 @@ void System::CreateDefaultMemoryRegions()
 void System::CreateDefaultLabels()
 {
     GlobalMemoryLocation p;
+
+    // Create the CPU vector labels
+    GetEntryPoint(&p);
+    CreateLabel(p, "_reset");
+
+    p.address -= 2;
+    CreateLabel(p, "_nmi");
+    GetMemoryRegion(p)->MarkMemoryAsWords(p, 6); // mark the three vectors as words
+
+    p.address += 4;
+    CreateLabel(p, "_irqbrk");
+
+    // And the labels for the registers
+    p = GlobalMemoryLocation();
     p.address = 0x2000; CreateLabel(p, "PPUCONT");
     p.address = 0x2001; CreateLabel(p, "PPUMASK");
     p.address = 0x2002; CreateLabel(p, "PPUSTAT");
@@ -167,17 +77,6 @@ void System::CreateDefaultLabels()
     p.address = 0x2007; CreateLabel(p, "PPUDATA");
 
     p.address = 0x4014; CreateLabel(p, "OAMDMA");
-}
-
-bool System::IsROMValid(std::string const& file_path_name, std::istream& is)
-{
-    unsigned char buf[16];
-    is.read(reinterpret_cast<char*>(buf), 16);
-    if(is && (buf[0] == 'N' && buf[1] == 'E' && buf[2] == 'S' && buf[3] == 0x1A)) {
-        return true;
-    }
-
-    return false;
 }
 
 // Memory
@@ -370,9 +269,23 @@ int System::DisassemblyThread()
 
             // certain instructions must stop disassembly and others cause branches
             switch(op) {
-            case 0x4C: // JMP absolute. the only difference with JSR is that we finish this line of disassembly
+            case 0x4C: // JMP absolute
                 disassembling_inner = false;
                 // fall through
+            case 0x20: // JSR absolute
+            {
+                u16 target = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
+                GlobalMemoryLocation target_location(current_loc);
+                target_location.address = target;
+
+                if(target >= memory_region->GetBaseAddress() && target < memory_region->GetEndAddress()) { // in the same bank
+                    locations.push_back(target_location);
+                } else if(target >= 0x8000 && !CanBank(target_location)) {
+                    locations.push_back(target_location);
+                }
+
+                break;
+            }
 
             case 0x60: // RTS
             case 0x6C: // JMP indirect
@@ -539,29 +452,6 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, u
     default:
         break;
     }
-}
-
-BaseSystem::Information const* System::GetInformation()
-{
-    return System::GetInformationStatic();
-}
-
-BaseSystem::Information const* System::GetInformationStatic()
-{
-    static BaseSystem::Information information = {
-        .abbreviation  = "NES",
-        .full_name     = "Nintendo Entertainment System",
-        .is_rom_valid  = std::bind(&System::IsROMValid, placeholders::_1, placeholders::_2),
-        .create_system = std::bind(&System::CreateSystem)
-    };
-
-    return &information;
-}
-
-shared_ptr<BaseSystem> System::CreateSystem()
-{
-    System* nes_system = new System();
-    return shared_ptr<BaseSystem>(nes_system);
 }
 
 }

@@ -19,7 +19,25 @@ Cartridge::~Cartridge()
 {
 }
 
-void Cartridge::Prepare()
+bool Cartridge::LoadHeader(u8* buf)
+{
+    // Parse the iNES header
+    header.num_prg_rom_banks = (u8)buf[4];
+    header.num_chr_rom_banks = (u8)buf[5];
+    header.prg_rom_size      = header.num_prg_rom_banks * 16 * 1024;
+    header.chr_rom_size      = header.num_chr_rom_banks *  8 * 1024;
+    header.mapper            = ((u8)buf[6] & 0xF0) >> 4 | ((u8)buf[7] & 0xF0);
+    header.mirroring         = ((u8)buf[6] & 0x08) ? MIRRORING_FOUR_SCREEN : ((bool)((u8)buf[6] & 0x01) ? MIRRORING_VERTICAL : MIRRORING_HORIZONTAL);
+    header.has_sram          = (bool)((u8)buf[6] & 0x02);
+    header.has_trainer       = (bool)((u8)buf[6] & 0x04);
+
+    // Finish creating the cartridge based on mapper information
+    CreateMemoryRegions();
+
+    return true;
+}
+
+void Cartridge::CreateMemoryRegions()
 {
     auto system = parent_system.lock();
     if(!system) return;

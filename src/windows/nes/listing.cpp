@@ -37,8 +37,7 @@ Listing::Listing()
     // create internal signals
     listing_command = make_shared<listing_command_t>();
 
-    shared_ptr<System> system = dynamic_pointer_cast<System>(MyApp::Instance()->GetCurrentSystem());
-    if(system) {
+    if(auto system = (MyApp::Instance()->GetProject()->GetSystem<System>())) {
         // grab a weak_ptr so we don't have to continually use dynamic_pointer_cast
         current_system = system;
 
@@ -98,6 +97,8 @@ void Listing::GoToAddress(u32 address)
         } else {
             // not a banked address, see if it's valid
             if(system->GetMemoryRegion(guessed_address)) {
+                selection_history_back.push(current_selection); // save the current location to the history
+
                 // looks good
                 current_selection = guessed_address;
             }

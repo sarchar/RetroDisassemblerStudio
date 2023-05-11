@@ -25,7 +25,8 @@ public:
 
     Cartridge(std::shared_ptr<System>&);
     ~Cartridge();
-    void Prepare(void);
+
+    bool LoadHeader(u8*);
 
     bool                               CanBank(GlobalMemoryLocation const&);
     std::shared_ptr<ProgramRomBank>&   GetProgramRomBank(u8 bank) { return program_rom_banks[bank]; }
@@ -34,6 +35,8 @@ public:
 
     u16 GetResetVectorBank();
 private:
+    void CreateMemoryRegions();
+
     std::weak_ptr<System> parent_system;
 
     std::vector<std::shared_ptr<ProgramRomBank>>   program_rom_banks;

@@ -19,11 +19,10 @@
 
 #include "main.h"
 #include "systems/nes/nes_label.h"
+#include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
-#include "systems/snes/snes_system.h"
-#include "windows/debugger.h"
-#include "windows/memory.h"
 #include "windows/rom_loader.h"
+#include "windows/nes/listing.h"
 #include "windows/nes/listing.h"
 
 #include "systems/expressions.h" // TODO temp
@@ -38,16 +37,13 @@ MyApp::MyApp(int argc, char* argv[])
 {
     ((void)argc);
     ((void)argv);
-    ProjectCreatorWindow::RegisterSystemInformation(NES::System::GetInformationStatic());
-    ProjectCreatorWindow::RegisterSystemInformation(SNESSystem::GetInformationStatic());
-    current_system_changed = make_shared<current_system_changed_t>();
+    ProjectCreatorWindow::RegisterProjectInformation(NES::Project::GetInformationStatic());
+//!    current_system_changed = make_shared<current_system_changed_t>();
 
     // register all the windows
 #   define REGISTER_WINDOW_TYPE(className) \
         create_window_functions[className::GetWindowClassStatic()] = std::bind(&className::CreateWindow);
     REGISTER_WINDOW_TYPE(NES::Listing);
-    REGISTER_WINDOW_TYPE(SNESMemory);
-    REGISTER_WINDOW_TYPE(SNESDebugger);
 #   undef REGISTER_WINDOW_TYPE
 }
 
@@ -217,7 +213,10 @@ void MyApp::CreateINIWindows()
 
 void MyApp::AddWindow(shared_ptr<BaseWindow> window)
 {
-    // bind to window_closed which is available on all BaseWindows
+    // TODO HACK ALERT! need a clearly way of catching these signals
+    if(auto listing = dynamic_pointer_cast<NES::Listing>(window)) {
+        *listing->listing_command += std::bind(&MyApp::ListingWindowCommand, this, placeholders::_1, placeholders::_2, placeholders::_3);
+    }
     *window->window_closed += std::bind(&MyApp::ManagedWindowClosedHandler, this, placeholders::_1);
 
     managed_windows.push_back(window);
@@ -436,14 +435,14 @@ void MyApp::RenderMainMenuBar()
         }
 
         if(ImGui::BeginMenu("Windows")) {
-            if(ImGui::MenuItem("Debugger")) {
-                auto wnd = SNESDebugger::CreateWindow();
-                AddWindow(wnd);
-            }
-            if(ImGui::MenuItem("Memory")) {
-                auto wnd = SNESMemory::CreateWindow();
-                AddWindow(wnd);
-            }
+            //!if(ImGui::MenuItem("Debugger")) {
+            //!    auto wnd = SNESDebugger::CreateWindow();
+            //!    AddWindow(wnd);
+            //!}
+            //!if(ImGui::MenuItem("Memory")) {
+            //!    auto wnd = SNESMemory::CreateWindow();
+            //!    AddWindow(wnd);
+            //!}
             ImGui::EndMenu();
         }
 
@@ -551,9 +550,11 @@ void MyApp::RenderGUI()
 
 void MyApp::RenderPopups()
 {
-    CreateLabelPopup();
-    DisassemblyPopup();
-    GoToAddressPopup();
+    if(current_project) {
+        CreateLabelPopup();
+        DisassemblyPopup();
+        GoToAddressPopup();
+    }
 
     if(ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         ImGui::CloseCurrentPopup();
@@ -616,37 +617,39 @@ void MyApp::CreateNewProject(string const& file_path_name)
 {
     cout << "[MyApp] CreateNewProject(" << file_path_name << ")" << endl;
 
+    if(current_project) {
+        assert(false); // TODO prompt user to close project and current_project->Close();
+    }
+
     // TODO: close the current project and open windows
+    // TODO move close windows to project
     for(auto& window : managed_windows) {
         window->CloseWindow();
     }
 
-    auto loader = ProjectCreatorWindow::CreateWindow(file_path_name);
-    *loader->system_loaded += std::bind(&MyApp::SystemLoadedHandler, this, placeholders::_1, placeholders::_2);
-    AddWindow(loader);
+    auto creator = ProjectCreatorWindow::CreateWindow(file_path_name);
+    *creator->project_created += std::bind(&MyApp::ProjectCreatedHandler, this, placeholders::_1, placeholders::_2);
+    AddWindow(creator);
 }
 
-void MyApp::SystemLoadedHandler(std::shared_ptr<BaseWindow> project_creator_window, std::shared_ptr<BaseSystem> new_system)
+void MyApp::ProjectCreatedHandler(std::shared_ptr<BaseWindow> project_creator_window, std::shared_ptr<BaseProject> project)
 {
     project_creator_window->CloseWindow();
 
     // TODO: create the default workspace and focus a source editor to the projects entry point
 
-    current_system = new_system;
-    cout << "[MyApp] new " << current_system->GetInformation()->full_name << " loaded." << endl;
-    current_system_changed->emit();
+    current_project = project;
+    cout << "[MyApp] new " << project->GetInformation()->full_name << " loaded." << endl;
+    //!current_system_changed->emit();
 
-    // TODO Would be nice to look up the Listing window and not care which platform is loaded
-    auto wnd = NES::Listing::CreateWindow();
-    *wnd->listing_command      += std::bind(&MyApp::ListingWindowCommand, this, placeholders::_1, placeholders::_2, placeholders::_3);
-
-    AddWindow(wnd);
+    // create the default workspace for the new system
+    current_project->CreateDefaultWorkspace();
 }
 
 void MyApp::ListingWindowCommand(shared_ptr<BaseWindow> const& wnd, string const& cmd, NES::GlobalMemoryLocation const& where)
 {
     // TODO this should be generic
-    if(auto system = dynamic_pointer_cast<NES::System>(current_system)) {
+    if(auto system = current_project->GetSystem<NES::System>()) {
         if(cmd == "CreateLabel") {
             popups.create_label.uhg = make_shared<NES::GlobalMemoryLocation>(where);
             popups.create_label.show = true;
@@ -655,11 +658,8 @@ void MyApp::ListingWindowCommand(shared_ptr<BaseWindow> const& wnd, string const
             // if currently disassembling, ignore the request
             if(popups.disassembly.thread) return;
         
-            // TODO this should be generic
-            if(auto system = dynamic_pointer_cast<NES::System>(current_system)) {
-                system->InitDisassembly(where);
-                popups.disassembly.show = true;
-            }
+            system->InitDisassembly(where);
+            popups.disassembly.show = true;
         } else if(cmd == "GoToAddress") {
             popups.goto_address.listing = wnd;
             popups.goto_address.show = true;
@@ -671,18 +671,21 @@ void MyApp::CreateLabelPopup()
 {
     auto title = popups.create_label.title.c_str();
 
-    // TODO this should be generic and we can use current_system->DisassemblyThread
-    auto system = dynamic_pointer_cast<NES::System>(current_system);
+    // TODO this should be generic
+    auto system = current_project->GetSystem<NES::System>();
     if(!system) return;
 
     if(!ImGui::IsPopupOpen(title) && popups.create_label.show) {
         popups.create_label.show = false;
         popups.create_label.buf[0] = '\0';
+        popups.create_label.edit = -1;
 
         NES::GlobalMemoryLocation* where = static_cast<NES::GlobalMemoryLocation*>(popups.create_label.uhg.get());
         auto labels = system->GetLabelsAt(*where);
         if(labels.size()) {
-            strncpy(popups.create_label.buf, labels.at(0)->GetString().c_str(), sizeof(popups.create_label.buf));
+            int nth = 0;
+            strncpy(popups.create_label.buf, labels.at(nth)->GetString().c_str(), sizeof(popups.create_label.buf));
+            popups.create_label.edit = nth;
         }
 
         ImGui::OpenPopup(title);
@@ -705,7 +708,7 @@ void MyApp::CreateLabelPopup()
         string lstr(popups.create_label.buf);
         NES::GlobalMemoryLocation* where = static_cast<NES::GlobalMemoryLocation*>(popups.create_label.uhg.get());
 
-        if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
+        if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || popups.create_label.edit == -1) {
             // add the label
             system->CreateLabel(*where, lstr, true);
         } else {
@@ -725,7 +728,7 @@ void MyApp::DisassemblyPopup()
     auto title = popups.disassembly.title.c_str();
     
     // TODO this should be generic and we can use current_system->DisassemblyThread
-    auto system = dynamic_pointer_cast<NES::System>(current_system);
+    auto system = current_project->GetSystem<NES::System>();
     if(!system) return;
 
     // Check if the dialog needs to be opened
@@ -768,7 +771,7 @@ void MyApp::GoToAddressPopup()
     auto title = popups.goto_address.title.c_str();
 
     // TODO this should be generic and we can use current_system->DisassemblyThread
-    auto system = dynamic_pointer_cast<NES::System>(current_system);
+    auto system = current_project->GetSystem<NES::System>();
     if(!system) return;
 
     if(!ImGui::IsPopupOpen(title) && popups.goto_address.show) {

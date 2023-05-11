@@ -9,13 +9,14 @@
 #include "imgui_internal.h"
 
 #include "main.h"
+#include "project.h"
 #include "signals.h"
 #include "systems/system.h"
 #include "windows/rom_loader.h"
 
 using namespace std;
 
-std::vector<BaseSystem::Information const*> ProjectCreatorWindow::system_informations;
+std::vector<BaseProject::Information const*> ProjectCreatorWindow::project_informations;
 
 shared_ptr<ProjectCreatorWindow> ProjectCreatorWindow::CreateWindow(string const& _file_path_name)
 {
@@ -29,7 +30,7 @@ ProjectCreatorWindow::ProjectCreatorWindow(string const& _file_path_name)
 {
     SetTitle("Project Creator");
     SetWindowless(true);
-    system_loaded = make_shared<system_loaded_t>();
+    project_created = make_shared<project_created_t>();
 }
 
 ProjectCreatorWindow::~ProjectCreatorWindow()
@@ -39,10 +40,10 @@ ProjectCreatorWindow::~ProjectCreatorWindow()
 
 void ProjectCreatorWindow::UpdateContent(double deltaTime) 
 {
-    // loop over all systems asking if the file name is valid
-    // if there's only 1 valid system, load it
+    // loop over all projects asking if the file name is valid
+    // if there's only 1 valid project, load it
     // if there's more than 1, ask the user to clarify which system should load it
-    // returns a System instance
+    // returns a Project instance
     switch(loader_state) {
     case LOADER_STATE_INIT:
     {
@@ -54,10 +55,10 @@ void ProjectCreatorWindow::UpdateContent(double deltaTime)
         }
 
         // loop over all the loaders and accumuilate the valid ones
-        vector<BaseSystem::Information const*> valid_systems;
-        for(auto info : ProjectCreatorWindow::system_informations) {
+        vector<BaseProject::Information const*> valid_projects;
+        for(auto info : ProjectCreatorWindow::project_informations) {
             if(info->is_rom_valid(file_path_name, is)) {
-                valid_systems.push_back(info);
+                valid_projects.push_back(info);
             }
 
             // rewind the pointer for the next call
@@ -66,21 +67,21 @@ void ProjectCreatorWindow::UpdateContent(double deltaTime)
         }
 
         // if there are no valid loaders, tell the user
-        if(valid_systems.size() == 0) {
+        if(valid_projects.size() == 0) {
             loader_state = LOADER_STATE_NOT_A_VALID_ROM;
             break;
         }
 
         // if there's only 1 valid loader, load it
-        if(valid_systems.size() == 1) {
-            CreateNewProject(valid_systems[0]);
+        if(valid_projects.size() == 1) {
+            CreateNewProject(valid_projects[0]);
             loader_state = LOADER_STATE_CREATING_PROJECT;
             //TODO CloseWindow();
             break;
         }
         
         // otherwise, allow the user to select which system to load
-        available_systems = valid_systems;
+        available_systems = valid_projects;
         loader_state = LOADER_STATE_SELECT_SYSTEM;
         break;
     }
@@ -161,9 +162,7 @@ void ProjectCreatorWindow::RenderContent()
 
             if(create_project_done) {
                 if(!create_project_error || ImGui::Button("Close")) { // wait for OK to be pressed
-                    //CloseWindow();
-                    //TODO move this somewhere else
-                    system_loaded->emit(shared_from_this(), current_system);
+                    project_created->emit(shared_from_this(), current_project);
                     create_project_done = false;
                 }
             }
@@ -178,10 +177,10 @@ void ProjectCreatorWindow::RenderContent()
     }
 }
 
-void ProjectCreatorWindow::CreateNewProject(BaseSystem::Information const* info)
+void ProjectCreatorWindow::CreateNewProject(BaseProject::Information const* info)
 {
-    current_system = info->create_system();
-    *current_system->create_new_project_progress += std::bind(&ProjectCreatorWindow::CreateNewProjectProgress, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4, placeholders::_5);
+    current_project = info->create_project();
+    *current_project->create_new_project_progress += std::bind(&ProjectCreatorWindow::CreateNewProjectProgress, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4, placeholders::_5);
     create_project_max_progress = 0;
     create_project_message.clear();
     create_project_error = false;
@@ -191,7 +190,7 @@ void ProjectCreatorWindow::CreateNewProject(BaseSystem::Information const* info)
     create_project_thread = make_unique<std::thread>(std::bind(&ProjectCreatorWindow::CreateProjectThreadMain, this));
 }
 
-void ProjectCreatorWindow::CreateNewProjectProgress(shared_ptr<BaseSystem> system, bool error, u64 max_progress, u64 current_progress, std::string const& msg)
+void ProjectCreatorWindow::CreateNewProjectProgress(shared_ptr<BaseProject> system, bool error, u64 max_progress, u64 current_progress, std::string const& msg)
 {
     cout << "[ProjectCreatorWindow] CreateNewProjectProgress: " << msg << " (" << current_progress << "/" << max_progress << ")" << endl;
 
@@ -201,16 +200,16 @@ void ProjectCreatorWindow::CreateNewProjectProgress(shared_ptr<BaseSystem> syste
     create_project_message          = msg;
 }
 
-void ProjectCreatorWindow::RegisterSystemInformation(BaseSystem::Information const* info)
+void ProjectCreatorWindow::RegisterProjectInformation(BaseProject::Information const* info)
 {
-    ProjectCreatorWindow::system_informations.push_back(info);
+    ProjectCreatorWindow::project_informations.push_back(info);
 }
 
 void ProjectCreatorWindow::CreateProjectThreadMain()
 {
     cout << "[ProjectCreatorWindow] CreateProjectThreadMain start" << endl;
 
-    if(current_system->CreateNewProjectFromFile(file_path_name)) {
+    if(current_project->CreateNewProjectFromFile(file_path_name)) {
         // success
     } else {
         // failure
