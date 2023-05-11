@@ -153,7 +153,7 @@ void ProjectCreatorWindow::RenderContent()
         ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoResize;
         if(ImGui::BeginPopupModal(title.c_str(), nullptr, flags)) {
             if(create_project_max_progress != 0) {
-                ImGui::Text("%s (%.2f%%)", create_project_message.c_str(), create_project_current_progress / (float)create_project_max_progress);
+                ImGui::Text("%s (%.2f%%)", create_project_message.c_str(), create_project_current_progress / (float)create_project_max_progress * 100.0f);
             } else {
                 // might be empty for a frame or two, but that's OK
                 ImGui::Text("%s", create_project_message.c_str());

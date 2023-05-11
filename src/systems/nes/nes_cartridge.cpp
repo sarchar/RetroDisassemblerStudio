@@ -103,6 +103,22 @@ u16 Cartridge::GetResetVectorBank()
     return 0;
 }
 
+bool Cartridge::CanBank(GlobalMemoryLocation const& where)
+{
+    if(where.address < 0x8000) {
+        return false;
+    } else {
+        switch(header.mapper) {
+        case 0: // no banking with mapper 0
+            return false;
+
+        case 1: // MMC1 depends on the location 
+            if(header.num_prg_rom_banks <= 16 && where.address >= 0xC000) return false;
+            return true;
+        }
+    }
+}
+
 std::shared_ptr<MemoryRegion> Cartridge::GetMemoryRegion(GlobalMemoryLocation const& where)
 {
     if(where.is_chr) {
@@ -111,8 +127,19 @@ std::shared_ptr<MemoryRegion> Cartridge::GetMemoryRegion(GlobalMemoryLocation co
         if(where.address < 0x8000) { // TODO SRAM support
             return nullptr;
         } else {
-            assert(where.prg_rom_bank < header.num_prg_rom_banks);
-            return program_rom_banks[where.prg_rom_bank];
+            switch(header.mapper) {
+            case 0: // easy
+                if(header.num_prg_rom_banks == 1) return program_rom_banks[0];
+                return program_rom_banks[(int)(where.address >= 0xC000)];
+
+            case 1: 
+                if(header.num_prg_rom_banks <= 16 && where.address >= 0xC000) {
+                    return program_rom_banks[header.num_prg_rom_banks - 1];
+                } else {
+                    assert(where.prg_rom_bank < header.num_prg_rom_banks);
+                    return program_rom_banks[where.prg_rom_bank];
+                }
+            }
         }
     }
 }

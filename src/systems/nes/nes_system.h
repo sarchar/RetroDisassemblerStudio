@@ -47,6 +47,7 @@ public:
     // Memory
     void CreateDefaultMemoryRegions();
     void GetEntryPoint(NES::GlobalMemoryLocation*);
+    bool CanBank(GlobalMemoryLocation const&);
     void GetBanksForAddress(GlobalMemoryLocation const&, std::vector<u16>&);
 
     std::shared_ptr<MemoryRegion> GetMemoryRegion(GlobalMemoryLocation const&);
@@ -71,9 +72,10 @@ public:
 
     // Disassembly
     std::shared_ptr<Disassembler> GetDisassembler() { return disassembler; }
+    bool IsDisassembling() const { return disassembling; }
     void InitDisassembly(GlobalMemoryLocation const&);
     int  DisassemblyThread();
-    bool IsDisassembling() const { return disassembling; }
+    void CreateDefaultOperandExpression(GlobalMemoryLocation const&, u8);
 
     //!std::shared_ptr<LabelList> GetLabels(GlobalMemoryLocation const& where) {
     //!    if(!label_database.contains(where)) return nullptr;

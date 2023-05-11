@@ -727,7 +727,8 @@ string MemoryObject::FormatOperandField(u32 /* internal_offset */, shared_ptr<Di
                 break;
 
             case MemoryObject::TYPE_CODE:
-                ss << disassembler->FormatOperand(code.opcode, code.operands);
+                // this code path is largely not followed
+                ss << "<missing expression>";
                 break;
 
             default:

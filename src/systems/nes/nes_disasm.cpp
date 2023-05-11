@@ -100,78 +100,8 @@ ADDRESSING_MODE Disassembler::GetAddressingMode(u8 opcode)
 
 std::string Disassembler::FormatOperand(u8 opcode, u8 const* operands)
 {
-    stringstream ss;
-
-    switch(Disassembler::GetAddressingMode(opcode)) {
-    case AM_ACCUM:
-        ss << "A" << endl;
-        break;
-
-    case AM_IMMEDIATE:
-        ss << "#$" << hex << setw(2) << setfill('0') << uppercase << (int)operands[0];
-        break;
-
-    case AM_ZEROPAGE:
-        ss << "$" << hex << setw(2) << setfill('0') << uppercase << (int)operands[0] << "";
-        break;
-
-    case AM_ZEROPAGE_X:
-        ss << "$" << hex << setw(2) << setfill('0') << uppercase << (int)operands[0] << ",X";
-        break;
-
-    case AM_ZEROPAGE_Y:
-        ss << "$" << hex << setw(2) << setfill('0') << uppercase << (int)operands[0] << ",Y";
-        break;
-
-    case AM_ABSOLUTE:
-    {
-        u16 w = (u16)operands[0] | ((u16)operands[1] << 8);
-        ss << "$" << hex << setw(4) << setfill('0') << uppercase << w;
-        break;
-    }
-
-    case AM_ABSOLUTE_X:
-    {
-        u16 w = (u16)operands[0] | ((u16)operands[1] << 8);
-        ss << "$" << hex << setw(4) << setfill('0') << uppercase << w << ",X";
-        break;
-    }
-
-    case AM_ABSOLUTE_Y:
-    {
-        u16 w = (u16)operands[0] | ((u16)operands[1] << 8);
-        ss << "$" << hex << setw(4) << setfill('0') << uppercase << w << ",Y";
-        break;
-    }
-
-    case AM_INDIRECT:
-    {
-        u16 w = (u16)operands[0] | ((u16)operands[1] << 8);
-        ss << "($" << hex << setw(4) << setfill('0') << uppercase << w << ")";
-        break;
-    }
-
-    case AM_INDIRECT_X:
-        ss << "($" << hex << setw(2) << setfill('0') << uppercase << (int)operands[0] << ",X)";
-        break;
-
-    case AM_INDIRECT_Y:
-        ss << "($" << hex << setw(2) << setfill('0') << uppercase << (int)operands[0] << "),Y";
-        break;
-
-    case AM_RELATIVE:
-    {
-        ss << "rel $" << hex << setw(2) << setfill('0') << uppercase << (int)operands[0];
-        break;
-    }
-
-    case AM_IMPLIED:
-    default:
-        assert(false); // don't call me
-        return "";
-    }
-
-    return ss.str();
+    assert(false);
+    return "";
 }
 
 }

@@ -58,39 +58,27 @@ namespace BaseExpressionNodes {
         std::string right;
     };
 
-    class ConstantU8 : public BaseExpressionNode {
+    template <class T>
+    class Constant : public BaseExpressionNode {
     public:
-        ConstantU8(std::string const& vstr)
-            : value_str(vstr)
-        {
-            // parse value_str
-            std::stringstream ss;
-            if(vstr[0] == L'$') {
-                ss << std::hex << vstr.substr(1);
-            } else {
-                ss << vstr;
-            }
+        Constant(T _value, std::string const& _display)
+            : value(_value), display(_display)
+        { }
 
-            u64 v;
-            ss >> v;
+        virtual ~Constant() {}
 
-            value = (u8)(v & 0xFF);
-        }
-
-        virtual ~ConstantU8() {}
-
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
+        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const&, s64* result) const override {
             *result = (s64)value;
             return true;
         }
 
         void Print(std::ostream& ostream) const override {
-            ostream << value_str;
+            ostream << display;
         }
 
     private:
-        std::string value_str;
-        u8          value;
+        T           value;
+        std::string display;
     };
 
     class Name : public BaseExpressionNode {
@@ -151,41 +139,45 @@ namespace BaseExpressionNodes {
 
 class BaseExpressionNodeCreator : public std::enable_shared_from_this<BaseExpressionNodeCreator> {
 public:
-    typedef std::shared_ptr<BaseExpressionNode> N;
+    typedef std::shared_ptr<BaseExpressionNode> BN;
 
     BaseExpressionNodeCreator();
     virtual ~BaseExpressionNodeCreator();
 
-    virtual N CreateParens(std::string const& left, N& value, std::string const& right) {
+    virtual BN CreateParens(std::string const& left, BN& value, std::string const& right) {
         return std::make_shared<BaseExpressionNodes::Parens>(left, value, right);
     }
 
-    virtual N CreateConstantU8(std::string const& s) {
-        return std::make_shared<BaseExpressionNodes::ConstantU8>(s);
+    virtual BN CreateConstantU8(u8 value, std::string const& display) {
+        return std::make_shared<BaseExpressionNodes::Constant<u8>>(value, display);
     }
 
-    virtual N CreateName(std::string const& s) {
+    virtual BN CreateConstantU16(u16 value, std::string const& display) {
+        return std::make_shared<BaseExpressionNodes::Constant<u16>>(value, display);
+    }
+
+    virtual BN CreateName(std::string const& s) {
         return std::make_shared<BaseExpressionNodes::Name>(s);
     }
 
-    virtual N CreateAddOp(N& left, N& right, std::string const& display) {
+    virtual BN CreateAddOp(BN& left, BN& right, std::string const& display) {
         auto op = [](s64 a, s64 b)->s64 { return a + b; };
-        return std::make_shared<BaseExpressionNodes::BinaryOp<N>>(op, left, right, display);
+        return std::make_shared<BaseExpressionNodes::BinaryOp<BN>>(op, left, right, display);
     }
 
-    virtual N CreateSubtractOp(N& left, N& right, std::string const& display) {
+    virtual BN CreateSubtractOp(BN& left, BN& right, std::string const& display) {
         auto op = [](s64 a, s64 b)->s64 { return a - b; };
-        return std::make_shared<BaseExpressionNodes::BinaryOp<N>>(op, left, right, display);
+        return std::make_shared<BaseExpressionNodes::BinaryOp<BN>>(op, left, right, display);
     }
 
-    virtual N CreateMultiplyOp(N& left, N& right, std::string const& display) {
+    virtual BN CreateMultiplyOp(BN& left, BN& right, std::string const& display) {
         auto op = [](s64 a, s64 b)->s64 { return a * b; };
-        return std::make_shared<BaseExpressionNodes::BinaryOp<N>>(op, left, right, display);
+        return std::make_shared<BaseExpressionNodes::BinaryOp<BN>>(op, left, right, display);
     }
 
-    virtual N CreateDivideOp(N& left, N& right, std::string const& display) {
+    virtual BN CreateDivideOp(BN& left, BN& right, std::string const& display) {
         auto op = [](s64 a, s64 b)->s64 { return a / b; };
-        return std::make_shared<BaseExpressionNodes::BinaryOp<N>>(op, left, right, display);
+        return std::make_shared<BaseExpressionNodes::BinaryOp<BN>>(op, left, right, display);
     }
 };
 

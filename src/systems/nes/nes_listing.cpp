@@ -139,11 +139,7 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
             ImGui::Text("%s", memory_object->FormatInstructionField(disassembler).c_str());
 
             ImGui::TableNextColumn();
-            if(sz == 1) {
-                ImGui::Text("");
-            } else {
-                ImGui::Text("%s", memory_object->FormatOperandField(0, disassembler).c_str());
-            }
+            ImGui::Text("%s", memory_object->FormatOperandField(0, disassembler).c_str());
 
             ImGui::TableNextColumn();
             if(auto eolc = memory_object->comments.eol) {

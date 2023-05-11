@@ -189,6 +189,17 @@ void System::GetEntryPoint(GlobalMemoryLocation* out)
     out->prg_rom_bank = cartridge->GetResetVectorBank();
 }
 
+bool System::CanBank(GlobalMemoryLocation const& where)
+{
+    if(where.is_chr) {
+        assert(false); // TODO
+        return false;
+    } else {
+        // some mappers don't have switchable banks, making some disassembly look nicer
+        return cartridge->CanBank(where);
+    }
+}
+
 void System::GetBanksForAddress(GlobalMemoryLocation const& where, vector<u16>& out)
 {
     assert(!where.is_chr);
@@ -330,35 +341,14 @@ int System::DisassemblyThread()
             // re-get the memory object JIC
             memory_object = memory_region->GetMemoryObject(current_loc);
 
-            // next PC
-            current_loc = current_loc + size;
+            // create the expressions as necessary
+            CreateDefaultOperandExpression(current_loc, op);
 
             // certain instructions must stop disassembly and others cause branches
             switch(op) {
             case 0x4C: // JMP absolute. the only difference with JSR is that we finish this line of disassembly
                 disassembling_inner = false;
                 // fall through
-            case 0x20: // JSR absolute
-            {
-                u16 target = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
-                if(target >= memory_region->GetBaseAddress() && target < memory_region->GetEndAddress()) {
-                    GlobalMemoryLocation newloc(current_loc);
-                    newloc.address = target;
-                    locations.push_back(newloc);
-                    //cout << "[NES::System::DisassemblyThread] continuing disassembling at " << newloc << endl;
-
-                    // create a label at that address if there isn't one yet
-                    auto destination_object = memory_region->GetMemoryObject(newloc);
-
-                    stringstream ss;
-                    ss << "L_" << hex << setw(2) << setfill('0') << uppercase << newloc.prg_rom_bank << setw(4) << newloc.address;
-                    string label_str = ss.str();
-
-                    // no problem if this fails if the label already exists
-                    CreateLabel(newloc, label_str);
-                }
-                break;
-            }
 
             case 0x60: // RTS
             case 0x6C: // JMP indirect
@@ -366,39 +356,8 @@ int System::DisassemblyThread()
                 break;
             }
 
-            // Attempt to apply labels to all absolute indexing modes
-            switch(disassembler->GetAddressingMode(op)) {
-            case AM_ABSOLUTE:
-            {
-                u16 target = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
-
-                GlobalMemoryLocation target_location;
-                target_location.address = target;
-
-                // if the target is in the current bank, copy over that bank number
-                // otherwise, leave it at 0 for other memory regions
-                if(target >= memory_region->GetBaseAddress() && target < memory_region->GetEndAddress()) {
-                    target_location.prg_rom_bank = current_loc.prg_rom_bank;
-                }
-
-                if(auto target_object = GetMemoryObject(target_location)) {
-                    if(target_object->labels.size()) {
-                        auto label = target_object->labels.at(0);
-                        auto expr = make_shared<Expression>();
-                        auto name = expr->GetNodeCreator()->CreateName(label->GetString());
-                        expr->Set(name);
-
-                        // set the expression for memory object at current_selection. it'll show up immediately
-                        memory_object->operand_expression = expr;
-                    }
-                }
-
-                break;
-            }
-
-            default:
-                break;
-            }
+            // next PC, maybe
+            current_loc = current_loc + size;
         }
     }
 
@@ -408,6 +367,154 @@ int System::DisassemblyThread()
     disassembling = false;
     disassembly_stopped->emit(disassembly_address);
     return 0;
+}
+
+void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, u8 opcode)
+{
+    auto code_region = GetMemoryRegion(where);
+    auto code_object = GetMemoryObject(where);
+
+    switch(auto am = disassembler->GetAddressingMode(opcode)) {
+    case AM_ABSOLUTE:
+    case AM_ABSOLUTE_X:
+    case AM_ABSOLUTE_Y:
+    case AM_ZEROPAGE:
+    case AM_ZEROPAGE_X:
+    case AM_ZEROPAGE_Y:
+    case AM_INDIRECT_X:
+    case AM_INDIRECT_Y:
+    case AM_RELATIVE:
+    {
+        // 8-bit addresses are always zero page and never ROM
+        bool is16 = (am == AM_ABSOLUTE || am == AM_ABSOLUTE_X || am == AM_ABSOLUTE_Y);
+        bool isrel = (am == AM_RELATIVE);
+
+        u16 target = isrel ? (u16)((s16)(where.address + 2) + (s16)(s8)code_object->code.operands[0])
+                           : (is16 ? ((u16)code_object->code.operands[0] | ((u16)code_object->code.operands[1] << 8))
+                                   : (u16)code_object->code.operands[0]);
+
+        GlobalMemoryLocation target_location;
+        target_location.address = target;
+        bool is_valid = true;
+
+        // if the target is in the current bank, copy over that bank number
+        // if the target is in a banked region, try to determine the bank
+        // otherwise, leave it at 0 for other memory regions
+        if(target >= code_region->GetBaseAddress() && target < code_region->GetEndAddress()) {
+            target_location.prg_rom_bank = where.prg_rom_bank;
+        } else if(CanBank(target_location)) {
+            vector<u16> banks;
+            GetBanksForAddress(target_location, banks);
+            if(banks.size() == 1) {
+                target_location.prg_rom_bank = banks[0];
+            } else {
+                // here we can't always ask the user for which bank, since we could be disassembling
+                is_valid = false;
+            }
+        }
+
+        // only for valid destination addresses do we create an expression. others get the default
+        // disasembler output and the user will have to create the expression manually
+        auto target_object = GetMemoryObject(target_location);
+        if(target_object) {
+            // create a label at that address if there isn't one yet
+            stringstream ss;
+            if(isrel) ss << ".";
+            else      ss << "L_";
+            ss << hex << setfill('0') << uppercase;
+            if(CanBank(target_location)) ss << setw(2) << target_location.prg_rom_bank;
+            ss << setw(4) << target_location.address;
+
+            // no problem if this fails if the label already exists
+            CreateLabel(target_location, ss.str());
+        }
+
+        // now create an expression for the operands
+        auto expr = make_shared<Expression>();
+        auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
+
+        // TODO format in other bases?
+        char buf[6];
+        if(is16 || isrel) {
+            snprintf(buf, sizeof(buf), "$%04X", target_location.address);
+        } else {
+            snprintf(buf, sizeof(buf), "$%02X", target_location.address);
+        }
+
+        // if the destination is not valid memory, we can't really create an OperandAddressOrLabel node
+        auto root = is_valid ? nc->CreateOperandAddressOrLabel(target_object, target_location, 0, string(buf))
+                             : (is16 ? nc->CreateConstantU16(target_location.address, buf)
+                                     : nc->CreateConstantU8(target_location.address, buf));
+
+        // wrap the address/label with whatever is necessary to format this instruction
+        if(am == AM_ABSOLUTE_X || am == AM_ZEROPAGE_X) {
+            root = nc->CreateIndexedX(root, ",X");
+        } else if(am == AM_ABSOLUTE_Y || am == AM_ZEROPAGE_Y) {
+            root = nc->CreateIndexedY(root, ",Y");
+        } else if(am == AM_INDIRECT_X) {
+            // (v,X)
+            root = nc->CreateIndexedX(root, ",X");
+            root = nc->CreateParens("(", root, ")");
+        } else if(am == AM_INDIRECT_X) {
+            // (v),Y
+            root = nc->CreateParens("(", root, ")");
+            root = nc->CreateIndexedY(root, ",Y");
+        }
+
+        expr->Set(root);
+
+        // set the expression for memory object at current_selection. it'll show up immediately
+        code_object->operand_expression = expr;
+        break;
+    }
+
+    case AM_IMMEDIATE: // Immediate instructions don't get labels
+    {
+        u8 imm = code_object->code.operands[0];
+
+        auto expr = make_shared<Expression>();
+        auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
+
+        // TODO format in other bases?
+        char buf[4];
+        snprintf(buf, sizeof(buf), "$%02X", imm);
+
+        auto root = nc->CreateConstantU8(imm, string(buf));
+        root = nc->CreateImmediate("#", root);
+        expr->Set(root);
+
+        // set the expression for memory object at current_selection. it'll show up immediately
+        code_object->operand_expression = expr;
+
+        break;
+    }
+
+    case AM_ACCUM: // "A", or not, we don't care!
+    {
+        auto expr = make_shared<Expression>();
+        auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
+
+        auto root = nc->CreateAccum("A"); // if you don't want to type the A, leave this string blank
+        expr->Set(root);
+
+        // set the expression for memory object at current_selection. it'll show up immediately
+        code_object->operand_expression = expr;
+        break;
+    }
+
+    case AM_IMPLIED: // implied opcodes don't have an expression, so we make it empty
+    {
+        auto expr = make_shared<Expression>();
+        auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
+
+        // set the expression for memory object at current_selection. it'll show up immediately
+        code_object->operand_expression = expr;
+        break;
+    }
+
+    default:
+        break;
+    }
 }
 
 BaseSystem::Information const* System::GetInformation()

@@ -460,17 +460,17 @@ void MyApp::RenderMainMenuBar()
                 // 3 * ((1 + myFunc)-( $10*otherFunc ))
                 // and have it should evaluate to -126
 
-                auto constant_one = node_creator->CreateConstantU8("1");
+                auto constant_one = node_creator->CreateConstantU8(1, "1");
                 auto label = node_creator->CreateName("myFunc");
                 auto add = node_creator->CreateAddOp(constant_one, label, " + ");
                 auto paren1 = node_creator->CreateParens("(", add, ")");
-                auto constant_two = node_creator->CreateConstantU8("$10");
+                auto constant_two = node_creator->CreateConstantU8(0x10, "$10");
                 auto label2 = node_creator->CreateName("otherFunc");
                 auto mul = node_creator->CreateMultiplyOp(constant_two, label2, "*");
                 auto paren2 = node_creator->CreateParens("( ", mul, " )");
                 auto sub = node_creator->CreateSubtractOp(paren1, paren2, "-");
                 auto paren3 = node_creator->CreateParens("(", sub, ")");
-                auto constant_three = node_creator->CreateConstantU8("3");
+                auto constant_three = node_creator->CreateConstantU8(3, "3");
                 auto mul2 = node_creator->CreateMultiplyOp(constant_three, paren3, " * ");
                 expr->Set(mul2);
 
@@ -480,8 +480,8 @@ void MyApp::RenderMainMenuBar()
                         : node_creator(nc) {}
 
                     shared_ptr<BaseExpressionNode> ResolveName(string const& name) override {
-                        if(name == "myFunc") return node_creator->CreateConstantU8("5");
-                        if(name == "otherFunc") return node_creator->CreateConstantU8("3");
+                        if(name == "myFunc") return node_creator->CreateConstantU8(5, "5");
+                        if(name == "otherFunc") return node_creator->CreateConstantU8(3, "3");
                         return nullptr;
                     }
 

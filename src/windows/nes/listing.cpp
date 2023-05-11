@@ -77,22 +77,30 @@ void Listing::GoToAddress(u32 address)
         current_selection.address = address;
     } else {
         // destination is not in this memory region, see if we can find it
-        GlobalMemoryLocation guessed_address(current_selection);
+        GlobalMemoryLocation guessed_address;
         guessed_address.address = address;
 
-        vector<u16> possible_banks;
-        system->GetBanksForAddress(guessed_address, possible_banks);
+        if(system->CanBank(guessed_address)) {
+            vector<u16> possible_banks;
+            system->GetBanksForAddress(guessed_address, possible_banks);
 
-        if(possible_banks.size() == 1) {
-            guessed_address.prg_rom_bank = possible_banks[0];
-            memory_region = system->GetMemoryRegion(guessed_address);
-            if(memory_region) {
-                selection_history_back.push(current_selection); // save the current location to the history
-                ClearForwardHistory();                          // and clear the forward history
-                current_selection = guessed_address;
+            if(possible_banks.size() == 1) {
+                guessed_address.prg_rom_bank = possible_banks[0];
+                memory_region = system->GetMemoryRegion(guessed_address);
+                if(memory_region) {
+                    selection_history_back.push(current_selection); // save the current location to the history
+                    ClearForwardHistory();                          // and clear the forward history
+                    current_selection = guessed_address;
+                }
+            } else {
+                assert(false); // popup dialog and wait for selection of which bank to go to
             }
         } else {
-            assert(false); // popup dialog and wait for selection of which bank to go to
+            // not a banked address, see if it's valid
+            if(system->GetMemoryRegion(guessed_address)) {
+                // looks good
+                current_selection = guessed_address;
+            }
         }
     }
 
@@ -166,7 +174,7 @@ void Listing::CheckInput()
             listing_command->emit(shared_from_this(), "GoToAddress", current_selection);
             break;
 
-        case L'r': // convert operand to reference
+        case L'e': // create default expression for operand
         {
             // TODO this will be a larger task in the future
             auto memory_region = system->GetMemoryRegion(current_selection);

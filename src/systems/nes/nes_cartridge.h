@@ -27,6 +27,7 @@ public:
     ~Cartridge();
     void Prepare(void);
 
+    bool                               CanBank(GlobalMemoryLocation const&);
     std::shared_ptr<ProgramRomBank>&   GetProgramRomBank(u8 bank) { return program_rom_banks[bank]; }
     std::shared_ptr<CharacterRomBank>& GetCharacterRomBank(u8 bank) { return character_rom_banks[bank]; }
     std::shared_ptr<MemoryRegion>      GetMemoryRegion(GlobalMemoryLocation const&);
