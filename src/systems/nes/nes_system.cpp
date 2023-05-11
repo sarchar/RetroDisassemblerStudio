@@ -242,15 +242,13 @@ void System::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count
     memory_region->MarkMemoryAsWords(where, byte_count);
 }
 
-shared_ptr<Label> System::CreateLabel(GlobalMemoryLocation const& where, string const& label_str, bool was_user_created)
+shared_ptr<Label> System::GetOrCreateLabel(GlobalMemoryLocation const& where, string const& label_str, bool was_user_created)
 {
-    // lookup the label to see 
+    // lookup the label to see if it already exists
     auto other = label_database[label_str];
-    if(other) {
-        cout << "[System::CreateLabel] label '" << label_str << "' already exists and points to " << where << endl;
-        return nullptr;
-    }
+    if(other) return other;
 
+    // create a new Label
     auto label = make_shared<Label>(where, label_str);
     label_database[label_str] = label;
 
@@ -261,6 +259,17 @@ shared_ptr<Label> System::CreateLabel(GlobalMemoryLocation const& where, string 
     label_created->emit(label, was_user_created);
 
     return label;
+}
+
+shared_ptr<Label> System::CreateLabel(GlobalMemoryLocation const& where, string const& label_str, bool was_user_created)
+{
+    auto other = label_database[label_str];
+    if(other) {
+        //cout << "[System::CreateLabel] label '" << label_str << "' already exists and points to " << where << endl;
+        return nullptr;
+    }
+
+    return GetOrCreateLabel(where, label_str, was_user_created);
 }
 
 void System::InitDisassembly(GlobalMemoryLocation const& where)
@@ -337,7 +346,7 @@ int System::DisassemblyThread()
                     ss << "L_" << hex << setw(2) << setfill('0') << uppercase << newloc.prg_rom_bank << setw(4) << newloc.address;
                     string label_str = ss.str();
 
-                    if(auto label = CreateLabel(newloc, label_str)) {
+                    if(auto label = GetOrCreateLabel(newloc, label_str)) {
                         auto expr         = make_shared<Expression>();
                         auto name         = expr->GetNodeCreator()->CreateName(label->GetString());
                         expr->Set(name);

@@ -65,6 +65,7 @@ public:
         return nullptr;
     }
     
+    std::shared_ptr<Label> GetOrCreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
     std::shared_ptr<Label> CreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
 
     // Disassembly
