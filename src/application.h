@@ -21,6 +21,7 @@ public:
     virtual void RenderMainToolBar();
 
     virtual void OnKeyPress(int glfw_key, int scancode, int action, int mods);
+    virtual void OnWindowMoved(int x, int y);
 
     virtual bool OnWindowCreated();
     virtual void OnWindowDestroyed();
@@ -58,6 +59,7 @@ private:
     int CreateWindow();
     void DestroyWindow();
     void KeyPressHandler(GLFWwindow*, int, int, int, int);
+    void WindowPosHandler(GLFWwindow*, int, int);
     void _RenderMainStatusBar();
     void _RenderMainToolBar();
 

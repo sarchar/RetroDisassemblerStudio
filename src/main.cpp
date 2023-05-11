@@ -79,11 +79,6 @@ bool MyApp::OnWindowCreated()
     // Connect handlers for ImGui to store layout data
     SetupINIHandlers();
 
-    // position the window in a consistent location
-#ifndef NDEBUG
-    SetWindowPos(1600, 200);
-#endif
-
     // load some fonts
     // TODO everything will one day be user customizable
     ImFont* default_font = io.Fonts->AddFontDefault();
