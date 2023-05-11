@@ -18,6 +18,7 @@
 #include "dirent/dirent.h"
 
 #include "main.h"
+#include "systems/nes/nes_label.h"
 #include "systems/nes/nes_system.h"
 #include "systems/snes/snes_system.h"
 #include "windows/debugger.h"
@@ -676,8 +677,13 @@ void MyApp::CreateLabelPopup()
 
     if(!ImGui::IsPopupOpen(title) && popups.create_label.show) {
         popups.create_label.show = false;
-
         popups.create_label.buf[0] = '\0';
+
+        NES::GlobalMemoryLocation* where = static_cast<NES::GlobalMemoryLocation*>(popups.create_label.uhg.get());
+        auto labels = system->GetLabelsAt(*where);
+        if(labels.size()) {
+            strncpy(popups.create_label.buf, labels.at(0)->GetString().c_str(), sizeof(popups.create_label.buf));
+        }
 
         ImGui::OpenPopup(title);
     }
@@ -696,10 +702,17 @@ void MyApp::CreateLabelPopup()
     ImVec2 button_size(ImGui::GetFontSize() * 7.0f, 0.0f);
     if(ImGui::InputText("Label", popups.create_label.buf, sizeof(popups.create_label.buf), ImGuiInputTextFlags_EnterReturnsTrue)
        || ImGui::Button("OK", button_size)) {
-        // create the label
         string lstr(popups.create_label.buf);
         NES::GlobalMemoryLocation* where = static_cast<NES::GlobalMemoryLocation*>(popups.create_label.uhg.get());
-        system->CreateLabel(*where, lstr, true);
+
+        if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
+            // add the label
+            system->CreateLabel(*where, lstr, true);
+        } else {
+            // replace the label
+            system->EditLabel(*where, lstr, 0, true);
+        }
+
         ImGui::CloseCurrentPopup(); 
     }
 

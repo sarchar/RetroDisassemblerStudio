@@ -257,6 +257,15 @@ void System::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count
     memory_region->MarkMemoryAsWords(where, byte_count);
 }
 
+std::vector<std::shared_ptr<Label>> const& System::GetLabelsAt(GlobalMemoryLocation const& where)
+{
+    static vector<shared_ptr<Label>> empty_vector;
+    if(auto memory_object = GetMemoryObject(where)) {
+        return memory_object->labels;
+    }
+    return empty_vector;
+}
+
 shared_ptr<Label> System::GetOrCreateLabel(GlobalMemoryLocation const& where, string const& label_str, bool was_user_created)
 {
     // lookup the label to see if it already exists
@@ -287,6 +296,21 @@ shared_ptr<Label> System::CreateLabel(GlobalMemoryLocation const& where, string 
 
     return GetOrCreateLabel(where, label_str, was_user_created);
 }
+
+shared_ptr<Label> System::EditLabel(GlobalMemoryLocation const& where, string const& label_str, int nth, bool was_user_edited)
+{
+    if(auto memory_object = GetMemoryObject(where)) {
+        if(nth < memory_object->labels.size()) {
+            auto label = memory_object->labels.at(nth);
+            label->SetString(label_str);
+            return label;
+        }
+    }
+            
+    //cout << "[System::EditLabel] label '" << nth << "' doesn't exists" << where << endl;
+    return nullptr;
+}
+
 
 void System::InitDisassembly(GlobalMemoryLocation const& where)
 {

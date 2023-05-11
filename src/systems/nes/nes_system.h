@@ -62,6 +62,8 @@ public:
     // Labels
     void CreateDefaultLabels(); // for new projects
 
+    std::vector<std::shared_ptr<Label>> const& GetLabelsAt(GlobalMemoryLocation const&);
+
     std::shared_ptr<Label> FindLabel(std::string const& label_str) {
         if(label_database.contains(label_str)) return label_database[label_str];
         return nullptr;
@@ -69,6 +71,7 @@ public:
     
     std::shared_ptr<Label> GetOrCreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
     std::shared_ptr<Label> CreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
+    std::shared_ptr<Label> EditLabel(GlobalMemoryLocation const&, std::string const&, int nth, bool was_user_edited = false);
 
     // Disassembly
     std::shared_ptr<Disassembler> GetDisassembler() { return disassembler; }

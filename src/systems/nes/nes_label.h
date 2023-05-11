@@ -12,6 +12,7 @@ public:
     Label(GlobalMemoryLocation const&, std::string const&);
     ~Label();
 
+    void SetString(std::string const& s) { label = s; }
 
     GlobalMemoryLocation const& GetMemoryLocation() const { return memory_location; }
     std::string          const& GetString()         const { return label; }
