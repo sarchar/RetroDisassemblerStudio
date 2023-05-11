@@ -43,15 +43,14 @@ public:
 
     // Cartridge
     std::shared_ptr<NES::Cartridge>& GetCartridge() { return cartridge; }
-    std::shared_ptr<NES::Cartridge> cartridge;
 
     // Memory
+    void CreateDefaultMemoryRegions();
     void GetEntryPoint(NES::GlobalMemoryLocation*);
-    u16  GetMemoryRegionBaseAddress(GlobalMemoryLocation const&);
-    u32  GetMemoryRegionSize(GlobalMemoryLocation const&);
     void GetBanksForAddress(GlobalMemoryLocation const&, std::vector<u16>&);
 
     std::shared_ptr<MemoryRegion> GetMemoryRegion(GlobalMemoryLocation const&);
+    std::shared_ptr<MemoryObject> GetMemoryObject(GlobalMemoryLocation const&);
 
     void MarkMemoryAsUndefined(GlobalMemoryLocation const&);
     void MarkMemoryAsWords(GlobalMemoryLocation const&, u32 byte_count);
@@ -60,6 +59,8 @@ public:
     void GetListingItems(GlobalMemoryLocation const&, std::vector<std::shared_ptr<NES::ListingItem>>& out);
 
     // Labels
+    void CreateDefaultLabels(); // for new projects
+
     std::shared_ptr<Label> FindLabel(std::string const& label_str) {
         if(label_database.contains(label_str)) return label_database[label_str];
         return nullptr;
@@ -81,6 +82,11 @@ public:
 
 private:
     std::string rom_file_path_name;
+
+    // Memory
+    std::shared_ptr<NES::PPURegistersRegion> ppu_registers;
+    std::shared_ptr<NES::IORegistersRegion> io_registers;
+    std::shared_ptr<NES::Cartridge> cartridge;
 
     // label database
     std::unordered_map<std::string, std::shared_ptr<Label>> label_database = {};

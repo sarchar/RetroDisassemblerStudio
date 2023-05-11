@@ -20,41 +20,36 @@ class System;
 // SystemMemoryLocation dials into a specific byte within the system. It has enough information to select which
 // segment of the system (RAM, SRAM, etc) as well as which ROM bank, overlay or any psuedo location that may exist.
 struct GlobalMemoryLocation {
-    GlobalMemoryLocation() { 
-        address      = 0;
-        is_chr       = false;
-        prg_rom_bank = 0;
-        chr_rom_bank = 0;
-    }
-
     // 0x00-0xFF: zero page
     // 0x100-0x1FF: stack
     // 0x200-0x7FF: RAM
     // 0x6000-7FFF: SRAM
     // 0x8000-FFFF: ROM
-    u16 address;
+    u16 address = 0;
 
     // set to true if we're reading CHR-RAM
-    bool is_chr;
+    bool is_chr = false;
 
     // used only for ROM
-    u16 prg_rom_bank;
+    u16 prg_rom_bank = 0;
 
     // used only for CHR
-    u16 chr_rom_bank;
+    u16 chr_rom_bank = 0;
 
-    void Increment() {
+    template <class T>
+    void Increment(T const& v) {
+        address += v; // TODO wrap, increment banks, etc
     }
 
     template<typename T>
     GlobalMemoryLocation operator+(T const& v) const {
         GlobalMemoryLocation ret(*this);
-        ret.address += v; // TODO wrap, increment banks, etc
+        ret.Increment(v);
         return ret;
     }
 
     GlobalMemoryLocation& operator++() {
-        address += 1; // TODO wrap
+        Increment(1);
         return *this;
     }
 
@@ -134,7 +129,9 @@ struct MemoryObject {
         TYPE_LIST,
         TYPE_ARRAY
     };
+
     TYPE type = TYPE_UNDEFINED;
+    bool backed; // false if the data is uninitialized memory
 
     std::weak_ptr<MemoryObjectTreeNode> parent;
 
@@ -190,6 +187,7 @@ public:
         return address_in_region - base_address; 
     }
 
+    void                           InitializeEmpty();
     void                           InitializeFromData(u8* data, int count);
 
     std::shared_ptr<MemoryObject>  GetMemoryObject(GlobalMemoryLocation const&);
@@ -229,6 +227,7 @@ private:
     // And we need the Root of the object tree
     std::shared_ptr<MemoryObjectTreeNode> object_tree_root = nullptr;
 
+    void _InitializeEmpty(std::shared_ptr<MemoryObjectTreeNode>&, u32, int);
     void _InitializeFromData(std::shared_ptr<MemoryObjectTreeNode>&, u32, u8*, int);
     void _UpdateMemoryObject(std::shared_ptr<MemoryObject>&, u32);
     void RemoveMemoryObjectFromTree(std::shared_ptr<MemoryObject>&, bool save_tree_node = false);
@@ -267,6 +266,18 @@ public:
 private:
     CHARACTER_ROM_BANK_LOAD bank_load;
     CHARACTER_ROM_BANK_SIZE bank_size;
+};
+
+class PPURegistersRegion : public MemoryRegion {
+public:
+    PPURegistersRegion(std::shared_ptr<System>&);
+    virtual ~PPURegistersRegion() {}
+};
+
+class IORegistersRegion : public MemoryRegion {
+public:
+    IORegistersRegion(std::shared_ptr<System>&);
+    virtual ~IORegistersRegion() {}
 };
 
 

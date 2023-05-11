@@ -38,10 +38,8 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
     cout << "[NES::System] CreateNewProjectFromFile begin" << endl;
     create_new_project_progress->emit(shared_from_this(), false, 0, 0, "Loading file...");
 
-    shared_ptr<BaseSystem> base_system = shared_from_this();
-    auto selfptr = dynamic_pointer_cast<System>(base_system);
-    assert(selfptr);
-    cartridge = make_shared<Cartridge>(selfptr);
+    // Before we can read ROM, we need a place to store it
+    CreateDefaultMemoryRegions();
 
     // Read in the iNES header
     ifstream rom_stream(file_path_name, ios::binary);
@@ -67,7 +65,7 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
     cartridge->header.has_sram          = (bool)((u8)buf[6] & 0x02);
     cartridge->header.has_trainer       = (bool)((u8)buf[6] & 0x04);
 
-    // Allocate storage and initialize cart based on header information
+    // Finish creating the cartridge based on mapper information
     cartridge->Prepare();
 
     // skip the trainer if present
@@ -131,11 +129,44 @@ bool System::CreateNewProjectFromFile(string const& file_path_name)
     vectors.address += 4;
     CreateLabel(vectors, "_irqbrk");
 
+    CreateDefaultLabels();
+
     create_new_project_progress->emit(shared_from_this(), false, num_steps, ++current_step, "Done");
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     cout << "[NES::System] CreateNewProjectFromFile end" << endl;
     return true;
+}
+
+void System::CreateDefaultMemoryRegions()
+{
+    shared_ptr<BaseSystem> base_system = shared_from_this();
+    auto selfptr = dynamic_pointer_cast<System>(base_system);
+    assert(selfptr);
+    
+    // TODO RAM
+    ppu_registers = make_shared<PPURegistersRegion>(selfptr); // 0x2000-0x3FFF
+    ppu_registers->InitializeEmpty();
+
+    io_registers  = make_shared<IORegistersRegion>(selfptr);  // 0x4000-0x401F
+    io_registers->InitializeEmpty();
+
+    cartridge     = make_shared<Cartridge>(selfptr);          // 0x6000-0xFFFF
+}
+
+void System::CreateDefaultLabels()
+{
+    GlobalMemoryLocation p;
+    p.address = 0x2000; CreateLabel(p, "PPUCONT");
+    p.address = 0x2001; CreateLabel(p, "PPUMASK");
+    p.address = 0x2002; CreateLabel(p, "PPUSTAT");
+    p.address = 0x2003; CreateLabel(p, "OAMADDR");
+    p.address = 0x2004; CreateLabel(p, "OAMDATA");
+    p.address = 0x2005; CreateLabel(p, "PPUSCRL");
+    p.address = 0x2006; CreateLabel(p, "PPUADDR");
+    p.address = 0x2007; CreateLabel(p, "PPUDATA");
+
+    p.address = 0x4014; CreateLabel(p, "OAMDMA");
 }
 
 bool System::IsROMValid(std::string const& file_path_name, std::istream& is)
@@ -176,42 +207,6 @@ void System::GetBanksForAddress(GlobalMemoryLocation const& where, vector<u16>& 
     }
 }
 
-u16 System::GetMemoryRegionBaseAddress(GlobalMemoryLocation const& where)
-{
-    assert(!where.is_chr); // TODO
-
-    if(where.address < 0x2000) {
-        return where.address & ~0x7FF;
-    } else if(where.address < 0x4020) {
-        return 0x2000;
-    } else if(where.address < 0x6000) {
-        return 0x4020;
-    } else if(where.address < 0x8000) {
-        return 0x6000;
-    } else {
-        auto prg_bank = cartridge->GetProgramRomBank(where.prg_rom_bank);
-        return prg_bank->GetBaseAddress();
-    }
-}
-
-u32 System::GetMemoryRegionSize(GlobalMemoryLocation const& where)
-{
-    assert(!where.is_chr); // TODO
-
-    if(where.address < 0x2000) {
-        return 0x800;
-    } else if(where.address < 0x4020) {
-        return 0x2020;
-    } else if(where.address < 0x6000) {
-        return 0x1FE0;
-    } else if(where.address < 0x8000) {
-        return 0x2000;
-    } else {
-        auto prg_bank = cartridge->GetProgramRomBank(where.prg_rom_bank);
-        return prg_bank->GetRegionSize();
-    }
-}
-
 std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const& where)
 {
     static shared_ptr<MemoryRegion> empty_ptr;
@@ -219,15 +214,24 @@ std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const
 
     if(where.address < 0x2000) {
         return empty_ptr;
-    } else if(where.address < 0x4020) {
-        return empty_ptr;
-    } else if(where.address < 0x6000) {
-        return empty_ptr;
-    } else if(where.address < 0x8000) {
+    } else if(where.address < ppu_registers->GetEndAddress()) {
+        return ppu_registers;
+    } else if(where.address < io_registers->GetEndAddress()) {
+        return io_registers;
+    } else if(where.address < 0x6000) { // empty space
         return empty_ptr;
     } else {
-        return cartridge->GetProgramRomBank(where.prg_rom_bank);
+        return cartridge->GetMemoryRegion(where);
     }
+}
+
+std::shared_ptr<MemoryObject> System::GetMemoryObject(GlobalMemoryLocation const& where)
+{
+    if(auto memory_region = GetMemoryRegion(where)) {
+        return memory_region->GetMemoryObject(where);
+    }
+
+    return nullptr;
 }
 
 void System::MarkMemoryAsUndefined(GlobalMemoryLocation const& where)
@@ -252,11 +256,12 @@ shared_ptr<Label> System::GetOrCreateLabel(GlobalMemoryLocation const& where, st
     auto label = make_shared<Label>(where, label_str);
     label_database[label_str] = label;
 
-    auto memory_region = GetMemoryRegion(where);
-    memory_region->ApplyLabel(label);
+    if(auto memory_region = GetMemoryRegion(where)) {
+        memory_region->ApplyLabel(label);
 
-    // notify the system of new labels
-    label_created->emit(label, was_user_created);
+        // notify the system of new labels
+        label_created->emit(label, was_user_created);
+    }
 
     return label;
 }
@@ -285,23 +290,23 @@ int System::DisassemblyThread()
     locations.push_back(disassembly_address);
 
     while(disassembling && locations.size()) {
-        GlobalMemoryLocation loc = locations.front();
+        GlobalMemoryLocation current_loc = locations.front();
         locations.pop_front();
 
         bool disassembling_inner = true;
         while(disassembling_inner) {
-            auto memory_region = GetMemoryRegion(loc);
-            auto memory_object = memory_region->GetMemoryObject(loc);
+            auto memory_region = GetMemoryRegion(current_loc);
+            auto memory_object = memory_region->GetMemoryObject(current_loc);
 
             // bail on this disassemble if we already know the location is code
             if(memory_object->type == MemoryObject::TYPE_CODE) {
-                //cout << "[NES::System::DisassemblyThread] address " << loc << " is already code" << endl;
+                //cout << "[NES::System::DisassemblyThread] address " << current_loc << " is already code" << endl;
                 break;
             }
 
             // give up if we can't even convert this data to code. the user must clear the data type first
             if(memory_object->type != MemoryObject::TYPE_UNDEFINED && memory_object->type != MemoryObject::TYPE_BYTE) {
-                cout << "[NES::System::DisassemblyThread] cannot disassemble type " << memory_object->type << " at " << loc << endl;
+                cout << "[NES::System::DisassemblyThread] cannot disassemble type " << memory_object->type << " at " << current_loc << endl;
                 break;
             }
 
@@ -312,18 +317,21 @@ int System::DisassemblyThread()
 
             // stop disassembling on unknown opcodes
             if(size == 0) {
-                cout << "[NES::System::DisassemblyThread] stopping because invalid opcode $" << hex << uppercase << (int)memory_object->bval << " (" << inst << ") at "  << loc << endl;
+                cout << "[NES::System::DisassemblyThread] stopping because invalid opcode $" << hex << uppercase << (int)memory_object->bval << " (" << inst << ") at "  << current_loc << endl;
                 break; // break on unimplemented opcodes (TODO remove me)
             }
 
             // convert the memory to code
-            if(!memory_region->MarkMemoryAsCode(loc, size)) {
+            if(!memory_region->MarkMemoryAsCode(current_loc, size)) {
                 assert(false); // this shouldn't happen
                 break;
             }
 
+            // re-get the memory object JIC
+            memory_object = memory_region->GetMemoryObject(current_loc);
+
             // next PC
-            loc = loc + size;
+            current_loc = current_loc + size;
 
             // certain instructions must stop disassembly and others cause branches
             switch(op) {
@@ -334,7 +342,7 @@ int System::DisassemblyThread()
             {
                 u16 target = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
                 if(target >= memory_region->GetBaseAddress() && target < memory_region->GetEndAddress()) {
-                    GlobalMemoryLocation newloc(loc);
+                    GlobalMemoryLocation newloc(current_loc);
                     newloc.address = target;
                     locations.push_back(newloc);
                     //cout << "[NES::System::DisassemblyThread] continuing disassembling at " << newloc << endl;
@@ -346,14 +354,8 @@ int System::DisassemblyThread()
                     ss << "L_" << hex << setw(2) << setfill('0') << uppercase << newloc.prg_rom_bank << setw(4) << newloc.address;
                     string label_str = ss.str();
 
-                    if(auto label = GetOrCreateLabel(newloc, label_str)) {
-                        auto expr         = make_shared<Expression>();
-                        auto name         = expr->GetNodeCreator()->CreateName(label->GetString());
-                        expr->Set(name);
-
-                        // set the expression for memory object at current_selection. it'll show up immediately
-                        memory_object->operand_expression = expr;
-                    }
+                    // no problem if this fails if the label already exists
+                    CreateLabel(newloc, label_str);
                 }
                 break;
             }
@@ -361,6 +363,40 @@ int System::DisassemblyThread()
             case 0x60: // RTS
             case 0x6C: // JMP indirect
                 disassembling_inner = false;
+                break;
+            }
+
+            // Attempt to apply labels to all absolute indexing modes
+            switch(disassembler->GetAddressingMode(op)) {
+            case AM_ABSOLUTE:
+            {
+                u16 target = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
+
+                GlobalMemoryLocation target_location;
+                target_location.address = target;
+
+                // if the target is in the current bank, copy over that bank number
+                // otherwise, leave it at 0 for other memory regions
+                if(target >= memory_region->GetBaseAddress() && target < memory_region->GetEndAddress()) {
+                    target_location.prg_rom_bank = current_loc.prg_rom_bank;
+                }
+
+                if(auto target_object = GetMemoryObject(target_location)) {
+                    if(target_object->labels.size()) {
+                        auto label = target_object->labels.at(0);
+                        auto expr = make_shared<Expression>();
+                        auto name = expr->GetNodeCreator()->CreateName(label->GetString());
+                        expr->Set(name);
+
+                        // set the expression for memory object at current_selection. it'll show up immediately
+                        memory_object->operand_expression = expr;
+                    }
+                }
+
+                break;
+            }
+
+            default:
                 break;
             }
         }

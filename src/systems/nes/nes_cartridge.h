@@ -29,10 +29,9 @@ public:
 
     std::shared_ptr<ProgramRomBank>&   GetProgramRomBank(u8 bank) { return program_rom_banks[bank]; }
     std::shared_ptr<CharacterRomBank>& GetCharacterRomBank(u8 bank) { return character_rom_banks[bank]; }
+    std::shared_ptr<MemoryRegion>      GetMemoryRegion(GlobalMemoryLocation const&);
 
     u16 GetResetVectorBank();
-
-//!    void MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type);
 private:
     std::weak_ptr<System> parent_system;
 

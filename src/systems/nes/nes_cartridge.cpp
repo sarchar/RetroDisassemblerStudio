@@ -103,13 +103,19 @@ u16 Cartridge::GetResetVectorBank()
     return 0;
 }
 
-//!void Cartridge::MarkContentAsData(NES::GlobalMemoryLocation const& where, u32 byte_count, CONTENT_BLOCK_DATA_TYPE new_data_type)
-//!{
-//!    assert(where.address >= 0x8000); // TODO support SRAM etc
-//!
-//!    auto prg_bank = GetProgramRomBank(where.prg_rom_bank);
-//!    prg_bank->MarkContentAsData(where, byte_count, new_data_type);
-//!}
+std::shared_ptr<MemoryRegion> Cartridge::GetMemoryRegion(GlobalMemoryLocation const& where)
+{
+    if(where.is_chr) {
+        return nullptr;
+    } else {
+        if(where.address < 0x8000) { // TODO SRAM support
+            return nullptr;
+        } else {
+            assert(where.prg_rom_bank < header.num_prg_rom_banks);
+            return program_rom_banks[where.prg_rom_bank];
+        }
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

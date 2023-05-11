@@ -133,6 +133,7 @@ void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_no
 
         // set the data
         obj->type = MemoryObject::TYPE_UNDEFINED;
+        obj->backed = true;
         obj->bval = *data;
 
         // set the element in the node
@@ -149,6 +150,38 @@ void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_no
         tree_node->right = make_shared<MemoryObjectTreeNode>(tree_node);
         int fixed_count = (count / 2) + (count % 2);
         _InitializeFromData(tree_node->right, region_offset + count / 2, &data[count / 2], fixed_count);
+    }
+}
+
+// I don't like the duplicated code between this and _InitializeFromData
+void MemoryRegion::_InitializeEmpty(shared_ptr<MemoryObjectTreeNode>& tree_node, u32 region_offset, int count)
+{
+    // stop the iteration when there's one byte left
+    if(count == 1) {
+        tree_node->is_object = true;
+
+        // create the object
+        shared_ptr<MemoryObject> obj = make_shared<MemoryObject>();
+        obj->parent = tree_node;
+
+        // set the data
+        obj->type = MemoryObject::TYPE_UNDEFINED;
+        obj->backed = false;
+
+        // set the element in the node
+        tree_node->obj = obj;
+
+        // and create the memory address reference to the object
+        object_refs[region_offset] = obj;
+    } else {
+        // initialize the tree by splitting the data into left and right halves
+        tree_node->left  = make_shared<MemoryObjectTreeNode>(tree_node);
+        _InitializeEmpty(tree_node->left , region_offset, count / 2);
+
+        // handle odd number of elements by putting the odd one on the right side
+        tree_node->right = make_shared<MemoryObjectTreeNode>(tree_node);
+        int fixed_count = (count / 2) + (count % 2);
+        _InitializeEmpty(tree_node->right, region_offset + count / 2, fixed_count);
     }
 }
 
@@ -176,8 +209,35 @@ void MemoryRegion::InitializeFromData(u8* data, int count)
     RecreateListingItems();
     RecalculateListingItemCounts();
 
-    cout << "[MemoryRegion::InitializeWithData] set 0x" << hex << uppercase << setfill('0') << setw(0) << count 
-         << " bytes of data for memory base 0x" << setw(4) << base_address << endl;
+    cout << "[MemoryRegion::InitializeWithData] set $" << hex << uppercase << setfill('0') << setw(0) << count 
+         << " bytes of data for memory base $" << setw(4) << base_address << endl;
+}
+
+void MemoryRegion::InitializeEmpty()
+{
+    // Kill all content blocks and references
+    Erase();
+
+    // the refs list is a object lookup by address map, and will always be the size of the memory region
+    int count = (int)GetRegionSize();
+    object_refs.resize(count);
+
+    // We need a root for the tree first and foremost
+    object_tree_root = make_shared<MemoryObjectTreeNode>(nullptr);
+
+    // initialize the tree by splitting the data into left and right halves
+    assert(count >= 2); // minimum region size, albeit silly
+    object_tree_root->left  = make_shared<MemoryObjectTreeNode>(object_tree_root);
+    object_tree_root->right = make_shared<MemoryObjectTreeNode>(object_tree_root);
+    _InitializeEmpty(object_tree_root->left , 0        , count / 2);
+    _InitializeEmpty(object_tree_root->right, count / 2, (count / 2) + (count % 2));
+
+    // first pass create listing items
+    RecreateListingItems();
+    RecalculateListingItemCounts();
+
+    cout << "[MemoryRegion::InitializeEmpty] non-backed memory initialized at $" 
+         << hex << uppercase << setfill('0') << setw(4) << base_address << endl;
 }
 
 shared_ptr<MemoryObject> MemoryRegion::GetMemoryObject(GlobalMemoryLocation const& where)
@@ -647,29 +707,33 @@ string MemoryObject::FormatOperandField(u32 /* internal_offset */, shared_ptr<Di
 {
     stringstream ss;
 
-    // if there's an operand expression, display that, otherwise format a default expression
-    if(operand_expression) {
-        ss << *operand_expression;
+    if(!backed) { // uninitialized memory has nothing to show and cannot have expressions
+        ss << "??";
     } else {
-        ss << hex << setfill('0') << uppercase;
+        // if there's an operand expression, display that, otherwise format a default expression
+        if(operand_expression) {
+            ss << *operand_expression;
+        } else {
+            ss << hex << setfill('0') << uppercase;
 
-        switch(type) {
-        case MemoryObject::TYPE_UNDEFINED:
-        case MemoryObject::TYPE_BYTE:
-            ss << "$" << setw(2) << (int)bval;
-            break;
+            switch(type) {
+            case MemoryObject::TYPE_UNDEFINED:
+            case MemoryObject::TYPE_BYTE:
+                ss << "$" << setw(2) << (int)bval;
+                break;
 
-        case MemoryObject::TYPE_WORD:
-            ss << "$" << setw(4) << hval;
-            break;
+            case MemoryObject::TYPE_WORD:
+                ss << "$" << setw(4) << hval;
+                break;
 
-        case MemoryObject::TYPE_CODE:
-            ss << disassembler->FormatOperand(code.opcode, code.operands);
-            break;
+            case MemoryObject::TYPE_CODE:
+                ss << disassembler->FormatOperand(code.opcode, code.operands);
+                break;
 
-        default:
-            assert(false);
-            break;
+            default:
+                assert(false);
+                break;
+            }
         }
     }
 
@@ -746,6 +810,26 @@ CharacterRomBank::CharacterRomBank(shared_ptr<System>& system, CHARACTER_ROM_BAN
     default:
         assert(false);
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// PPU registers $2000-$2008 (mirroed every 8 bytes until 0x3FFF)
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+PPURegistersRegion::PPURegistersRegion(shared_ptr<System>& system)
+    : MemoryRegion(system)
+{
+    base_address = 0x2000;
+    region_size  = 0x2000;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// APU and I/O registers $4000-$401F (doesn't have mirrored data)
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+IORegistersRegion::IORegistersRegion(shared_ptr<System>& system)
+    : MemoryRegion(system)
+{
+    base_address = 0x4000;
+    region_size  = 0x20;
 }
 
 }
