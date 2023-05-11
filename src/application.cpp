@@ -124,9 +124,26 @@ int Application::CreateWindow()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
+    // Center the glfw_window on the first monitor
+    int mcount;
+    GLFWmonitor** monitors = glfwGetMonitors(&mcount);
+    const GLFWvidmode* video_mode = glfwGetVideoMode(monitors[0]);
+    int monitor_x, monitor_y;
+    glfwGetMonitorPos(monitors[0], &monitor_x, &monitor_y);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+
     // Create window with graphics context
     glfw_window = glfwCreateWindow(window_width, window_height, window_title.c_str(), NULL, NULL);
     if (glfw_window == NULL) return -2;
+
+    // move the window
+    glfwDefaultWindowHints(); // required for moving the window?
+    SetWindowPos(monitor_x + (video_mode->width - window_width) / 2, monitor_y + (video_mode->height - window_height) / 2); 
+    glfwShowWindow(glfw_window);
+
+    int xpos, ypos;
+    glfwGetWindowPos(glfw_window, &xpos, &ypos);
+    std::cout << "window at " << xpos << ", " << ypos << std::endl;
 
     // Bind the keypress handler
     // static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -135,6 +152,13 @@ int Application::CreateWindow()
                                     std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
     glfw3_callback_t key_press_handler = static_cast<glfw3_callback_t>(GLFW3Callback<void(GLFWwindow*, int, int, int, int)>::glfw3_callback);
     glfwSetKeyCallback(glfw_window, key_press_handler);
+
+    // static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+    typedef void (*glfw3_window_pos_callback_t)(GLFWwindow*, int, int);
+    GLFW3Callback<void(GLFWwindow*, int, int)>::callback = std::bind(&Application::WindowPosHandler, this, 
+                                    std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+    glfw3_window_pos_callback_t window_pos_handler = static_cast<glfw3_window_pos_callback_t>(GLFW3Callback<void(GLFWwindow*, int, int)>::glfw3_callback);
+    glfwSetWindowPosCallback(glfw_window, window_pos_handler);
 
     // Make context current & enable vsync
     glfwMakeContextCurrent(glfw_window);
@@ -318,6 +342,11 @@ void Application::KeyPressHandler(GLFWwindow* _window, int key, int scancode, in
     }
 }
 
+void Application::WindowPosHandler(GLFWwindow* _window, int x, int y)
+{
+    OnWindowMoved(x, y);
+}
+
 void Application::SetWindowPos(int x, int y)
 {
     glfwSetWindowPos(glfw_window, x, y);
@@ -336,6 +365,8 @@ void Application::RenderMainStatusBar() { }
 void Application::RenderMainToolBar() { } 
 
 void Application::OnKeyPress(int glfw_key, int scancode, int action, int mods) { }
+
+void Application::OnWindowMoved(int, int) { }
 
 void Application::OnWindowDestroyed() { }
 
