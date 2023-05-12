@@ -98,6 +98,7 @@ void Listing::GoToAddress(u32 address)
             // not a banked address, see if it's valid
             if(system->GetMemoryRegion(guessed_address)) {
                 selection_history_back.push(current_selection); // save the current location to the history
+                ClearForwardHistory();                          // and clear the forward history
 
                 // looks good
                 current_selection = guessed_address;

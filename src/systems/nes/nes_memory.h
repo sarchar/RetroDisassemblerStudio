@@ -131,7 +131,7 @@ struct MemoryObject {
     };
 
     TYPE type = TYPE_UNDEFINED;
-    bool backed; // false if the data is uninitialized memory
+    bool backed = false; // false if the data is uninitialized memory
 
     std::weak_ptr<MemoryObjectTreeNode> parent;
 
