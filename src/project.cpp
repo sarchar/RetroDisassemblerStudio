@@ -15,13 +15,29 @@ BaseProject::~BaseProject()
 }
 
 
-bool Save(ostream& os, string& errmsg)
+bool BaseProject::Save(ostream& os, string& errmsg)
 {
-    return false;
+    auto inf = GetInformation();
+
+    // save the abbreviation designating which project type we are
+    WriteString(os, inf->abbreviation);
+
+    // save the ROM file location
+    WriteString(os, rom_file_name);
+
+    // TODO save workspace arrangement and docking locations
+
+    if(!os.good()) {
+        errmsg = "Failure writing BaseProject information";
+        return false;
+    }
+
+    return true;
 }
 
-bool Read(istream& is, string& errmsg)
+bool BaseProject::Load(istream& is, string& errmsg)
 {
+    errmsg = "BaseProject::Load Unimplemented";
     return false;
 }
 

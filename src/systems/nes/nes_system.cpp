@@ -265,7 +265,7 @@ int System::DisassemblyThread()
             memory_object = memory_region->GetMemoryObject(current_loc);
 
             // create the expressions as necessary
-            CreateDefaultOperandExpression(current_loc, op);
+            CreateDefaultOperandExpression(current_loc);
 
             // certain instructions must stop disassembly and others cause branches
             switch(op) {
@@ -306,12 +306,12 @@ int System::DisassemblyThread()
     return 0;
 }
 
-void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, u8 opcode)
+void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
 {
     auto code_region = GetMemoryRegion(where);
     auto code_object = GetMemoryObject(where);
 
-    switch(auto am = disassembler->GetAddressingMode(opcode)) {
+    switch(auto am = disassembler->GetAddressingMode(code_object->code.opcode)) {
     case AM_ABSOLUTE:
     case AM_ABSOLUTE_X:
     case AM_ABSOLUTE_Y:
@@ -452,6 +452,18 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, u
     default:
         break;
     }
+}
+
+bool System::Save(std::ostream& os, std::string& errmsg)
+{
+    // save the non-cartridge memory regions
+    if(!ppu_registers->Save(os, errmsg)) return false;
+    if(!io_registers->Save(os, errmsg)) return false;
+
+    // save the cartridge (which will save some memory regions)
+    if(!cartridge->Save(os, errmsg)) return false;
+
+    return true;
 }
 
 }

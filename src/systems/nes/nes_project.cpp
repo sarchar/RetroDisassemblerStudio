@@ -59,6 +59,7 @@ bool Project::IsROMValid(std::string const& file_path_name, std::istream& is)
 bool Project::CreateNewProjectFromFile(string const& file_path_name)
 {
     cout << "[NES::Project] CreateNewProjectFromFile begin" << endl;
+    rom_file_name = file_path_name;
 
     // create a barebones system with nothing loaded
     auto system = make_shared<System>();
@@ -151,5 +152,25 @@ void Project::CreateDefaultWorkspace()
     auto wnd = Listing::CreateWindow();
     MyApp::Instance()->AddWindow(wnd);
 }
+
+bool Project::Save(std::ostream& os, std::string& errmsg) 
+{
+    // call the base method first to inject the project Information
+    if(!BaseProject::Save(os, errmsg)) return false;
+
+    // serialie the System structure
+    auto system = GetSystem<System>();
+    if(!system->Save(os, errmsg)) return false;
+
+    return true;
+}
+
+bool Project::Load(std::istream& is, std::string& errmsg) 
+{
+    errmsg = "not implemented";
+    return false;
+}
+
+
 
 }

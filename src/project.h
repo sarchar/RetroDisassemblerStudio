@@ -23,6 +23,7 @@ public:
     BaseProject();
     virtual ~BaseProject();
 
+    std::string                 GetRomFileName() const { return rom_file_name; }
     std::shared_ptr<BaseSystem> GetBaseSystem() { return current_system; }
 
     template <class T>
@@ -35,8 +36,8 @@ public:
 
     virtual void CreateDefaultWorkspace() = 0;
 
-    bool Save(std::ostream& os, std::string&);
-    bool Read(std::istream& is, std::string&);
+    virtual bool Save(std::ostream& os, std::string&);
+    virtual bool Load(std::istream& is, std::string&);
 
     // signals
     typedef signal<std::function<void(std::shared_ptr<BaseProject>, bool error, 
@@ -45,6 +46,6 @@ public:
 
 protected:
     std::shared_ptr<BaseSystem> current_system;
-
+    std::string                 rom_file_name;
 };
 

@@ -69,6 +69,8 @@ private:
     void CreateLabelPopup();
     void DisassemblyPopup();
     void GoToAddressPopup();
+    void SaveProjectPopup();
+    void SaveProjectThread();
 
     bool request_exit;
     bool show_imgui_demo;
@@ -105,6 +107,15 @@ private:
             char        buf[64];
             bool        show = false;
         } goto_address;
+
+        struct {
+            std::string title = "Saving Project...";
+            std::shared_ptr<std::thread> thread;
+            bool show = false;
+            bool saving = false;
+            bool errored = false;
+            std::string errmsg;
+        } save_project;
     } popups;
 
 private:
@@ -123,4 +134,6 @@ private:
     WindowFromINI* NewINIWindow();
     void CreateINIWindows();
     std::vector<std::shared_ptr<WindowFromINI>> ini_windows;
+
+    std::string project_file_path;
 };

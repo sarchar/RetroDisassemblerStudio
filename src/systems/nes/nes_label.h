@@ -17,6 +17,7 @@ public:
     GlobalMemoryLocation const& GetMemoryLocation() const { return memory_location; }
     std::string          const& GetString()         const { return label; }
 
+    bool Save(std::ostream&, std::string&);
 private:
     GlobalMemoryLocation memory_location;
     std::string          label;

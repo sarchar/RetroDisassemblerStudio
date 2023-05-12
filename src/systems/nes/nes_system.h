@@ -68,16 +68,17 @@ public:
     bool IsDisassembling() const { return disassembling; }
     void InitDisassembly(GlobalMemoryLocation const&);
     int  DisassemblyThread();
-    void CreateDefaultOperandExpression(GlobalMemoryLocation const&, u8);
+    void CreateDefaultOperandExpression(GlobalMemoryLocation const&);
 
     //!std::shared_ptr<LabelList> GetLabels(GlobalMemoryLocation const& where) {
     //!    if(!label_database.contains(where)) return nullptr;
     //!    return label_database[where];
     //!}
 
-private:
-    std::string rom_file_path_name;
+    // Save and load
+    bool Save(std::ostream& os, std::string&) override;
 
+private:
     // Memory
     std::shared_ptr<NES::PPURegistersRegion> ppu_registers;
     std::shared_ptr<NES::IORegistersRegion> io_registers;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -24,6 +25,8 @@ public:
 
     virtual bool Evaluate(std::shared_ptr<BaseExpressionHelper> const&, s64*) const = 0;
 
+    virtual bool Save(std::ostream&, std::string&) = 0;
+
     friend std::ostream& operator<<(std::ostream&, BaseExpressionNode const&);
 };
 
@@ -40,7 +43,7 @@ namespace BaseExpressionNodes {
     public:
         Parens(std::string const& _left, std::shared_ptr<BaseExpressionNode>& _value, std::string const& _right)
             : left(_left), value(_value), right(_right)
-        { }
+        { assert(value); }
 
         virtual ~Parens() {}
 
@@ -50,6 +53,13 @@ namespace BaseExpressionNodes {
 
         void Print(std::ostream& ostream) const override {
             ostream << left << *value << right;
+        }
+
+        bool Save(std::ostream& os, std::string& errmsg) override {
+            WriteString(os, left);
+            if(!value->Save(os, errmsg)) return false;
+            WriteString(os, right);
+            return true;
         }
 
     private:
@@ -76,6 +86,12 @@ namespace BaseExpressionNodes {
             ostream << display;
         }
 
+        bool Save(std::ostream& os, std::string& errmsg) override {
+            WriteVarInt(os, value);
+            WriteString(os, display);
+            return true;
+        }
+
     private:
         T           value;
         std::string display;
@@ -100,6 +116,11 @@ namespace BaseExpressionNodes {
             ostream << name;
         }
 
+        bool Save(std::ostream& os, std::string& errmsg) override {
+            WriteString(os, name);
+            return true;
+        }
+
     private:
         std::string name;
     };
@@ -112,6 +133,8 @@ namespace BaseExpressionNodes {
         BinaryOp(BinaryOpFunc _op, T& _left, T& _right, std::string const& _display)
             : op(_op), left(_left), right(_right), display(_display)
         {
+            assert(left);
+            assert(right);
         }
 
         virtual ~BinaryOp() {}
@@ -127,6 +150,13 @@ namespace BaseExpressionNodes {
 
         void Print(std::ostream& ostream) const override {
             ostream << *left << display << *right;
+        }
+
+        bool Save(std::ostream& os, std::string& errmsg) override {
+            if(!left->Save(os, errmsg)) return false;
+            WriteString(os, display);
+            if(!right->Save(os, errmsg)) return false;
+            return true;
         }
 
     private:
@@ -196,9 +226,17 @@ public:
 
     virtual std::shared_ptr<BaseExpressionNodeCreator> GetNodeCreator() = 0;
 
+    virtual bool Save(std::ostream& os, std::string& errmsg) {
+        bool has_root = (bool)root;
+        assert(sizeof(has_root) == 1);
+        os.write((char*)&has_root, sizeof(has_root));
+        if(root) return root->Save(os, errmsg);
+        return true;
+    }
+
     friend std::ostream& operator<<(std::ostream&, BaseExpression const&);
 
-private:
+protected:
     std::shared_ptr<BaseExpressionNode> root;
 };
 

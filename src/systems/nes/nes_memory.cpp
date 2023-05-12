@@ -19,6 +19,20 @@ using namespace std;
 
 namespace NES {
 
+bool GlobalMemoryLocation::Save(std::ostream& os, std::string& errmsg)
+{
+    WriteVarInt(os, address);
+    assert(sizeof(is_chr) == 1);
+    os.write((char*)&is_chr, sizeof(is_chr));
+    WriteVarInt(os, prg_rom_bank);
+    WriteVarInt(os, chr_rom_bank);
+    if(!os.good()) {
+        errmsg = "Error writing GlobalMemoryLocation";
+        return false;
+    }
+    return true;
+}
+
 MemoryRegion::MemoryRegion(shared_ptr<System>& _parent_system) 
 { 
     // create a week reference to avoid cyclical refs
@@ -741,9 +755,71 @@ string MemoryObject::FormatOperandField(u32 /* internal_offset */, shared_ptr<Di
     return ss.str();
 }
 
+bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
+{
+    // save type and if there's data
+    WriteVarInt(os, type);
+    assert(sizeof(backed) == 1);
+    os.write((char*)&backed, sizeof(backed));
+
+    // save the data (for now, TODO: don't save data and instead read from the rom file?)
+    if(backed) WriteVarInt(os, GetSize());
+
+    if(!os.good()) {
+        errmsg = "Error writing MemoryObject";
+        return false;
+    }
+
+    // save labels
+    int nlabels = labels.size();
+    os.write((char*)&nlabels, sizeof(nlabels));
+    for(int i = 0; i < nlabels; i++) {
+        if(!labels[i]->Save(os, errmsg)) return false;
+    }
+
+    // create a fields flag for comments and other bits
+    int fields_present = 0;
+    fields_present |= (int)(bool)operand_expression << 0;
+    fields_present |= (int)(bool)comments.eol       << 1;
+    WriteVarInt(os, fields_present);
+
+    // operand expression
+    if(operand_expression && !operand_expression->Save(os, errmsg)) return false;
+
+    // comments
+    if(comments.eol) WriteString(os, *comments.eol);
+
+    if(!os.good()) {
+        errmsg = "Error writing MemoryObject data";
+        return false;
+    }
+
+    return true;
+}
+
 u8 MemoryRegion::ReadByte(GlobalMemoryLocation const& where)
 {
     return 0;
+}
+
+bool MemoryRegion::Save(std::ostream& os, std::string& errmsg)
+{
+    // save base and size
+    WriteVarInt(os, base_address);
+    WriteVarInt(os, region_size);
+    if(!os.good()) {
+        errmsg = "Error writing data";
+        return false;
+    }
+
+    // save all the unique memory objects
+    for(u32 offset = 0; offset < region_size; offset++) {
+        auto memory_object = object_refs[offset];
+        if(!memory_object->Save(os, errmsg)) return false;
+        offset += memory_object->GetSize(); // skip addresses that point to the same object
+    }
+
+    return true;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -781,6 +857,18 @@ ProgramRomBank::ProgramRomBank(shared_ptr<System>& system, PROGRAM_ROM_BANK_LOAD
     }
 }
 
+bool ProgramRomBank::Save(std::ostream& os, std::string& errmsg)
+{
+    WriteVarInt(os, bank_load);
+    WriteVarInt(os, bank_size);
+    if(!os.good()) {
+        errmsg = "Error writing data";
+        return false;
+    }
+
+    return MemoryRegion::Save(os, errmsg);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 CharacterRomBank::CharacterRomBank(shared_ptr<System>& system, CHARACTER_ROM_BANK_LOAD _bank_load, CHARACTER_ROM_BANK_SIZE _bank_size)
@@ -811,6 +899,18 @@ CharacterRomBank::CharacterRomBank(shared_ptr<System>& system, CHARACTER_ROM_BAN
     default:
         assert(false);
     }
+}
+
+bool CharacterRomBank::Save(std::ostream& os, std::string& errmsg)
+{
+    WriteVarInt(os, bank_load);
+    WriteVarInt(os, bank_size);
+    if(!os.good()) {
+        errmsg = "Error writing data";
+        return false;
+    }
+
+    return MemoryRegion::Save(os, errmsg);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

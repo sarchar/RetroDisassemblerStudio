@@ -34,6 +34,8 @@ public:
     std::shared_ptr<MemoryRegion>      GetMemoryRegion(GlobalMemoryLocation const&);
 
     u16 GetResetVectorBank();
+
+    bool Save(std::ostream&, std::string&);
 private:
     void CreateMemoryRegions();
 

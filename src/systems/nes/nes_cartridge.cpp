@@ -162,6 +162,20 @@ std::shared_ptr<MemoryRegion> Cartridge::GetMemoryRegion(GlobalMemoryLocation co
     }
 }
 
+bool Cartridge::Save(std::ostream& os, std::string& errmsg)
+{
+    os.write((char*)&header, sizeof(header));
+    if(!os.good()) {
+        errmsg = "Error writing cartridge header";
+        return false;
+    }
+
+    for(auto& memory_region : program_rom_banks) if(!memory_region->Save(os, errmsg)) return false;
+    for(auto& memory_region : character_rom_banks) if(!memory_region->Save(os, errmsg)) return false;
+
+    return true;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //!u8 ProgramRomBank::ReadByte(u16 offset)

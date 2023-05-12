@@ -53,6 +53,8 @@ struct GlobalMemoryLocation {
         return *this;
     }
 
+    bool Save(std::ostream&, std::string&);
+
     bool operator==(GlobalMemoryLocation const& other) const {
         return address == other.address &&
             (is_chr ? ( other.is_chr && chr_rom_bank == other.chr_rom_bank)
@@ -165,6 +167,8 @@ struct MemoryObject {
 
     std::string FormatInstructionField(std::shared_ptr<Disassembler> disassembler = nullptr);
     std::string FormatOperandField(u32, std::shared_ptr<Disassembler> disassembler = nullptr);
+
+    bool Save(std::ostream&, std::string&);
 };
 
 // MemoryRegion represents a region of memory on the system
@@ -212,6 +216,9 @@ public:
     // Code
     bool MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_count);
 
+    // Load and save
+    virtual bool Save(std::ostream&, std::string&);
+
 protected:
     u32 base_address;
     u32 region_size;
@@ -253,6 +260,7 @@ public:
     ProgramRomBank(std::shared_ptr<System>&, PROGRAM_ROM_BANK_LOAD, PROGRAM_ROM_BANK_SIZE);
     virtual ~ProgramRomBank() {};
 
+    bool Save(std::ostream&, std::string&) override;
 private:
     PROGRAM_ROM_BANK_LOAD bank_load;
     PROGRAM_ROM_BANK_SIZE bank_size;
@@ -263,6 +271,7 @@ public:
     CharacterRomBank(std::shared_ptr<System>&, CHARACTER_ROM_BANK_LOAD, CHARACTER_ROM_BANK_SIZE);
     virtual ~CharacterRomBank() {}
 
+    bool Save(std::ostream&, std::string&) override;
 private:
     CHARACTER_ROM_BANK_LOAD bank_load;
     CHARACTER_ROM_BANK_SIZE bank_size;

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
+#include <iostream>
 #include <string>
 
 typedef unsigned char u8;
@@ -23,6 +25,32 @@ inline std::string StringLower(std::string const& s)
     std::string ret = s;
     std::transform(ret.begin(), ret.end(), ret.begin(), [](unsigned char c){ return std::tolower(c); });
     return ret;
+}
+
+template <class T>
+inline void WriteVarInt(std::ostream& os, T const& v)
+{
+    if(v < 254) {
+        u8 s = (u8)v;
+        os.write((char*)&s, 1);
+    } else if(v < 0x10000) {
+        u8 c = 254;
+        u16 s = (u16)v;
+        os.write((char*)&c, 1);
+        os.write((char*)&s, 2);
+    } else {
+        assert(v < 0x100000000LL);
+        u8 c = 255;
+        u32 s = (u32)v;
+        os.write((char*)&c, 1);
+        os.write((char*)&s, 4);
+    }
+}
+
+inline void WriteString(std::ostream& os, std::string const& s)
+{
+    WriteVarInt(os, s.size());
+    os.write(s.c_str(), s.size());
 }
 
 template<class T>

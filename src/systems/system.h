@@ -9,8 +9,8 @@
 
 class BaseSystem : public std::enable_shared_from_this<BaseSystem> {
 public:
-   
-public:
     BaseSystem();
     virtual ~BaseSystem();
+
+    virtual bool Save(std::ostream& os, std::string&) = 0;
 };

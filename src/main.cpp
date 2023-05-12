@@ -1,5 +1,6 @@
 #include "config.h"
 
+#include <filesystem>
 #include <iostream>
 #include <locale>
 #include <sstream>
@@ -393,6 +394,30 @@ void MyApp::RenderMainMenuBar()
                                                                                            | ImGuiFileDialogFlags_DisableCreateDirectoryButton);
             }
 
+            if(ImGui::MenuItem("Save Project...", "ctrl+s")) {
+                std::string default_file = current_project->GetRomFileName(); // current loaded file name
+
+                // get only the base filename
+                auto i = default_file.rfind("/");
+                if(i != std::string::npos) {
+                    default_file = default_file.substr(i + 1);
+                }
+                i = default_file.rfind("\\");
+                if(i != std::string::npos) {
+                    default_file = default_file.substr(i + 1);
+                }
+
+                // append .rdsproj
+                i = default_file.find(L'.');
+                if(i != std::string::npos) {
+                    default_file = default_file.substr(0, i);
+                }
+                default_file = default_file + ".rdsproj";
+
+                ImGuiFileDialog::Instance()->OpenDialog("SaveProjectFileDialog", "Save Project", "Project Files (*.rdsproj){.rdsproj}", "./roms/", default_file.c_str(), 
+                                                       1, nullptr, ImGuiFileDialogFlags_Modal);
+            }
+
             ImGui::Separator();
             if(ImGui::MenuItem("Exit", "ctrl+x")) {
                 request_exit = true;
@@ -515,6 +540,45 @@ void MyApp::RenderMainMenuBar()
 
             ImGuiFileDialog::Instance()->Close();
         }
+
+        // overwrite existing project?
+        {
+            if (ImGui::BeginPopupModal("OverwriteExitingProject", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+                ImGui::Text("The file %s already exists. Overwrite?", project_file_path.c_str());
+                
+                if(ImGui::Button("Yes")) {
+                    ImGui::CloseCurrentPopup();
+                    ImGuiFileDialog::Instance()->Close(); // close file dialog too
+                    popups.save_project.show = true;
+                }
+
+                ImGui::SameLine();
+                if(ImGui::Button("No")) {
+                    ImGui::CloseCurrentPopup();
+                    // don't close ImGuiFileDialog, keep asking
+                }
+
+                ImGui::EndPopup();
+            }
+        } 
+
+        if(!ImGui::IsPopupOpen("OverwriteExitingProject") && ImGuiFileDialog::Instance()->Display("SaveProjectFileDialog")) {
+            bool close_file_dialog = true;
+
+            if(ImGuiFileDialog::Instance()->IsOk()) {
+                project_file_path = ImGuiFileDialog::Instance()->GetFilePathName();
+
+                // if the file exists, ask the user to overwrite
+                if(std::filesystem::exists(project_file_path)) {
+                    close_file_dialog = false; // don't close file dialog yet
+                    ImGui::OpenPopup("OverwriteExitingProject");
+                } else {
+                    popups.save_project.show = true;
+                }
+            }
+
+            if(close_file_dialog) ImGuiFileDialog::Instance()->Close();
+        }
     }
 }
 
@@ -556,9 +620,7 @@ void MyApp::RenderPopups()
         GoToAddressPopup();
     }
 
-    if(ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-        ImGui::CloseCurrentPopup();
-    }
+    SaveProjectPopup();
 }
 
 bool MyApp::OKPopup(std::string const& title, std::string const& message)
@@ -670,6 +732,7 @@ void MyApp::ListingWindowCommand(shared_ptr<BaseWindow> const& wnd, string const
 void MyApp::CreateLabelPopup() 
 {
     auto title = popups.create_label.title.c_str();
+    bool should_close = false;
 
     // TODO this should be generic
     auto system = current_project->GetSystem<NES::System>();
@@ -716,7 +779,11 @@ void MyApp::CreateLabelPopup()
             system->EditLabel(*where, lstr, 0, true);
         }
 
-        ImGui::CloseCurrentPopup(); 
+        should_close = true;
+    }
+
+    if(should_close || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        ImGui::CloseCurrentPopup();
     }
 
     ImGui::EndPopup();
@@ -769,6 +836,7 @@ void MyApp::DisassemblyPopup()
 void MyApp::GoToAddressPopup() 
 {
     auto title = popups.goto_address.title.c_str();
+    bool should_close = false;
 
     // TODO this should be generic and we can use current_system->DisassemblyThread
     auto system = current_project->GetSystem<NES::System>();
@@ -810,13 +878,94 @@ void MyApp::GoToAddressPopup()
         shared_ptr<NES::Listing> listing = dynamic_pointer_cast<NES::Listing>(popups.goto_address.listing);
         if(listing) listing->GoToAddress(address);
 
-        ImGui::CloseCurrentPopup(); 
+        should_close = true;
+    }
+
+    if(should_close || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        ImGui::CloseCurrentPopup();
     }
 
     ImGui::EndPopup();
 }
 
+void MyApp::SaveProjectPopup()
+{
+    auto title = popups.save_project.title.c_str();
 
+    if(!ImGui::IsPopupOpen(title) && popups.save_project.show) {
+        if(!popups.save_project.thread) { // create the save project thread
+            popups.save_project.saving = true;
+            popups.save_project.errored = false;
+            popups.save_project.thread = make_shared<std::thread>(std::bind(&MyApp::SaveProjectThread, this));
+            cout << "[MyApp::SaveProjectPopup] started save project thread" << endl;
+        }
+
+        ImGui::OpenPopup(title);
+        popups.save_project.show = false;
+
+        // center the window
+        ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    }
+
+    if(ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::Text("Saving to %s...", project_file_path.c_str());
+
+        if(!popups.save_project.saving) {
+            popups.save_project.thread->join();
+            popups.save_project.thread = nullptr;
+            ImGui::CloseCurrentPopup();
+
+        }
+
+        ImGui::EndPopup();
+    }
+
+    // Show the error message
+    if(popups.save_project.errored) {
+        ImGui::OpenPopup("Error saving project");
+        popups.save_project.errored = false;
+    }
+
+    if(ImGui::BeginPopupModal("Error saving project", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::Text("An error occurred while saving the project: %s", popups.save_project.errmsg.c_str());
+        if(ImGui::Button("OK")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void MyApp::SaveProjectThread()
+{
+    cout << "save thread" << endl;
+
+    ofstream out(project_file_path, ios::binary);
+    if(out.good()) {
+        u64 magic = 0x8781a90afde1f317; 
+        u32 flags = 0; 
+        u32 version = 0; 
+
+        out.write((char*)&magic, sizeof(magic));
+        out.write((char*)&version, sizeof(version));
+        out.write((char*)&flags, sizeof(flags));
+        if(out.good()) {
+            popups.save_project.errored = !current_project->Save(out, popups.save_project.errmsg);
+        } else {
+            popups.save_project.errored = true;
+            popups.save_project.errmsg = "Could not write to file";
+        }
+    } else {
+        popups.save_project.errored = true;
+        popups.save_project.errmsg = "Could not open file";
+    }
+    
+    if(out.good()) out.flush();
+    if(!popups.save_project.errored) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    popups.save_project.saving = false;
+}
 
 int main(int argc, char* argv[])
 {

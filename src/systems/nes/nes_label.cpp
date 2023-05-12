@@ -13,5 +13,11 @@ Label::~Label()
 {
 }
 
+bool Label::Save(std::ostream& os, std::string& errmsg)
+{
+    if(!memory_location.Save(os, errmsg)) return false;
+    WriteString(os, label);
+    return true;
+}
 
 }
