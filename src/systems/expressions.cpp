@@ -52,10 +52,10 @@ void BaseExpressionNodeCreator::RegisterBaseExpressionNodes()
     RegisterBaseExpressionNode<BaseExpressionNodes::Constant<u8>>();
     RegisterBaseExpressionNode<BaseExpressionNodes::Constant<u16>>();
     RegisterBaseExpressionNode<BaseExpressionNodes::Name>();
-//!    RegisterBaseExpressionNode<AddOp>();
-//!    RegisterBaseExpressionNode<SubtractOp>();
-//!    RegisterBaseExpressionNode<MultiplyOp>();
-//!    RegisterBaseExpressionNode<DivideOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::AddOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::SubtractOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::MultiplyOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::DivideOp>();
 }
 
 bool BaseExpressionNodeCreator::Save(shared_ptr<BaseExpressionNode> const& node, ostream& os, string& errmsg)
@@ -111,6 +111,8 @@ int Parens::base_expression_node_id = 0;
 template <class T>
 int Constant<T>::base_expression_node_id = 0;
 int Name::base_expression_node_id = 0;
+template <s64 (*T)(s64, s64)>
+int BinaryOp<T>::base_expression_node_id = 0;
 
 bool Parens::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
 {
@@ -120,21 +122,26 @@ bool Parens::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCrea
     return true;
 }
 
-std::shared_ptr<Parens> Parens::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& node_creator) 
+std::shared_ptr<Parens> Parens::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& creator) 
 {
-    return nullptr;
-//    std::string left;
-//    ReadString(is, left);
-//    if(!os.good()) return nullptr;
-//    
-//    auto value = node_creator->Load(is, errmsg);
-//    if(!value) return nullptr;
-//    
-//    std::string right;
-//    ReadString(is, right);
-//    if(!os.good()) return nullptr;
-//    
-//    return std::make_shared<Parens>(left, value, right);
+    string left;
+    ReadString(is, left);
+    if(!is.good()) {
+        errmsg = "Could not load Parens";
+        return nullptr;
+    }
+
+    auto value = creator->Load(is, errmsg);
+    if(!value) return nullptr;
+
+    string right;
+    ReadString(is, right);
+    if(!is.good()) {
+        errmsg = "Could not load Parens";
+        return nullptr;
+    }
+
+    return std::make_shared<Parens>(left, value, right);
 }
 
 template <class T>
@@ -146,9 +153,17 @@ bool Constant<T>::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNod
 }
 
 template <class T>
-std::shared_ptr<Constant<T>> Constant<T>::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& node_creator) 
+std::shared_ptr<Constant<T>> Constant<T>::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& creator) 
 {
-    return nullptr;
+    T value = ReadVarInt<T>(is);
+    string display;
+    ReadString(is, display);
+    if(!is.good()) {
+        errmsg = "Could not load Constant<T>";
+        return nullptr;
+    }
+
+    return std::make_shared<Constant<T>>(value, display);
 }
 
 bool Name::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
@@ -157,24 +172,45 @@ bool Name::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreato
     return true;
 }
 
-std::shared_ptr<Name> Name::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& node_creator) 
+std::shared_ptr<Name> Name::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& creator) 
 {
-    return nullptr;
+    string display;
+    ReadString(is, display);
+    if(!is.good()) {
+        errmsg = "Could not load Constant<T>";
+        return nullptr;
+    }
+
+    return std::make_shared<Name>(display);
 }
 
-//!template <class T>
-//!bool BinaryOp::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
-//!{
-//!    if(!creator->Save(left, os, errmsg)) return false;
-//!    WriteString(os, display);
-//!    if(!creator->Save(right, os, errmsg)) return false;
-//!    return true;
-//!}
-//!template <class T>
-//!std::shared_ptr<BinaryOp<T>> BinaryOp<T>::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& node_creator) 
-//!{
-//!    return nullptr;
-//!}
+template <s64 (*T)(s64, s64)>
+bool BinaryOp<T>::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
+{
+    if(!creator->Save(left, os, errmsg)) return false;
+    WriteString(os, display);
+    if(!creator->Save(right, os, errmsg)) return false;
+    return true;
+}
+
+template <s64 (*T)(s64, s64)>
+std::shared_ptr<BinaryOp<T>> BinaryOp<T>::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& creator) 
+{
+    auto left = creator->Load(is, errmsg);
+    if(!left) return nullptr;
+
+    string display;
+    ReadString(is, display);
+    if(!is.good()) {
+        errmsg = "Could not load Constant<T>";
+        return nullptr;
+    }
+
+    auto right = creator->Load(is, errmsg);
+    if(!right) return nullptr;
+
+    return std::make_shared<BinaryOp<T>>(left, display, right);
+}
 
 }
 

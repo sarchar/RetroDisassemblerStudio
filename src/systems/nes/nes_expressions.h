@@ -80,8 +80,14 @@ namespace ExpressionNodes {
             return true;
         }
 
-        static std::shared_ptr<Accum> Load(std::istream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>&) {
-            return nullptr;
+        static std::shared_ptr<Accum> Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>&) {
+            std::string display;
+            ReadString(is, display);
+            if(!is.good()) {
+                errmsg = "Could not load Accum";
+                return nullptr;
+            }
+            return std::make_shared<Accum>(display);
         }
     private:
         std::string display;
@@ -111,8 +117,16 @@ namespace ExpressionNodes {
             return true;
         }
 
-        static std::shared_ptr<Immediate> Load(std::istream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>&) {
-            return nullptr;
+        static std::shared_ptr<Immediate> Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& creator) {
+            std::string display;
+            ReadString(is, display);
+            if(!is.good()) {
+                errmsg = "Could not load Accum";
+                return nullptr;
+            }
+            auto value = creator->Load(is, errmsg);
+            if(!value) return nullptr;
+            return std::make_shared<Immediate>(display, value);
         }
     private:
         std::string display;
@@ -143,8 +157,18 @@ namespace ExpressionNodes {
             return true;
         }
 
-        static std::shared_ptr<IndexedX> Load(std::istream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>&) {
-            return nullptr;
+        static std::shared_ptr<IndexedX> Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& creator) {
+            auto base = creator->Load(is, errmsg);
+            if(!base) return nullptr;
+
+            std::string display;
+            ReadString(is, display);
+            if(!is.good()) {
+                errmsg = "Could not load IndexedX";
+                return nullptr;
+            }
+
+            return std::make_shared<IndexedX>(base, display);
         }
     private:
         std::shared_ptr<BaseExpressionNode> base;
@@ -175,8 +199,18 @@ namespace ExpressionNodes {
             return true;
         }
 
-        static std::shared_ptr<IndexedY> Load(std::istream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>&) {
-            return nullptr;
+        static std::shared_ptr<IndexedY> Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& creator) {
+            auto base = creator->Load(is, errmsg);
+            if(!base) return nullptr;
+
+            std::string display;
+            ReadString(is, display);
+            if(!is.good()) {
+                errmsg = "Could not load IndexedY";
+                return nullptr;
+            }
+
+            return std::make_shared<IndexedY>(base, display);
         }
     private:
         std::shared_ptr<BaseExpressionNode> base;
