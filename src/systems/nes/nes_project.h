@@ -23,8 +23,8 @@ public:
     static std::shared_ptr<BaseProject> CreateProject();
 
     // Save and Load
-    bool Save(std::ostream& os, std::string&) override;
-    bool Load(std::istream& is, std::string&) override;
+    bool Save(std::ostream&, std::string&) override;
+    bool Load(std::istream&, std::string&) override;
 
 private:
 };

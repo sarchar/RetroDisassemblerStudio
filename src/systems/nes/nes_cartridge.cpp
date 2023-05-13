@@ -133,8 +133,13 @@ bool Cartridge::CanBank(GlobalMemoryLocation const& where)
         case 1: // MMC1 depends on the location 
             if(header.num_prg_rom_banks <= 16 && where.address >= 0xC000) return false;
             return true;
+
+        default:
+            assert(false);
+            return false;
         }
     }
+
 }
 
 std::shared_ptr<MemoryRegion> Cartridge::GetMemoryRegion(GlobalMemoryLocation const& where)
@@ -157,6 +162,10 @@ std::shared_ptr<MemoryRegion> Cartridge::GetMemoryRegion(GlobalMemoryLocation co
                     assert(where.prg_rom_bank < header.num_prg_rom_banks);
                     return program_rom_banks[where.prg_rom_bank];
                 }
+
+            default:
+                assert(false);
+                return nullptr;
             }
         }
     }
@@ -172,6 +181,29 @@ bool Cartridge::Save(std::ostream& os, std::string& errmsg)
 
     for(auto& memory_region : program_rom_banks) if(!memory_region->Save(os, errmsg)) return false;
     for(auto& memory_region : character_rom_banks) if(!memory_region->Save(os, errmsg)) return false;
+
+    return true;
+}
+
+bool Cartridge::Load(std::istream& is, std::string& errmsg, shared_ptr<System>& system)
+{
+    is.read((char*)&header, sizeof(header));
+    if(!is.good()) {
+        errmsg = "Error reading cartridge header";
+        return false;
+    }
+
+    for(u32 i = 0; i < header.num_prg_rom_banks; i++) {
+        auto memory_region = ProgramRomBank::Load(is, errmsg, system);
+        if(!memory_region) return false;
+        program_rom_banks.push_back(memory_region);
+    }
+
+    for(u32 i = 0; i < header.num_chr_rom_banks; i++) {
+        auto memory_region = CharacterRomBank::Load(is, errmsg, system);
+        if(!memory_region) return false;
+        character_rom_banks.push_back(memory_region);
+    }
 
     return true;
 }

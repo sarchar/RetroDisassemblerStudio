@@ -176,7 +176,7 @@ void Listing::CheckInput()
             listing_command->emit(shared_from_this(), "GoToAddress", current_selection);
             break;
 
-        case L'e': // create default expression for operand
+        case L'p': // create pointer at cursor (apply a label to the address pointed by the word at this location)
         {
             // TODO this will be a larger task in the future
             auto memory_region = system->GetMemoryRegion(current_selection);
@@ -214,17 +214,25 @@ void Listing::CheckInput()
 
             cout << "Creating memory reference to " << label_address << endl;
             {
-                stringstream ss;
-                ss << "L_" << hex << setw(2) << setfill('0') << uppercase << label_address.prg_rom_bank << setw(4) << label_address.address;
-                string label_str = ss.str();
-                if(auto label = system->CreateLabel(label_address, label_str)) {
-                    auto expr = make_shared<Expression>();
-                    auto name = expr->GetNodeCreator()->CreateName(label->GetString());
-                    expr->Set(name);
+                auto target_object = system->GetMemoryObject(label_address);
+                if(target_object && target_object->labels.size() == 0) { // create a label at that address if there isn't one yet
+                    stringstream ss;
+                    ss << "L_" << hex << setfill('0') << uppercase;
+                    if(system->CanBank(label_address)) ss << setw(2) << label_address.prg_rom_bank;
+                    ss << setw(4) << label_address.address;
 
-                    // set the expression for memory object at current_selection. it'll show up immediately
-                    memory_object->operand_expression = expr;
+                    system->CreateLabel(label_address, ss.str());
                 }
+
+                // now apply a OperandAddressOrLabel to the data on this memory object
+                auto default_operand_format = memory_object->FormatOperandField();
+                auto expr = make_shared<Expression>();
+                auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
+                auto name = nc->CreateOperandAddressOrLabel(label_address, 0, default_operand_format);
+                expr->Set(name);
+
+                // set the expression for memory object at current_selection. it'll show up immediately
+                memory_object->operand_expression = expr;
             }
 
 

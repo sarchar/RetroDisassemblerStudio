@@ -16,10 +16,13 @@ class ExpressionNode : public BaseExpressionNode {
 namespace ExpressionNodes {
     class OperandAddressOrLabel : public ExpressionNode {
     public:
-        OperandAddressOrLabel(std::shared_ptr<MemoryObject> const& _target, GlobalMemoryLocation const& _where, int _nth, std::string const& _display)
-            : target(_target), where(_where), nth(_nth), display(_display)
+        OperandAddressOrLabel(GlobalMemoryLocation const& _where, int _nth, std::string const& _display)
+            : where(_where), nth(_nth), display(_display)
         { }
         virtual ~OperandAddressOrLabel() { }
+
+        static int base_expression_node_id;
+        int GetExpressionNodeType() const override { return OperandAddressOrLabel::base_expression_node_id; }
 
         bool Evaluate(std::shared_ptr<BaseExpressionHelper> const&, s64* result) const override {
             *result = where.address;
@@ -28,15 +31,27 @@ namespace ExpressionNodes {
 
         void Print(std::ostream& ostream) const override;
 
-        bool Save(std::ostream& os, std::string& errmsg) override {
+        bool Save(std::ostream& os, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>) override {
             if(!where.Save(os, errmsg)) return false;
             WriteVarInt(os, nth);
             WriteString(os, display);
             return true;
         }
 
+        static std::shared_ptr<OperandAddressOrLabel> Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>&) {
+            GlobalMemoryLocation where;
+            if(!where.Load(is, errmsg)) return nullptr;
+            int nth = ReadVarInt<int>(is);
+            std::string display;
+            ReadString(is, display);
+            if(!is.good()) {
+                errmsg = "Error loading OperandAddressOrLabel";
+                return nullptr;
+            }
+            return std::make_shared<OperandAddressOrLabel>(where, nth, display);
+        }
+
     private:
-        std::weak_ptr<MemoryObject> target;
         GlobalMemoryLocation        where;
         int nth;
         std::string                 display;
@@ -49,6 +64,9 @@ namespace ExpressionNodes {
         { }
         virtual ~Accum() { }
 
+        static int base_expression_node_id;
+        int GetExpressionNodeType() const override { return Accum::base_expression_node_id; }
+
         bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
             return false;
         }
@@ -57,11 +75,14 @@ namespace ExpressionNodes {
             ostream << display;
         }
 
-        bool Save(std::ostream& os, std::string& errmsg) override {
+        bool Save(std::ostream& os, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>) override {
             WriteString(os, display);
             return true;
         }
 
+        static std::shared_ptr<Accum> Load(std::istream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>&) {
+            return nullptr;
+        }
     private:
         std::string display;
     };
@@ -73,6 +94,9 @@ namespace ExpressionNodes {
         { assert(value); }
         virtual ~Immediate() { }
 
+        static int base_expression_node_id;
+        int GetExpressionNodeType() const override { return Immediate::base_expression_node_id; }
+
         bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
             return value->Evaluate(helper, result);
         }
@@ -81,12 +105,15 @@ namespace ExpressionNodes {
             ostream << display << *value;
         }
 
-        bool Save(std::ostream& os, std::string& errmsg) override {
+        bool Save(std::ostream& os, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator> creator) override {
             WriteString(os, display);
-            if(!value->Save(os, errmsg)) return false;
+            if(!creator->Save(value, os, errmsg)) return false;
             return true;
         }
 
+        static std::shared_ptr<Immediate> Load(std::istream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>&) {
+            return nullptr;
+        }
     private:
         std::string display;
         std::shared_ptr<BaseExpressionNode> value;
@@ -99,6 +126,9 @@ namespace ExpressionNodes {
         { }
         virtual ~IndexedX() { }
 
+        static int base_expression_node_id;
+        int GetExpressionNodeType() const override { return IndexedX::base_expression_node_id; }
+
         bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
             return false;
         }
@@ -107,12 +137,15 @@ namespace ExpressionNodes {
             ostream << *base << display;
         }
 
-        bool Save(std::ostream& os, std::string& errmsg) override {
-            if(!base->Save(os, errmsg)) return false;
+        bool Save(std::ostream& os, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator> creator) override {
+            if(!creator->Save(base, os, errmsg)) return false;
             WriteString(os, display);
             return true;
         }
 
+        static std::shared_ptr<IndexedX> Load(std::istream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>&) {
+            return nullptr;
+        }
     private:
         std::shared_ptr<BaseExpressionNode> base;
         std::string display;
@@ -125,6 +158,9 @@ namespace ExpressionNodes {
         { }
         virtual ~IndexedY() { }
 
+        static int base_expression_node_id;
+        int GetExpressionNodeType() const override { return IndexedY::base_expression_node_id; }
+
         bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
             return false;
         }
@@ -133,12 +169,15 @@ namespace ExpressionNodes {
             ostream << *base << display;
         }
 
-        bool Save(std::ostream& os, std::string& errmsg) override {
-            if(!base->Save(os, errmsg)) return false;
+        bool Save(std::ostream& os, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator> creator) override {
+            if(!creator->Save(base, os, errmsg)) return false;
             WriteString(os, display);
             return true;
         }
 
+        static std::shared_ptr<IndexedY> Load(std::istream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>&) {
+            return nullptr;
+        }
     private:
         std::shared_ptr<BaseExpressionNode> base;
         std::string display;
@@ -148,6 +187,8 @@ namespace ExpressionNodes {
 class ExpressionNodeCreator : public BaseExpressionNodeCreator {
 public:
     typedef std::shared_ptr<BaseExpressionNode> BN;
+
+    static void RegisterExpressionNodes();
 
     BN CreateAccum(std::string const& display) {
         return std::make_shared<ExpressionNodes::Accum>(display);
@@ -165,8 +206,8 @@ public:
         return std::make_shared<ExpressionNodes::IndexedY>(base, display);
     }
 
-    BN CreateOperandAddressOrLabel(std::shared_ptr<MemoryObject> const& target, GlobalMemoryLocation const& where, int nth, std::string const& display) {
-        return std::make_shared<ExpressionNodes::OperandAddressOrLabel>(target, where, nth, display);
+    BN CreateOperandAddressOrLabel(GlobalMemoryLocation const& where, int nth, std::string const& display) {
+        return std::make_shared<ExpressionNodes::OperandAddressOrLabel>(where, nth, display);
     }
 };
 

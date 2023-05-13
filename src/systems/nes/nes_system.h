@@ -76,7 +76,8 @@ public:
     //!}
 
     // Save and load
-    bool Save(std::ostream& os, std::string&) override;
+    bool Save(std::ostream&, std::string&) override;
+    bool Load(std::istream&, std::string&) override;
 
 private:
     // Memory

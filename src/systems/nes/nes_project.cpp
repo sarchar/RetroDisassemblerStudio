@@ -26,7 +26,7 @@ BaseProject::Information const* Project::GetInformationStatic()
         .abbreviation   = "NES",
         .full_name      = "Nintendo Entertainment System",
         .is_rom_valid   = std::bind(&Project::IsROMValid, placeholders::_1, placeholders::_2),
-        .create_project = std::bind(&Project::CreateProject)
+        .create_project = std::bind(&Project::CreateProject),
     };
 
     return &information;
@@ -158,19 +158,22 @@ bool Project::Save(std::ostream& os, std::string& errmsg)
     // call the base method first to inject the project Information
     if(!BaseProject::Save(os, errmsg)) return false;
 
-    // serialie the System structure
+    // save the System structure
     auto system = GetSystem<System>();
     if(!system->Save(os, errmsg)) return false;
 
     return true;
 }
 
-bool Project::Load(std::istream& is, std::string& errmsg) 
+bool Project::Load(std::istream& is, std::string& errmsg)
 {
-    errmsg = "not implemented";
-    return false;
+    if(!BaseProject::Load(is, errmsg)) return false;
+
+    current_system = make_shared<System>();
+    auto system = GetSystem<System>();
+    if(!system->Load(is, errmsg)) return false;
+
+    return true;
 }
-
-
 
 }

@@ -50,9 +50,6 @@ private:
     bool        create_project_done;
 
 public:
-    static void RegisterProjectInformation(BaseProject::Information const*);
     static std::shared_ptr<ProjectCreatorWindow> CreateWindow(std::string const& _file_path_name);
 
-private:
-    static std::vector<BaseProject::Information const*> project_informations;
 };

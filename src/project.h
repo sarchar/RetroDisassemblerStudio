@@ -36,8 +36,9 @@ public:
 
     virtual void CreateDefaultWorkspace() = 0;
 
-    virtual bool Save(std::ostream& os, std::string&);
-    virtual bool Load(std::istream& is, std::string&);
+    virtual bool Save(std::ostream&, std::string&);
+    virtual bool Load(std::istream&, std::string&);
+    static std::shared_ptr<BaseProject> LoadProject(std::istream&, std::string&);
 
     // signals
     typedef signal<std::function<void(std::shared_ptr<BaseProject>, bool error, 
@@ -47,5 +48,11 @@ public:
 protected:
     std::shared_ptr<BaseSystem> current_system;
     std::string                 rom_file_name;
+
+public:
+    static void RegisterProjectInformation(Information const*);
+    static Information const* GetProjectInformation(int);
+    static Information const* GetProjectInformation(std::string const& abbreviation);
+    static std::vector<Information const*> project_informations;
 };
 

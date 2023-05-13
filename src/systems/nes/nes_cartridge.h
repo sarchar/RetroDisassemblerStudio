@@ -36,6 +36,7 @@ public:
     u16 GetResetVectorBank();
 
     bool Save(std::ostream&, std::string&);
+    bool Load(std::istream&, std::string&, std::shared_ptr<System>&);
 private:
     void CreateMemoryRegions();
 

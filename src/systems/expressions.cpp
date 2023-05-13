@@ -1,4 +1,10 @@
+#include <functional>
+
 #include "systems/expressions.h"
+
+using namespace std;
+
+std::vector<std::shared_ptr<BaseExpressionNodeCreator::BaseExpressionNodeInfo>> BaseExpressionNodeCreator::expression_nodes;
 
 BaseExpressionHelper::BaseExpressionHelper()
 {
@@ -41,6 +47,41 @@ BaseExpressionNodeCreator::~BaseExpressionNodeCreator()
 {
 }
 
+void BaseExpressionNodeCreator::RegisterBaseExpressionNodes()
+{
+    RegisterBaseExpressionNode<BaseExpressionNodes::Constant<u8>>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::Constant<u16>>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::Name>();
+//!    RegisterBaseExpressionNode<AddOp>();
+//!    RegisterBaseExpressionNode<SubtractOp>();
+//!    RegisterBaseExpressionNode<MultiplyOp>();
+//!    RegisterBaseExpressionNode<DivideOp>();
+}
+
+bool BaseExpressionNodeCreator::Save(shared_ptr<BaseExpressionNode> const& node, ostream& os, string& errmsg)
+{
+    WriteVarInt(os, node->GetExpressionNodeType());
+    if(!os.good()) return false;
+    return node->Save(os, errmsg, shared_from_this());
+}
+
+std::shared_ptr<BaseExpressionNode> BaseExpressionNodeCreator::Load(std::istream& is, std::string& errmsg)
+{
+    u32 node_type = ReadVarInt<u32>(is);
+    if(!is.good()) {
+        errmsg = "Error reading expression node";
+        return nullptr;
+    }
+
+    if(node_type >= expression_nodes.size()) {
+        errmsg = "Invalid expression node type";
+        return nullptr;
+    }
+
+    auto ptr = shared_from_this();
+    return expression_nodes[node_type]->load(is, errmsg, ptr);
+}
+
 BaseExpression::BaseExpression()
 {
 }
@@ -64,4 +105,76 @@ std::ostream& operator<<(std::ostream& stream, BaseExpression const& e)
     return stream;
 };
 
+namespace BaseExpressionNodes {
+
+int Parens::base_expression_node_id = 0;
+template <class T>
+int Constant<T>::base_expression_node_id = 0;
+int Name::base_expression_node_id = 0;
+
+bool Parens::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
+{
+    WriteString(os, left);
+    if(!creator->Save(value, os, errmsg)) return false;
+    WriteString(os, right);
+    return true;
+}
+
+std::shared_ptr<Parens> Parens::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& node_creator) 
+{
+    return nullptr;
+//    std::string left;
+//    ReadString(is, left);
+//    if(!os.good()) return nullptr;
+//    
+//    auto value = node_creator->Load(is, errmsg);
+//    if(!value) return nullptr;
+//    
+//    std::string right;
+//    ReadString(is, right);
+//    if(!os.good()) return nullptr;
+//    
+//    return std::make_shared<Parens>(left, value, right);
+}
+
+template <class T>
+bool Constant<T>::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
+{
+    WriteVarInt(os, value);
+    WriteString(os, display);
+    return true;
+}
+
+template <class T>
+std::shared_ptr<Constant<T>> Constant<T>::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& node_creator) 
+{
+    return nullptr;
+}
+
+bool Name::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
+{
+    WriteString(os, name);
+    return true;
+}
+
+std::shared_ptr<Name> Name::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& node_creator) 
+{
+    return nullptr;
+}
+
+//!template <class T>
+//!bool BinaryOp::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
+//!{
+//!    if(!creator->Save(left, os, errmsg)) return false;
+//!    WriteString(os, display);
+//!    if(!creator->Save(right, os, errmsg)) return false;
+//!    return true;
+//!}
+//!template <class T>
+//!std::shared_ptr<BinaryOp<T>> BinaryOp<T>::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& node_creator) 
+//!{
+//!    return nullptr;
+//!}
+
+}
 

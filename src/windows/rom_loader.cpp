@@ -16,8 +16,6 @@
 
 using namespace std;
 
-std::vector<BaseProject::Information const*> ProjectCreatorWindow::project_informations;
-
 shared_ptr<ProjectCreatorWindow> ProjectCreatorWindow::CreateWindow(string const& _file_path_name)
 {
     return make_shared<ProjectCreatorWindow>(_file_path_name);
@@ -56,7 +54,8 @@ void ProjectCreatorWindow::UpdateContent(double deltaTime)
 
         // loop over all the loaders and accumuilate the valid ones
         vector<BaseProject::Information const*> valid_projects;
-        for(auto info : ProjectCreatorWindow::project_informations) {
+        int i = 0;
+        while(auto info = BaseProject::GetProjectInformation(i++)) {
             if(info->is_rom_valid(file_path_name, is)) {
                 valid_projects.push_back(info);
             }
@@ -198,11 +197,6 @@ void ProjectCreatorWindow::CreateNewProjectProgress(shared_ptr<BaseProject> syst
     create_project_max_progress     = max_progress;
     create_project_current_progress = current_progress;
     create_project_message          = msg;
-}
-
-void ProjectCreatorWindow::RegisterProjectInformation(BaseProject::Information const* info)
-{
-    ProjectCreatorWindow::project_informations.push_back(info);
 }
 
 void ProjectCreatorWindow::CreateProjectThreadMain()

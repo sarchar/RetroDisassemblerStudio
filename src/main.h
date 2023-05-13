@@ -71,6 +71,8 @@ private:
     void GoToAddressPopup();
     void SaveProjectPopup();
     void SaveProjectThread();
+    void LoadProjectPopup();
+    void LoadProjectThread();
 
     bool request_exit;
     bool show_imgui_demo;
@@ -116,6 +118,15 @@ private:
             bool errored = false;
             std::string errmsg;
         } save_project;
+
+        struct {
+            std::string title = "Loading Project...";
+            std::shared_ptr<std::thread> thread;
+            bool show = false;
+            bool loading = true;
+            bool errored = false;
+            std::string errmsg;
+        } load_project;
     } popups;
 
 private:

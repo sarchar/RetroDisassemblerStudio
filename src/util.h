@@ -47,10 +47,37 @@ inline void WriteVarInt(std::ostream& os, T const& v)
     }
 }
 
+template <class T>
+inline T ReadVarInt(std::istream& is)
+{
+    u8 v;
+    is.read((char*)&v, 1);
+    if(v < 254) {
+        return (T)v;
+    } else if(v == 254) {
+        u16 v;
+        is.read((char*)&v, 2);
+        return (T)v;
+    } else {
+        u32 v;
+        is.read((char*)&v, 4);
+        return (T)v;
+    }
+
+    return 0;
+}
+
 inline void WriteString(std::ostream& os, std::string const& s)
 {
     WriteVarInt(os, s.size());
     os.write(s.c_str(), s.size());
+}
+
+inline void ReadString(std::istream& is, std::string& s)
+{
+    auto len = ReadVarInt<u32>(is);
+    s.resize(len);
+    is.read(&s[0], len);
 }
 
 template<class T>

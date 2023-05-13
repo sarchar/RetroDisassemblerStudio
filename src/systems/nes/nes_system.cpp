@@ -379,7 +379,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
         }
 
         // if the destination is not valid memory, we can't really create an OperandAddressOrLabel node
-        auto root = is_valid ? nc->CreateOperandAddressOrLabel(target_object, target_location, 0, string(buf))
+        auto root = is_valid ? nc->CreateOperandAddressOrLabel(target_location, 0, string(buf))
                              : (is16 ? nc->CreateConstantU16(target_location.address, buf)
                                      : nc->CreateConstantU8(target_location.address, buf));
 
@@ -462,6 +462,27 @@ bool System::Save(std::ostream& os, std::string& errmsg)
 
     // save the cartridge (which will save some memory regions)
     if(!cartridge->Save(os, errmsg)) return false;
+
+    return true;
+}
+
+bool System::Load(std::istream& is, std::string& errmsg)
+{
+    shared_ptr<BaseSystem> base_system = shared_from_this();
+    auto selfptr = dynamic_pointer_cast<System>(base_system);
+    assert(selfptr);
+
+     // load registers
+    ppu_registers = make_shared<PPURegistersRegion>(selfptr); // 0x2000-0x3FFF
+    if(!ppu_registers->Load(is, errmsg)) return false;
+
+    io_registers  = make_shared<IORegistersRegion>(selfptr);  // 0x4000-0x401F
+    if(!io_registers->Load(is, errmsg)) return false;
+
+    // load cartridge
+    // save the cartridge (which will save some memory regions)
+    cartridge     = make_shared<Cartridge>(selfptr);          // 0x6000-0xFFFF
+    if(!cartridge->Load(is, errmsg, selfptr)) return false;
 
     return true;
 }

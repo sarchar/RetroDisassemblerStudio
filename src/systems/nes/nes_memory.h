@@ -54,6 +54,7 @@ struct GlobalMemoryLocation {
     }
 
     bool Save(std::ostream&, std::string&);
+    bool Load(std::istream&, std::string&);
 
     bool operator==(GlobalMemoryLocation const& other) const {
         return address == other.address &&
@@ -166,9 +167,10 @@ struct MemoryObject {
     void Read(u8*, int);
 
     std::string FormatInstructionField(std::shared_ptr<Disassembler> disassembler = nullptr);
-    std::string FormatOperandField(u32, std::shared_ptr<Disassembler> disassembler = nullptr);
+    std::string FormatOperandField(u32 = 0, std::shared_ptr<Disassembler> disassembler = nullptr);
 
     bool Save(std::ostream&, std::string&);
+    bool Load(std::istream&, std::string&);
 };
 
 // MemoryRegion represents a region of memory on the system
@@ -193,6 +195,7 @@ public:
 
     void                           InitializeEmpty();
     void                           InitializeFromData(u8* data, int count);
+    void                           ReinitializeFromObjectRefs();
 
     std::shared_ptr<MemoryObject>  GetMemoryObject(GlobalMemoryLocation const&);
     void                           UpdateMemoryObject(GlobalMemoryLocation const&);
@@ -218,6 +221,7 @@ public:
 
     // Load and save
     virtual bool Save(std::ostream&, std::string&);
+    virtual bool Load(std::istream&, std::string&);
 
 protected:
     u32 base_address;
@@ -236,6 +240,7 @@ private:
 
     void _InitializeEmpty(std::shared_ptr<MemoryObjectTreeNode>&, u32, int);
     void _InitializeFromData(std::shared_ptr<MemoryObjectTreeNode>&, u32, u8*, int);
+    void _ReinializeFromObjectRefs(std::shared_ptr<MemoryObjectTreeNode>&, std::vector<int> const&, u32, int);
     void _UpdateMemoryObject(std::shared_ptr<MemoryObject>&, u32);
     void RemoveMemoryObjectFromTree(std::shared_ptr<MemoryObject>&, bool save_tree_node = false);
 
@@ -261,6 +266,7 @@ public:
     virtual ~ProgramRomBank() {};
 
     bool Save(std::ostream&, std::string&) override;
+    static std::shared_ptr<ProgramRomBank> Load(std::istream&, std::string&, std::shared_ptr<System>&);
 private:
     PROGRAM_ROM_BANK_LOAD bank_load;
     PROGRAM_ROM_BANK_SIZE bank_size;
@@ -272,6 +278,7 @@ public:
     virtual ~CharacterRomBank() {}
 
     bool Save(std::ostream&, std::string&) override;
+    static std::shared_ptr<CharacterRomBank> Load(std::istream&, std::string&, std::shared_ptr<System>&);
 private:
     CHARACTER_ROM_BANK_LOAD bank_load;
     CHARACTER_ROM_BANK_SIZE bank_size;

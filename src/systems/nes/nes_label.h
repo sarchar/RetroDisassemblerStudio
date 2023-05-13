@@ -18,6 +18,7 @@ public:
     std::string          const& GetString()         const { return label; }
 
     bool Save(std::ostream&, std::string&);
+    static std::shared_ptr<Label> Load(std::istream&, std::string&);
 private:
     GlobalMemoryLocation memory_location;
     std::string          label;

@@ -33,6 +33,20 @@ bool GlobalMemoryLocation::Save(std::ostream& os, std::string& errmsg)
     return true;
 }
 
+bool GlobalMemoryLocation::Load(std::istream& is, std::string& errmsg)
+{
+    address = ReadVarInt<u16>(is);
+    is.read((char*)&is_chr, sizeof(is_chr));
+    prg_rom_bank = ReadVarInt<u16>(is);
+    chr_rom_bank = ReadVarInt<u16>(is);
+    if(!is.good()) {
+        errmsg = "Error reading GlobalMemoryLocation";
+        return false;
+    }
+    //cout << *this << endl;
+    return true;
+}
+
 MemoryRegion::MemoryRegion(shared_ptr<System>& _parent_system) 
 { 
     // create a week reference to avoid cyclical refs
@@ -199,6 +213,33 @@ void MemoryRegion::_InitializeEmpty(shared_ptr<MemoryObjectTreeNode>& tree_node,
     }
 }
 
+void MemoryRegion::_ReinializeFromObjectRefs(shared_ptr<MemoryObjectTreeNode>& tree_node, vector<int> const& objmap, u32 uid_start, int count)
+{
+    // stop the iteration when there's one byte left
+    if(count == 1) {
+        tree_node->is_object = true;
+
+        // don't create or the object, since we already have it
+        auto obj = object_refs[objmap[uid_start]];
+
+        // just set the parent
+        obj->parent = tree_node;
+
+        // and the obj pointer
+        tree_node->obj = obj;
+    } else {
+        // initialize the tree by splitting the data into left and right halves
+        tree_node->left  = make_shared<MemoryObjectTreeNode>(tree_node);
+        _ReinializeFromObjectRefs(tree_node->left , objmap, uid_start, count / 2);
+
+        // handle odd number of elements by putting the odd one on the right side
+        tree_node->right = make_shared<MemoryObjectTreeNode>(tree_node);
+        int fixed_count = (count / 2) + (count % 2);
+        _ReinializeFromObjectRefs(tree_node->right, objmap, uid_start + count / 2, fixed_count);
+    }
+}
+
+
 void MemoryRegion::InitializeFromData(u8* data, int count)
 {
     assert(count == region_size); // can only initialize the memory region tree with an exact number of bytes
@@ -225,6 +266,41 @@ void MemoryRegion::InitializeFromData(u8* data, int count)
 
     cout << "[MemoryRegion::InitializeWithData] set $" << hex << uppercase << setfill('0') << setw(0) << count 
          << " bytes of data for memory base $" << setw(4) << base_address << endl;
+}
+
+void MemoryRegion::ReinitializeFromObjectRefs()
+{
+    // we need a mapping from unique object index to offset in the region
+    // that requires a once-over the entire list of objects
+    std::vector<int> objmap;
+
+    auto current_object = object_refs[0];
+    objmap.push_back(0);
+    for(u32 offset = 0; offset < region_size; offset++) {
+        auto next_object = object_refs[offset];
+        if(next_object != current_object) {
+            current_object = next_object;
+            objmap.push_back(offset);
+        }
+    }
+
+    u32 count = objmap.size();
+
+    // We need a root for the tree first and foremost
+    object_tree_root = make_shared<MemoryObjectTreeNode>(nullptr);
+
+    // initialize the tree by splitting the data into left and right halves
+    assert(count >= 2); // minimum object count
+    object_tree_root->left  = make_shared<MemoryObjectTreeNode>(object_tree_root);
+    object_tree_root->right = make_shared<MemoryObjectTreeNode>(object_tree_root);
+    _ReinializeFromObjectRefs(object_tree_root->left , objmap, 0        , count / 2);
+    _ReinializeFromObjectRefs(object_tree_root->right, objmap, count / 2, (count / 2) + (count % 2));
+
+    // creating the listing items and recalculate the tree
+    RecreateListingItems();
+    RecalculateListingItemCounts();
+
+    cout << "[MemoryRegion::ReinitializeFromObjectRefs] processed " << count << " objects" << endl;
 }
 
 void MemoryRegion::InitializeEmpty()
@@ -717,6 +793,7 @@ string MemoryObject::FormatInstructionField(shared_ptr<Disassembler> disassemble
     return ss.str();
 }
 
+// TODO internal_offset will likely be used later to format multi-line data?
 string MemoryObject::FormatOperandField(u32 /* internal_offset */, shared_ptr<Disassembler> disassembler)
 {
     stringstream ss;
@@ -763,7 +840,10 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
     os.write((char*)&backed, sizeof(backed));
 
     // save the data (for now, TODO: don't save data and instead read from the rom file?)
-    if(backed) WriteVarInt(os, GetSize());
+    if(backed) {
+        WriteVarInt(os, GetSize());
+        os.write((char*)&bval, GetSize());
+    }
 
     if(!os.good()) {
         errmsg = "Error writing MemoryObject";
@@ -772,7 +852,7 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
 
     // save labels
     int nlabels = labels.size();
-    os.write((char*)&nlabels, sizeof(nlabels));
+    WriteVarInt(os, nlabels);
     for(int i = 0; i < nlabels; i++) {
         if(!labels[i]->Save(os, errmsg)) return false;
     }
@@ -797,6 +877,46 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
     return true;
 }
 
+bool MemoryObject::Load(std::istream& is, std::string& errmsg)
+{
+    int inttype = ReadVarInt<int>(is);
+    type = (MemoryObject::TYPE)inttype;
+    is.read((char*)&backed, sizeof(backed));
+
+    //cout << "MemoryObject::type = " << type << endl;
+    //cout << "MemoryObject::backed = " << backed << endl;
+
+    if(backed) {
+        u32 size = ReadVarInt<u32>(is);
+        //cout << "MemoryObject::size = " << size << endl;
+        is.read((char*)&bval, size);
+    }
+
+    int nlabels = ReadVarInt<int>(is);
+    //cout << "MemoryObject::nlabels = " << nlabels << endl;
+    for(int i = 0; i < nlabels; i++) {
+        auto label = Label::Load(is, errmsg);
+        if(!label) return false;
+        labels.push_back(label);
+    }
+
+    int fields_present = ReadVarInt<int>(is);
+
+    if(fields_present & (1 << 0)) {
+         operand_expression = make_shared<Expression>();
+         if(!operand_expression->Load(is, errmsg)) return false;
+    }
+
+    if(fields_present & (1 << 1)) {
+        string s;
+        ReadString(is, s);
+        comments.eol = make_shared<string>(s);
+        cout << "comment.eol: " << *comments.eol << endl;
+    }
+
+    return true;
+}
+
 u8 MemoryRegion::ReadByte(GlobalMemoryLocation const& where)
 {
     return 0;
@@ -813,11 +933,49 @@ bool MemoryRegion::Save(std::ostream& os, std::string& errmsg)
     }
 
     // save all the unique memory objects
-    for(u32 offset = 0; offset < region_size; offset++) {
+    for(u32 offset = 0; offset < region_size; ) {
         auto memory_object = object_refs[offset];
         if(!memory_object->Save(os, errmsg)) return false;
         offset += memory_object->GetSize(); // skip addresses that point to the same object
     }
+
+    return true;
+}
+
+bool MemoryRegion::Load(std::istream& is, std::string& errmsg)
+{
+    base_address = ReadVarInt<u32>(is);
+    region_size = ReadVarInt<u32>(is);
+    if(!is.good()) {
+        errmsg = "Error reading region address";
+        return false;
+    }
+    cout << "MemoryRegion::base_address = " << hex << base_address << endl;
+    cout << "MemoryRegion::region_size = " << hex << region_size << endl;
+
+    // initialize memory object storage
+    Erase();
+    object_refs.resize(region_size);
+
+    // load all the memory objects
+    for(u32 offset = 0; offset < region_size;) {
+        auto obj = make_shared<MemoryObject>();
+        if(!obj->Load(is, errmsg)) return false;
+        
+        //TODO put labels in the systems's label database
+        if(obj->labels.size()) {
+            cout << "[MemoryRegion::Load] need to register " << obj->labels.size() << " labels" << endl;
+        }
+
+        // set all memory locations offset..offset+size-1 to the object
+        for(u32 i = 0; i < obj->GetSize(); i++) object_refs[offset + i] = obj;
+
+        // next offset
+        offset += obj->GetSize();
+    }
+
+    // Rebuild the object tree using the list of object references
+    ReinitializeFromObjectRefs();
 
     return true;
 }
@@ -869,6 +1027,16 @@ bool ProgramRomBank::Save(std::ostream& os, std::string& errmsg)
     return MemoryRegion::Save(os, errmsg);
 }
 
+shared_ptr<ProgramRomBank> ProgramRomBank::Load(std::istream& is, std::string& errmsg, shared_ptr<System>& system)
+{
+    PROGRAM_ROM_BANK_LOAD bank_load = (PROGRAM_ROM_BANK_LOAD)ReadVarInt<int>(is);
+    PROGRAM_ROM_BANK_SIZE bank_size = (PROGRAM_ROM_BANK_SIZE)ReadVarInt<int>(is);
+    if(!is.good()) return nullptr;
+    auto prg_bank = make_shared<ProgramRomBank>(system, bank_load, bank_size);
+    if(!prg_bank->MemoryRegion::Load(is, errmsg)) return nullptr;
+    return prg_bank;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 CharacterRomBank::CharacterRomBank(shared_ptr<System>& system, CHARACTER_ROM_BANK_LOAD _bank_load, CHARACTER_ROM_BANK_SIZE _bank_size)
@@ -912,6 +1080,17 @@ bool CharacterRomBank::Save(std::ostream& os, std::string& errmsg)
 
     return MemoryRegion::Save(os, errmsg);
 }
+
+shared_ptr<CharacterRomBank> CharacterRomBank::Load(std::istream& is, std::string& errmsg, shared_ptr<System>& system)
+{
+    CHARACTER_ROM_BANK_LOAD bank_load = (CHARACTER_ROM_BANK_LOAD)ReadVarInt<int>(is);
+    CHARACTER_ROM_BANK_SIZE bank_size = (CHARACTER_ROM_BANK_SIZE)ReadVarInt<int>(is);
+    if(!is.good()) return nullptr;
+    auto chr_bank = make_shared<CharacterRomBank>(system, bank_load, bank_size);
+    if(!chr_bank->MemoryRegion::Load(is, errmsg)) return nullptr;
+    return chr_bank;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // PPU registers $2000-$2008 (mirroed every 8 bytes until 0x3FFF)

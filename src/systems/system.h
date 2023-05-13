@@ -13,4 +13,5 @@ public:
     virtual ~BaseSystem();
 
     virtual bool Save(std::ostream& os, std::string&) = 0;
+    virtual bool Load(std::istream&, std::string&) = 0;
 };

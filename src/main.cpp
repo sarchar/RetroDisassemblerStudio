@@ -19,6 +19,7 @@
 #include "dirent/dirent.h"
 
 #include "main.h"
+#include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
@@ -38,7 +39,12 @@ MyApp::MyApp(int argc, char* argv[])
 {
     ((void)argc);
     ((void)argv);
-    ProjectCreatorWindow::RegisterProjectInformation(NES::Project::GetInformationStatic());
+    BaseProject::RegisterProjectInformation(NES::Project::GetInformationStatic());
+
+    BaseExpressionNodeCreator::RegisterBaseExpressionNodes();
+    NES::ExpressionNodeCreator::RegisterExpressionNodes();
+
+    //
 //!    current_system_changed = make_shared<current_system_changed_t>();
 
     // register all the windows
@@ -383,18 +389,28 @@ void MyApp::RenderMainMenuBar()
 {
     if(ImGui::BeginMainMenuBar()) {
         if(ImGui::BeginMenu("File")) {
-            if(ImGui::MenuItem("New Disassembly...", "ctrl+o")) {
+            if(ImGui::MenuItem("New Project...", "ctrl+o")) {
                 auto infos_pane_cb = [=, this](char const* vFilter, IGFDUserDatas vUserDatas, bool* cantContinue) {
                     this->OpenROMInfosPane();
                 };
 
-                ImGuiFileDialog::Instance()->OpenDialog("OpenROMFileDialog", "Choose ROM to disassemble", "NES ROMs (*.nes){.nes}", "./roms/", "",
+                ImGuiFileDialog::Instance()->OpenDialog("OpenROMFileDialog", "Choose ROM for project", "NES ROMs (*.nes){.nes}", "./roms/", "",
                                                        bind(infos_pane_cb, placeholders::_1, placeholders::_2, placeholders::_3),
                                                        250, 1, IGFDUserDatas("InfosPane"), ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_CaseInsensitiveExtention
                                                                                            | ImGuiFileDialogFlags_DisableCreateDirectoryButton);
             }
 
-            if(ImGui::MenuItem("Save Project...", "ctrl+s")) {
+            if(ImGui::MenuItem("Open Project...", "ctrl+o")) {
+                assert(!current_project);
+                ImGuiFileDialog::Instance()->OpenDialog("OpenProjectFileDialog", "Open Project", "Project Files (*.rdsproj){.rdsproj}", "./roms/", "", 
+                                                       1, nullptr, ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_ReadOnlyFileNameField);
+            }
+
+            if(ImGui::MenuItem("Save Project", "ctrl+s", nullptr, (bool)current_project)) {
+                // TODO
+            }
+
+            if(ImGui::MenuItem("Save Project As...", "", nullptr, (bool)current_project)) {
                 std::string default_file = current_project->GetRomFileName(); // current loaded file name
 
                 // get only the base filename
@@ -415,7 +431,10 @@ void MyApp::RenderMainMenuBar()
                 default_file = default_file + ".rdsproj";
 
                 ImGuiFileDialog::Instance()->OpenDialog("SaveProjectFileDialog", "Save Project", "Project Files (*.rdsproj){.rdsproj}", "./roms/", default_file.c_str(), 
-                                                       1, nullptr, ImGuiFileDialogFlags_Modal);
+                                                       1, nullptr, ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_ConfirmOverwrite);
+            }
+
+            if(ImGui::MenuItem("Close Project", "", nullptr, (bool)current_project)) {
             }
 
             ImGui::Separator();
@@ -468,6 +487,10 @@ void MyApp::RenderMainMenuBar()
             //!    auto wnd = SNESMemory::CreateWindow();
             //!    AddWindow(wnd);
             //!}
+            if(ImGui::MenuItem("Listing")) {
+                auto wnd = NES::Listing::CreateWindow();
+                AddWindow(wnd);
+            }
             ImGui::EndMenu();
         }
 
@@ -477,52 +500,52 @@ void MyApp::RenderMainMenuBar()
             }
 
             if(ImGui::MenuItem("Expressions test", "")) {
-                // create an expression of the form "Label-1"
-                shared_ptr<BaseExpression> expr = make_shared<Expression>();
-                auto node_creator = expr->GetNodeCreator();
-
-                // Try to fully represent the following:
-                // 3 * ((1 + myFunc)-( $10*otherFunc ))
-                // and have it should evaluate to -126
-
-                auto constant_one = node_creator->CreateConstantU8(1, "1");
-                auto label = node_creator->CreateName("myFunc");
-                auto add = node_creator->CreateAddOp(constant_one, label, " + ");
-                auto paren1 = node_creator->CreateParens("(", add, ")");
-                auto constant_two = node_creator->CreateConstantU8(0x10, "$10");
-                auto label2 = node_creator->CreateName("otherFunc");
-                auto mul = node_creator->CreateMultiplyOp(constant_two, label2, "*");
-                auto paren2 = node_creator->CreateParens("( ", mul, " )");
-                auto sub = node_creator->CreateSubtractOp(paren1, paren2, "-");
-                auto paren3 = node_creator->CreateParens("(", sub, ")");
-                auto constant_three = node_creator->CreateConstantU8(3, "3");
-                auto mul2 = node_creator->CreateMultiplyOp(constant_three, paren3, " * ");
-                expr->Set(mul2);
-
-                class ExpressionHelper : public BaseExpressionHelper {
-                public:
-                    ExpressionHelper(shared_ptr<BaseExpressionNodeCreator>& nc) 
-                        : node_creator(nc) {}
-
-                    shared_ptr<BaseExpressionNode> ResolveName(string const& name) override {
-                        if(name == "myFunc") return node_creator->CreateConstantU8(5, "5");
-                        if(name == "otherFunc") return node_creator->CreateConstantU8(3, "3");
-                        return nullptr;
-                    }
-
-                    shared_ptr<BaseExpressionNodeCreator> node_creator;
-                };
-
-                shared_ptr<ExpressionHelper> helper = make_shared<ExpressionHelper>(node_creator);
-
-                // and print it
-                cout << "made expression: " << *expr << endl;
-                s64 result;
-                if(expr->Evaluate(helper, &result)) {
-                    cout << "evaluated: " << result << endl;
-                } else {
-                    cout << "failed evaluation" << endl;
-                }
+//!                // create an expression of the form "Label-1"
+//!                shared_ptr<BaseExpression> expr = make_shared<Expression>();
+//!                auto node_creator = expr->GetNodeCreator();
+//!
+//!                // Try to fully represent the following:
+//!                // 3 * ((1 + myFunc)-( $10*otherFunc ))
+//!                // and have it should evaluate to -126
+//!
+//!                auto constant_one = node_creator->CreateConstantU8(1, "1");
+//!                auto label = node_creator->CreateName("myFunc");
+//!                auto add = node_creator->CreateAddOp(constant_one, label, " + ");
+//!                auto paren1 = node_creator->CreateParens("(", add, ")");
+//!                auto constant_two = node_creator->CreateConstantU8(0x10, "$10");
+//!                auto label2 = node_creator->CreateName("otherFunc");
+//!                auto mul = node_creator->CreateMultiplyOp(constant_two, label2, "*");
+//!                auto paren2 = node_creator->CreateParens("( ", mul, " )");
+//!                auto sub = node_creator->CreateSubtractOp(paren1, paren2, "-");
+//!                auto paren3 = node_creator->CreateParens("(", sub, ")");
+//!                auto constant_three = node_creator->CreateConstantU8(3, "3");
+//!                auto mul2 = node_creator->CreateMultiplyOp(constant_three, paren3, " * ");
+//!                expr->Set(mul2);
+//!
+//!                class ExpressionHelper : public BaseExpressionHelper {
+//!                public:
+//!                    ExpressionHelper(shared_ptr<BaseExpressionNodeCreator>& nc) 
+//!                        : node_creator(nc) {}
+//!
+//!                    shared_ptr<BaseExpressionNode> ResolveName(string const& name) override {
+//!                        if(name == "myFunc") return node_creator->CreateConstantU8(5, "5");
+//!                        if(name == "otherFunc") return node_creator->CreateConstantU8(3, "3");
+//!                        return nullptr;
+//!                    }
+//!
+//!                    shared_ptr<BaseExpressionNodeCreator> node_creator;
+//!                };
+//!
+//!                shared_ptr<ExpressionHelper> helper = make_shared<ExpressionHelper>(node_creator);
+//!
+//!                // and print it
+//!                cout << "made expression: " << *expr << endl;
+//!                s64 result;
+//!                if(expr->Evaluate(helper, &result)) {
+//!                    cout << "evaluated: " << result << endl;
+//!                } else {
+//!                    cout << "failed evaluation" << endl;
+//!                }
             }
             ImGui::EndMenu();
         }
@@ -541,43 +564,22 @@ void MyApp::RenderMainMenuBar()
             ImGuiFileDialog::Instance()->Close();
         }
 
-        // overwrite existing project?
-        {
-            if (ImGui::BeginPopupModal("OverwriteExitingProject", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
-                ImGui::Text("The file %s already exists. Overwrite?", project_file_path.c_str());
-                
-                if(ImGui::Button("Yes")) {
-                    ImGui::CloseCurrentPopup();
-                    ImGuiFileDialog::Instance()->Close(); // close file dialog too
-                    popups.save_project.show = true;
-                }
-
-                ImGui::SameLine();
-                if(ImGui::Button("No")) {
-                    ImGui::CloseCurrentPopup();
-                    // don't close ImGuiFileDialog, keep asking
-                }
-
-                ImGui::EndPopup();
-            }
-        } 
-
-        if(!ImGui::IsPopupOpen("OverwriteExitingProject") && ImGuiFileDialog::Instance()->Display("SaveProjectFileDialog")) {
-            bool close_file_dialog = true;
-
+        if(ImGuiFileDialog::Instance()->Display("SaveProjectFileDialog")) {
             if(ImGuiFileDialog::Instance()->IsOk()) {
                 project_file_path = ImGuiFileDialog::Instance()->GetFilePathName();
-
-                // if the file exists, ask the user to overwrite
-                if(std::filesystem::exists(project_file_path)) {
-                    close_file_dialog = false; // don't close file dialog yet
-                    ImGui::OpenPopup("OverwriteExitingProject");
-                } else {
-                    popups.save_project.show = true;
-                }
+                popups.save_project.show = true;
             }
 
-            if(close_file_dialog) ImGuiFileDialog::Instance()->Close();
+            ImGuiFileDialog::Instance()->Close();
+        }
+
+        if(ImGuiFileDialog::Instance()->Display("OpenProjectFileDialog")) {
+            if(ImGuiFileDialog::Instance()->IsOk()) {
+                project_file_path = ImGuiFileDialog::Instance()->GetFilePathName();
+                popups.load_project.show = true;
+            }
+
+            ImGuiFileDialog::Instance()->Close();
         }
     }
 }
@@ -620,6 +622,7 @@ void MyApp::RenderPopups()
         GoToAddressPopup();
     }
 
+    LoadProjectPopup();
     SaveProjectPopup();
 }
 
@@ -888,6 +891,53 @@ void MyApp::GoToAddressPopup()
     ImGui::EndPopup();
 }
 
+void MyApp::LoadProjectPopup()
+{
+    auto title = popups.load_project.title.c_str();
+
+    if(!ImGui::IsPopupOpen(title) && popups.load_project.show) {
+        if(!popups.load_project.thread) { // create the load project thread
+            popups.load_project.loading = true;
+            popups.load_project.errored = false;
+            popups.load_project.thread = make_shared<std::thread>(std::bind(&MyApp::LoadProjectThread, this));
+            cout << "[MyApp::LoadProjectPopup] started load project thread" << endl;
+        }
+
+        ImGui::OpenPopup(title);
+        popups.load_project.show = false;
+
+        // center the window
+        ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    }
+
+    if(ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::Text("Loading from %s...", project_file_path.c_str());
+
+        if(!popups.load_project.loading) {
+            popups.load_project.thread->join();
+            popups.load_project.thread = nullptr;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+
+    // Show the error message
+    if(popups.load_project.errored) {
+        ImGui::OpenPopup("Error loading project");
+        popups.load_project.errored = false;
+    }
+
+    if(ImGui::BeginPopupModal("Error loading project", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::Text("An error occurred while loading the project: %s", popups.load_project.errmsg.c_str());
+        if(ImGui::Button("OK")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
 void MyApp::SaveProjectPopup()
 {
     auto title = popups.save_project.title.c_str();
@@ -936,19 +986,20 @@ void MyApp::SaveProjectPopup()
     }
 }
 
+#define PROJECT_FILE_MAGIC 0x8781a90afde1f317ULL
+#define PROJECT_FILE_VERSION 0x00000101
 void MyApp::SaveProjectThread()
 {
-    cout << "save thread" << endl;
-
     ofstream out(project_file_path, ios::binary);
     if(out.good()) {
-        u64 magic = 0x8781a90afde1f317; 
+        u64 magic = PROJECT_FILE_MAGIC; 
+        u32 version = PROJECT_FILE_VERSION; 
         u32 flags = 0; 
-        u32 version = 0; 
 
         out.write((char*)&magic, sizeof(magic));
         out.write((char*)&version, sizeof(version));
         out.write((char*)&flags, sizeof(flags));
+
         if(out.good()) {
             popups.save_project.errored = !current_project->Save(out, popups.save_project.errmsg);
         } else {
@@ -966,6 +1017,49 @@ void MyApp::SaveProjectThread()
     }
     popups.save_project.saving = false;
 }
+
+void MyApp::LoadProjectThread()
+{
+    cout << "load thread" << endl;
+
+    ifstream is(project_file_path, ios::binary);
+    if(is.good()) {
+        u64 magic;
+        u32 version;
+        u32 flags;
+
+        is.read((char*)&magic, sizeof(magic));
+        is.read((char*)&version, sizeof(version));
+        is.read((char*)&flags, sizeof(flags));
+
+        if(!is.good()) {
+            popups.load_project.errmsg = "Could not read from file";
+            popups.load_project.errored = true;
+        } else if(magic != PROJECT_FILE_MAGIC) {
+            popups.load_project.errmsg = "Not a Retro Disassembly Studio project file";
+            popups.load_project.errored = true;
+        } else if(version != PROJECT_FILE_VERSION) {
+            popups.load_project.errmsg = "The project file contains an invalid version number";
+            popups.load_project.errored = true;
+        }
+
+        if(!popups.load_project.errored) {
+            current_project = BaseProject::LoadProject(is, popups.load_project.errmsg);
+            // error condition when the returned object is null
+            popups.load_project.errored = !current_project;
+        }
+    } else {
+        popups.load_project.errored = true;
+        popups.load_project.errmsg = "Could not open file";
+    }
+    
+    if(!popups.load_project.errored) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    popups.load_project.loading = false;
+}
+
 
 int main(int argc, char* argv[])
 {
