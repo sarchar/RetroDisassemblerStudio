@@ -60,6 +60,8 @@ private:
     void CreateNewProject(std::string const&);
     void ProjectCreatedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<BaseProject>);
 
+    void CloseProject();
+
     void OpenROMInfosPane();
 
     void ListingWindowCommand(std::shared_ptr<BaseWindow> const&, std::string const&, NES::GlobalMemoryLocation const&);

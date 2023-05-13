@@ -390,6 +390,8 @@ void MyApp::RenderMainMenuBar()
     if(ImGui::BeginMainMenuBar()) {
         if(ImGui::BeginMenu("File")) {
             if(ImGui::MenuItem("New Project...", "ctrl+o")) {
+                CloseProject();
+
                 auto infos_pane_cb = [=, this](char const* vFilter, IGFDUserDatas vUserDatas, bool* cantContinue) {
                     this->OpenROMInfosPane();
                 };
@@ -401,13 +403,13 @@ void MyApp::RenderMainMenuBar()
             }
 
             if(ImGui::MenuItem("Open Project...", "ctrl+o")) {
-                assert(!current_project);
+                CloseProject();
+
                 ImGuiFileDialog::Instance()->OpenDialog("OpenProjectFileDialog", "Open Project", "Project Files (*.rdsproj){.rdsproj}", "./roms/", "", 
                                                        1, nullptr, ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_ReadOnlyFileNameField);
             }
 
             if(ImGui::MenuItem("Save Project", "ctrl+s", nullptr, (bool)current_project)) {
-                // TODO
             }
 
             if(ImGui::MenuItem("Save Project As...", "", nullptr, (bool)current_project)) {
@@ -435,6 +437,7 @@ void MyApp::RenderMainMenuBar()
             }
 
             if(ImGui::MenuItem("Close Project", "", nullptr, (bool)current_project)) {
+                CloseProject();
             }
 
             ImGui::Separator();
@@ -624,6 +627,18 @@ void MyApp::RenderPopups()
 
     LoadProjectPopup();
     SaveProjectPopup();
+}
+
+void MyApp::CloseProject()
+{
+    // Close all windows
+    for(auto& wnd : managed_windows) {
+        wnd->CloseWindow();
+    }
+
+    // Drop the reference to the project, which should free everything from memory
+    current_project = nullptr;
+    project_file_path = "";
 }
 
 bool MyApp::OKPopup(std::string const& title, std::string const& message)
