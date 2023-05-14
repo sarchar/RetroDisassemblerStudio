@@ -173,8 +173,16 @@ void Listing::CheckInput()
             listing_command->emit(shared_from_this(), "CreateLabel", current_selection);
             break;
 
-        case L';': // edit comment
+        case L';': // edit EOL comment
             listing_command->emit(shared_from_this(), "EditEOLComment", current_selection);
+            break;
+
+        case L':': // edit pre comment
+            listing_command->emit(shared_from_this(), "EditPreComment", current_selection);
+            break;
+
+        case L'o': // edit post comment
+            listing_command->emit(shared_from_this(), "EditPostComment", current_selection);
             break;
 
         case L'd': // start disassembly

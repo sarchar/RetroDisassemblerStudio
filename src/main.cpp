@@ -757,6 +757,14 @@ void MyApp::ListingWindowCommand(shared_ptr<BaseWindow> const& wnd, string const
             popups.edit_comment.uhg = make_shared<NES::GlobalMemoryLocation>(where);
             popups.edit_comment.type = (int)NES::MemoryObject::COMMENT_TYPE_EOL;
             popups.edit_comment.show = true;
+        } else if(cmd == "EditPreComment") {
+            popups.edit_comment.uhg = make_shared<NES::GlobalMemoryLocation>(where);
+            popups.edit_comment.type = (int)NES::MemoryObject::COMMENT_TYPE_PRE;
+            popups.edit_comment.show = true;
+        } else if(cmd == "EditPostComment") {
+            popups.edit_comment.uhg = make_shared<NES::GlobalMemoryLocation>(where);
+            popups.edit_comment.type = (int)NES::MemoryObject::COMMENT_TYPE_POST;
+            popups.edit_comment.show = true;
         } else if(cmd == "DisassemblyRequested") {
             // if currently disassembling, ignore the request
             if(popups.disassembly.thread) return;

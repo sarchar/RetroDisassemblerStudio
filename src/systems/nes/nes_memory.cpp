@@ -129,15 +129,19 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
         obj->listing_items.push_back(make_shared<ListingItemLabel>(label));
     }
 
+    if(obj->comments.pre) {
+        obj->listing_items.push_back(make_shared<ListingItemPreComment>(0));
+    }
+
     switch(obj->type) {
     case MemoryObject::TYPE_UNDEFINED:
     case MemoryObject::TYPE_BYTE:
     case MemoryObject::TYPE_WORD:
-        obj->listing_items.push_back(make_shared<ListingItemData>(shared_from_this(), 0));
+        obj->listing_items.push_back(make_shared<ListingItemData>(0));
         break;
 
     case MemoryObject::TYPE_CODE:
-        obj->listing_items.push_back(make_shared<ListingItemCode>(shared_from_this()));
+        obj->listing_items.push_back(make_shared<ListingItemCode>(0));
         break;
 
     default:
@@ -145,7 +149,9 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
         break;
     }
 
-    // count up # of lines for the EOL comment
+    if(obj->comments.post) {
+        obj->listing_items.push_back(make_shared<ListingItemPostComment>(0));
+    }
 }
 
 void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_node, u32 region_offset, u8* data, int count)
@@ -882,13 +888,17 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
     int fields_present = 0;
     fields_present |= (int)(bool)operand_expression << 0;
     fields_present |= (int)(bool)comments.eol       << 1;
+    fields_present |= (int)(bool)comments.pre       << 2;
+    fields_present |= (int)(bool)comments.post      << 3;
     WriteVarInt(os, fields_present);
 
     // operand expression
     if(operand_expression && !operand_expression->Save(os, errmsg)) return false;
 
     // comments
-    if(comments.eol) WriteString(os, *comments.eol);
+    if(comments.eol)  WriteString(os, *comments.eol);
+    if(comments.pre)  WriteString(os, *comments.pre);
+    if(comments.post) WriteString(os, *comments.post);
 
     if(!os.good()) {
         errmsg = "Error writing MemoryObject data";
@@ -933,6 +943,20 @@ bool MemoryObject::Load(std::istream& is, std::string& errmsg)
         ReadString(is, s);
         comments.eol = make_shared<string>(s);
         cout << "comment.eol: " << *comments.eol << endl;
+    }
+
+    if(fields_present & (1 << 2)) {
+        string s;
+        ReadString(is, s);
+        comments.pre = make_shared<string>(s);
+        cout << "comment.pre: " << *comments.pre << endl;
+    }
+
+    if(fields_present & (1 << 3)) {
+        string s;
+        ReadString(is, s);
+        comments.post = make_shared<string>(s);
+        cout << "comment.post: " << *comments.post << endl;
     }
 
     return true;

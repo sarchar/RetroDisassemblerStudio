@@ -134,7 +134,9 @@ struct MemoryObject {
     };
 
     enum COMMENT_TYPE {
-        COMMENT_TYPE_EOL
+        COMMENT_TYPE_EOL,
+        COMMENT_TYPE_PRE,
+        COMMENT_TYPE_POST,
     };
 
     TYPE type = TYPE_UNDEFINED;
@@ -149,6 +151,8 @@ struct MemoryObject {
 
     struct {
         std::shared_ptr<std::string> eol;
+        std::shared_ptr<std::string> pre;
+        std::shared_ptr<std::string> post;
     } comments;
 
     union {
@@ -180,6 +184,12 @@ struct MemoryObject {
         case COMMENT_TYPE_EOL:
             if(comments.eol) out = std::string(*comments.eol);
             break;
+        case COMMENT_TYPE_PRE:
+            if(comments.pre) out = std::string(*comments.pre);
+            break;
+        case COMMENT_TYPE_POST:
+            if(comments.post) out = std::string(*comments.post);
+            break;
         }
     }
 
@@ -191,6 +201,12 @@ private:
         switch(type) {
         case COMMENT_TYPE_EOL:
             comments.eol = std::make_shared<std::string>(comment);
+            break;
+        case COMMENT_TYPE_PRE:
+            comments.pre = std::make_shared<std::string>(comment);
+            break;
+        case COMMENT_TYPE_POST:
+            comments.post = std::make_shared<std::string>(comment);
             break;
         default:
             assert(false);

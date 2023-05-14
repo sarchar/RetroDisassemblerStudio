@@ -15,10 +15,8 @@ class ListingItem {
 public:
     static unsigned long common_inner_table_flags;
 
-    ListingItem()
-    { 
-    }
-    virtual ~ListingItem() { }
+    ListingItem() {}
+    virtual ~ListingItem() {}
 
     virtual void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) = 0;
 
@@ -47,29 +45,52 @@ public:
 
 class ListingItemData : public ListingItem {
 public:
-    ListingItemData(std::weak_ptr<MemoryRegion> _memory_region, u32 _internal_offset)
-        : ListingItem(), memory_region(_memory_region), internal_offset(_internal_offset)
+    ListingItemData(u32 _internal_offset)
+        : ListingItem(), internal_offset(_internal_offset)
     { }
     virtual ~ListingItemData() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
 
 private:
-    std::weak_ptr<MemoryRegion> memory_region;
     u32 internal_offset;
+};
+
+class ListingItemPreComment : public ListingItem {
+public:
+    ListingItemPreComment(int _line)
+        : ListingItem(), line(_line)
+    { }
+    virtual ~ListingItemPreComment() { }
+
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
+private:
+    int line;
+};
+
+class ListingItemPostComment : public ListingItem {
+public:
+    ListingItemPostComment(int _line)
+        : ListingItem(), line(_line)
+    { }
+    virtual ~ListingItemPostComment() { }
+
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
+private:
+    int line;
 };
 
 class ListingItemCode : public ListingItem {
 public:
-    ListingItemCode(std::weak_ptr<MemoryRegion> _memory_region)
-        : ListingItem(), memory_region(_memory_region)
+    ListingItemCode(int _line)
+        : ListingItem(), line(_line)
     { }
     virtual ~ListingItemCode() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
 
 private:
-    std::weak_ptr<MemoryRegion> memory_region;
+    int line;
 };
 
 class ListingItemLabel : public ListingItem {

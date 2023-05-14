@@ -79,9 +79,7 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         ImGui::TableNextColumn();
         // nothing
     
-        if(auto mr = memory_region.lock()) {
-            auto memory_object = mr->GetMemoryObject(where);
-
+        if(auto memory_object = system->GetMemoryObject(where)) {
             ImGui::TableNextColumn();
             ImGui::Text("%s", memory_object->FormatInstructionField().c_str());
 
@@ -105,6 +103,60 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
     }
 }
 
+void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
+{
+    ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
+    if(flags) {
+        table_flags &= ~ImGuiTableFlags_NoBordersInBody;
+        table_flags |= ImGuiTableFlags_BordersInnerV;
+    }
+
+    if(ImGui::BeginTable("listing_item_comment2", 2, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+        ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed, 4.0f);
+        ImGui::TableSetupColumn("Comment", ImGuiTableColumnFlags_WidthFixed);
+
+        ImGui::TableNextRow();
+        
+        ImGui::TableNextColumn();
+        ImGui::Text("        ");
+    
+        ImGui::TableNextColumn();
+        string precomment;
+        system->GetComment(where, MemoryObject::COMMENT_TYPE_PRE, precomment); // TODO multiline
+        ImGui::Text("; %s", precomment.c_str());
+
+        ImGui::EndTable();
+    }
+}
+
+void ListingItemPostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
+{
+    ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
+    if(flags) {
+        table_flags &= ~ImGuiTableFlags_NoBordersInBody;
+        table_flags |= ImGuiTableFlags_BordersInnerV;
+    }
+
+    if(ImGui::BeginTable("listing_item_comment2", 2, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+        ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed, 4.0f);
+        ImGui::TableSetupColumn("Comment", ImGuiTableColumnFlags_WidthFixed);
+
+        ImGui::TableNextRow();
+        
+        ImGui::TableNextColumn();
+        ImGui::Text("        ");
+
+        ImGui::TableNextColumn();
+        string postcomment;
+        system->GetComment(where, MemoryObject::COMMENT_TYPE_POST, postcomment); // TODO multiline
+        ImGui::Text("; %s", postcomment.c_str());
+
+        ImGui::EndTable();
+    }
+}
+
+
+
 void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
@@ -113,8 +165,7 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         table_flags |= ImGuiTableFlags_BordersInnerV;
     }
 
-    if(auto mr = memory_region.lock()) {
-        auto memory_object = mr->GetMemoryObject(where);
+    if(auto memory_object = system->GetMemoryObject(where)) {
         auto disassembler = system->GetDisassembler();
 
         u8 op = memory_object->code.opcode;
@@ -142,9 +193,9 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
             ImGui::Text("%s", memory_object->FormatOperandField(0, disassembler).c_str());
 
             ImGui::TableNextColumn();
-            if(auto eolc = memory_object->comments.eol) {
-                ImGui::Text("; %s", eolc->c_str()); // TODO multiline
-            }
+            string eolcomment;
+            system->GetComment(where, MemoryObject::COMMENT_TYPE_EOL, eolcomment); // TODO multiline
+            if(eolcomment.size()) ImGui::Text("; %s", eolcomment.c_str());
         }
 
         ImGui::EndTable();
@@ -161,7 +212,7 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
     }
 
     if(ImGui::BeginTable("listing_item_label", 2, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
-        ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableNextRow();
     
