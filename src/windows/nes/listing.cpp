@@ -145,11 +145,15 @@ void Listing::CheckInput()
     }
 
     if(ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
-        current_selection = current_selection + -1;
+        if(auto memory_object = system->GetMemoryObject(current_selection + -1)) {
+            current_selection = current_selection + -memory_object->GetSize();
+        }
     }
 
     if(ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
-        current_selection = current_selection + 1;
+        if(auto memory_object = system->GetMemoryObject(current_selection)) {
+            current_selection = current_selection + memory_object->GetSize();
+        }
     }
 
     for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
@@ -158,11 +162,15 @@ void Listing::CheckInput()
         // TODO really should be using signals and emit to broadcast these messages
         switch(c) {
         case L'j': // move current_selection down
-            current_selection = current_selection + 1;
+            if(auto memory_object = system->GetMemoryObject(current_selection)) {
+                current_selection = current_selection + memory_object->GetSize();
+            }
             break;
 
         case L'k': // move current_selection up
-            current_selection = current_selection + -1;
+            if(auto memory_object = system->GetMemoryObject(current_selection + -1)) {
+                current_selection = current_selection + -memory_object->GetSize();
+            }
             break;
 
         case L'w': // mark data as a word
@@ -312,8 +320,6 @@ void Listing::RenderContent()
     auto memory_region = system->GetMemoryRegion(current_selection);
 
     ImGuiTableFlags outer_table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoBordersInBody;
-
-    ImGuiWindowFlags_NoNav;
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
