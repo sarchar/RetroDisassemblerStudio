@@ -10,6 +10,8 @@ public:
     BaseWindow(std::string const& title);
     virtual ~BaseWindow();
 
+    static void ResetWindowIDs();
+
     // Utility
     void SetNav(bool _v) { enable_nav = _v; }
     void SetWindowless(bool _v) { windowless = _v; }

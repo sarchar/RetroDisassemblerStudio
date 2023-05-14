@@ -390,8 +390,6 @@ void MyApp::RenderMainMenuBar()
     if(ImGui::BeginMainMenuBar()) {
         if(ImGui::BeginMenu("File")) {
             if(ImGui::MenuItem("New Project...", "ctrl+o")) {
-                CloseProject();
-
                 auto infos_pane_cb = [=, this](char const* vFilter, IGFDUserDatas vUserDatas, bool* cantContinue) {
                     this->OpenROMInfosPane();
                 };
@@ -403,13 +401,16 @@ void MyApp::RenderMainMenuBar()
             }
 
             if(ImGui::MenuItem("Open Project...", "ctrl+o")) {
-                CloseProject();
-
                 ImGuiFileDialog::Instance()->OpenDialog("OpenProjectFileDialog", "Open Project", "Project Files (*.rdsproj){.rdsproj}", "./roms/", "", 
                                                        1, nullptr, ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_ReadOnlyFileNameField);
             }
 
+            bool do_save_as = false;
             if(ImGui::MenuItem("Save Project", "ctrl+s", nullptr, (bool)current_project)) {
+                if(project_file_path.size() == 0) do_save_as = true;
+                else {
+                    popups.save_project.show = true;
+                }
             }
 
             if(ImGui::MenuItem("Save Project As...", "", nullptr, (bool)current_project)) {
@@ -559,6 +560,7 @@ void MyApp::RenderMainMenuBar()
             if(ImGuiFileDialog::Instance()->IsOk()) {
                 auto selection = ImGuiFileDialog::Instance()->GetSelection();
                 if(selection.size() >  0) {
+                    CloseProject();
                     string file_path_name = (*selection.begin()).second;
                     CreateNewProject(file_path_name);
                 }
@@ -578,6 +580,7 @@ void MyApp::RenderMainMenuBar()
 
         if(ImGuiFileDialog::Instance()->Display("OpenProjectFileDialog")) {
             if(ImGuiFileDialog::Instance()->IsOk()) {
+                CloseProject();
                 project_file_path = ImGuiFileDialog::Instance()->GetFilePathName();
                 popups.load_project.show = true;
             }
@@ -639,6 +642,9 @@ void MyApp::CloseProject()
     // Drop the reference to the project, which should free everything from memory
     current_project = nullptr;
     project_file_path = "";
+
+    // temp
+    BaseWindow::ResetWindowIDs();
 }
 
 bool MyApp::OKPopup(std::string const& title, std::string const& message)

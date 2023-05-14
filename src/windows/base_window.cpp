@@ -12,6 +12,12 @@ using namespace std;
 
 static u64 base_window_next_id = 0;
 
+void BaseWindow::ResetWindowIDs()
+{
+    // temporary code
+    base_window_next_id = 0;
+}
+
 string BaseWindow::GetRandomID()
 {
     static char const CHARSET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-+?=";
