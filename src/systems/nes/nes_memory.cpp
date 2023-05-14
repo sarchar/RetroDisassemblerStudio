@@ -47,7 +47,8 @@ bool GlobalMemoryLocation::Load(std::istream& is, std::string& errmsg)
     return true;
 }
 
-MemoryRegion::MemoryRegion(shared_ptr<System>& _parent_system) 
+MemoryRegion::MemoryRegion(shared_ptr<System>& _parent_system, string const& _name) 
+    : name(_name)
 { 
     // create a week reference to avoid cyclical refs
     parent_system = _parent_system;
@@ -531,6 +532,15 @@ void MemoryRegion::UpdateMemoryObject(GlobalMemoryLocation const& where)
     _UpdateMemoryObject(memory_object, region_offset);
 }
 
+bool MemoryRegion::GetGlobalMemoryLocation(u32 offset, GlobalMemoryLocation* out)
+{
+    if(offset >= GetRegionSize()) return false;
+    *out = GlobalMemoryLocation {
+        .address = (u16)((base_address + offset) & 0xFFFF),
+    };
+    return true;
+}
+
 // save_tree_node means we don't delete the is_object tree node, so that the caller can use it to build a new subtree
 void MemoryRegion::RemoveMemoryObjectFromTree(shared_ptr<MemoryObject>& memory_object, bool save_tree_node)
 {
@@ -924,6 +934,9 @@ u8 MemoryRegion::ReadByte(GlobalMemoryLocation const& where)
 
 bool MemoryRegion::Save(std::ostream& os, std::string& errmsg)
 {
+    // save name
+    WriteString(os, name);
+
     // save base and size
     WriteVarInt(os, base_address);
     WriteVarInt(os, region_size);
@@ -944,6 +957,10 @@ bool MemoryRegion::Save(std::ostream& os, std::string& errmsg)
 
 bool MemoryRegion::Load(std::istream& is, std::string& errmsg)
 {
+    // save name
+    ReadString(is, name);
+    if(!is.good()) return false;
+
     base_address = ReadVarInt<u32>(is);
     region_size = ReadVarInt<u32>(is);
     if(!is.good()) {
@@ -982,8 +999,8 @@ bool MemoryRegion::Load(std::istream& is, std::string& errmsg)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ProgramRomBank::ProgramRomBank(shared_ptr<System>& system, PROGRAM_ROM_BANK_LOAD _bank_load, PROGRAM_ROM_BANK_SIZE _bank_size) 
-    : MemoryRegion(system), bank_load(_bank_load), bank_size(_bank_size) 
+ProgramRomBank::ProgramRomBank(shared_ptr<System>& system, int _prg_rom_bank, string const& name, PROGRAM_ROM_BANK_LOAD _bank_load, PROGRAM_ROM_BANK_SIZE _bank_size) 
+    : MemoryRegion(system, name), prg_rom_bank(_prg_rom_bank), bank_load(_bank_load), bank_size(_bank_size) 
 {
 
     switch(bank_load) {
@@ -1015,8 +1032,17 @@ ProgramRomBank::ProgramRomBank(shared_ptr<System>& system, PROGRAM_ROM_BANK_LOAD
     }
 }
 
+bool ProgramRomBank::GetGlobalMemoryLocation(u32 offset, GlobalMemoryLocation* out)
+{
+    if(!MemoryRegion::GetGlobalMemoryLocation(offset, out)) return false;
+    out->is_chr = false;
+    out->prg_rom_bank = prg_rom_bank;
+    return true;
+}
+
 bool ProgramRomBank::Save(std::ostream& os, std::string& errmsg)
 {
+    WriteVarInt(os, prg_rom_bank);
     WriteVarInt(os, bank_load);
     WriteVarInt(os, bank_size);
     if(!os.good()) {
@@ -1029,18 +1055,19 @@ bool ProgramRomBank::Save(std::ostream& os, std::string& errmsg)
 
 shared_ptr<ProgramRomBank> ProgramRomBank::Load(std::istream& is, std::string& errmsg, shared_ptr<System>& system)
 {
+    int prg_rom_bank = ReadVarInt<int>(is);
     PROGRAM_ROM_BANK_LOAD bank_load = (PROGRAM_ROM_BANK_LOAD)ReadVarInt<int>(is);
     PROGRAM_ROM_BANK_SIZE bank_size = (PROGRAM_ROM_BANK_SIZE)ReadVarInt<int>(is);
     if(!is.good()) return nullptr;
-    auto prg_bank = make_shared<ProgramRomBank>(system, bank_load, bank_size);
+    auto prg_bank = make_shared<ProgramRomBank>(system, prg_rom_bank, "", bank_load, bank_size);
     if(!prg_bank->MemoryRegion::Load(is, errmsg)) return nullptr;
     return prg_bank;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-CharacterRomBank::CharacterRomBank(shared_ptr<System>& system, CHARACTER_ROM_BANK_LOAD _bank_load, CHARACTER_ROM_BANK_SIZE _bank_size)
-    : MemoryRegion(system), bank_load(_bank_load), bank_size(_bank_size)
+CharacterRomBank::CharacterRomBank(shared_ptr<System>& system, int _chr_rom_bank, string const& name, CHARACTER_ROM_BANK_LOAD _bank_load, CHARACTER_ROM_BANK_SIZE _bank_size)
+    : MemoryRegion(system, name), chr_rom_bank(_chr_rom_bank), bank_load(_bank_load), bank_size(_bank_size)
 {
     switch(bank_load) {
     case CHARACTER_ROM_BANK_LOAD_LOW:
@@ -1069,8 +1096,17 @@ CharacterRomBank::CharacterRomBank(shared_ptr<System>& system, CHARACTER_ROM_BAN
     }
 }
 
+bool CharacterRomBank::GetGlobalMemoryLocation(u32 offset, GlobalMemoryLocation* out)
+{
+    if(!MemoryRegion::GetGlobalMemoryLocation(offset, out)) return false;
+    out->is_chr = true;
+    out->chr_rom_bank = chr_rom_bank;
+    return true;
+}
+
 bool CharacterRomBank::Save(std::ostream& os, std::string& errmsg)
 {
+    WriteVarInt(os, chr_rom_bank);
     WriteVarInt(os, bank_load);
     WriteVarInt(os, bank_size);
     if(!os.good()) {
@@ -1083,10 +1119,11 @@ bool CharacterRomBank::Save(std::ostream& os, std::string& errmsg)
 
 shared_ptr<CharacterRomBank> CharacterRomBank::Load(std::istream& is, std::string& errmsg, shared_ptr<System>& system)
 {
+    int chr_rom_bank = ReadVarInt<int>(is);
     CHARACTER_ROM_BANK_LOAD bank_load = (CHARACTER_ROM_BANK_LOAD)ReadVarInt<int>(is);
     CHARACTER_ROM_BANK_SIZE bank_size = (CHARACTER_ROM_BANK_SIZE)ReadVarInt<int>(is);
     if(!is.good()) return nullptr;
-    auto chr_bank = make_shared<CharacterRomBank>(system, bank_load, bank_size);
+    auto chr_bank = make_shared<CharacterRomBank>(system, chr_rom_bank, "", bank_load, bank_size);
     if(!chr_bank->MemoryRegion::Load(is, errmsg)) return nullptr;
     return chr_bank;
 }
@@ -1096,7 +1133,7 @@ shared_ptr<CharacterRomBank> CharacterRomBank::Load(std::istream& is, std::strin
 // PPU registers $2000-$2008 (mirroed every 8 bytes until 0x3FFF)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 PPURegistersRegion::PPURegistersRegion(shared_ptr<System>& system)
-    : MemoryRegion(system)
+    : MemoryRegion(system, "PPUREGS")
 {
     base_address = 0x2000;
     region_size  = 0x2000;
@@ -1106,7 +1143,7 @@ PPURegistersRegion::PPURegistersRegion(shared_ptr<System>& system)
 // APU and I/O registers $4000-$401F (doesn't have mirrored data)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 IORegistersRegion::IORegistersRegion(shared_ptr<System>& system)
-    : MemoryRegion(system)
+    : MemoryRegion(system, "IOREGS")
 {
     base_address = 0x4000;
     region_size  = 0x20;

@@ -32,7 +32,7 @@ Listing::Listing()
     : BaseWindow("NES::Listing")
 {
     SetTitle("Listing");
-    SetNav(false); // dsisable navigation
+    SetNav(false); // disable navigation
     
     // create internal signals
     listing_command = make_shared<listing_command_t>();
@@ -62,6 +62,14 @@ Listing::~Listing()
 {
 }
 
+void Listing::GoToAddress(GlobalMemoryLocation const& address)
+{
+    selection_history_back.push(current_selection); // save the current location to the history
+    ClearForwardHistory();                          // and clear the forward history
+    current_selection = address;
+    jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+}
+
 void Listing::GoToAddress(u32 address)
 {
     auto system = current_system.lock();
@@ -70,10 +78,9 @@ void Listing::GoToAddress(u32 address)
     auto memory_region = system->GetMemoryRegion(current_selection);
 
     if(address >= memory_region->GetBaseAddress() && address < memory_region->GetEndAddress()) {
-        selection_history_back.push(current_selection); // save the current location to the history
-        ClearForwardHistory();                          // and clear the forward history
-        
-        current_selection.address = address;
+        GlobalMemoryLocation new_selection(current_selection);
+        new_selection.address = address;
+        GoToAddress(new_selection);
     } else {
         // destination is not in this memory region, see if we can find it
         GlobalMemoryLocation guessed_address;
@@ -87,26 +94,16 @@ void Listing::GoToAddress(u32 address)
                 guessed_address.prg_rom_bank = possible_banks[0];
                 memory_region = system->GetMemoryRegion(guessed_address);
                 if(memory_region) {
-                    selection_history_back.push(current_selection); // save the current location to the history
-                    ClearForwardHistory();                          // and clear the forward history
-                    current_selection = guessed_address;
+                    GoToAddress(guessed_address);
                 }
             } else {
                 assert(false); // popup dialog and wait for selection of which bank to go to
             }
         } else {
-            // not a banked address, see if it's valid
-            if(system->GetMemoryRegion(guessed_address)) {
-                selection_history_back.push(current_selection); // save the current location to the history
-                ClearForwardHistory();                          // and clear the forward history
-
-                // looks good
-                current_selection = guessed_address;
-            }
+            // not a banked address, go to it if it's valid
+            if(system->GetMemoryRegion(guessed_address)) GoToAddress(guessed_address);
         }
     }
-
-    jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
 }
 
 void Listing::UpdateContent(double deltaTime) 
@@ -270,15 +267,6 @@ void Listing::CheckInput()
     }
 }
 
-void Listing::PreRenderContent()
-{
-    // Initialize this window on a dock
-    if(MyApp::Instance()->HasDockBuilder()) {
-        ImGuiID dock_node_id = (ImGuiID)MyApp::Instance()->GetDockBuilderRootID();
-        ImGui::SetNextWindowDockID(dock_node_id, ImGuiCond_Appearing);
-    }
-}
-
 void Listing::RenderContent() 
 {
     // All access goes through the system
@@ -374,11 +362,6 @@ void Listing::RenderContent()
     }
 
     ImGui::PopStyleVar(2);
-
-    // only scan input if the window is receiving focus
-    if(IsFocused()) {
-        CheckInput();
-    }
 }
 
 void Listing::LabelCreated(shared_ptr<Label> const& label, bool was_user_created)

@@ -180,13 +180,14 @@ class MemoryRegion : public std::enable_shared_from_this<MemoryRegion> {
 public:
     typedef std::vector<std::shared_ptr<MemoryObject>> ObjectRefListType;
 
-    MemoryRegion(std::shared_ptr<System>&);
+    MemoryRegion(std::shared_ptr<System>&, std::string const&);
     ~MemoryRegion();
 
-    u32 GetBaseAddress()       const { return base_address; }
-    u32 GetRegionSize()        const { return region_size; }
-    u32 GetEndAddress()        const { return base_address + region_size; }
-    u32 GetTotalListingItems() const { return object_tree_root ? object_tree_root->listing_item_count : 0; }
+    std::string const& GetName() const { return name; }
+    u32 GetBaseAddress()         const { return base_address; }
+    u32 GetRegionSize()          const { return region_size; }
+    u32 GetEndAddress()          const { return base_address + region_size; }
+    u32 GetTotalListingItems()   const { return object_tree_root ? object_tree_root->listing_item_count : 0; }
 
     inline u32 ConvertToRegionOffset(u32 address_in_region) { 
         assert(address_in_region >= base_address && address_in_region < base_address + region_size);
@@ -201,6 +202,8 @@ public:
     void                           UpdateMemoryObject(GlobalMemoryLocation const&);
 
     MemoryObject::TYPE             GetMemoryObjectType(GlobalMemoryLocation const& where) { return GetMemoryObject(where)->type; }
+
+    virtual bool                   GetGlobalMemoryLocation(u32, GlobalMemoryLocation*);
 
     // Listing help
     std::shared_ptr<MemoryObjectTreeNode::iterator> GetListingItemIterator(int listing_item_start_index);
@@ -229,6 +232,8 @@ protected:
     std::weak_ptr<System> parent_system;
 
 private:
+    std::string name;
+
     void Erase();
 
     // We need a list of all memory addresses pointing to objects
@@ -262,24 +267,30 @@ private:
 
 class ProgramRomBank : public MemoryRegion {
 public:
-    ProgramRomBank(std::shared_ptr<System>&, PROGRAM_ROM_BANK_LOAD, PROGRAM_ROM_BANK_SIZE);
+    ProgramRomBank(std::shared_ptr<System>&, int, std::string const&, PROGRAM_ROM_BANK_LOAD, PROGRAM_ROM_BANK_SIZE);
     virtual ~ProgramRomBank() {};
+
+    bool GetGlobalMemoryLocation(u32, GlobalMemoryLocation*) override;
 
     bool Save(std::ostream&, std::string&) override;
     static std::shared_ptr<ProgramRomBank> Load(std::istream&, std::string&, std::shared_ptr<System>&);
 private:
+    int prg_rom_bank;
     PROGRAM_ROM_BANK_LOAD bank_load;
     PROGRAM_ROM_BANK_SIZE bank_size;
 };
 
 class CharacterRomBank : public MemoryRegion {
 public:
-    CharacterRomBank(std::shared_ptr<System>&, CHARACTER_ROM_BANK_LOAD, CHARACTER_ROM_BANK_SIZE);
+    CharacterRomBank(std::shared_ptr<System>&, int, std::string const&, CHARACTER_ROM_BANK_LOAD, CHARACTER_ROM_BANK_SIZE);
     virtual ~CharacterRomBank() {}
+
+    bool GetGlobalMemoryLocation(u32, GlobalMemoryLocation*) override;
 
     bool Save(std::ostream&, std::string&) override;
     static std::shared_ptr<CharacterRomBank> Load(std::istream&, std::string&, std::shared_ptr<System>&);
 private:
+    int chr_rom_bank;
     CHARACTER_ROM_BANK_LOAD bank_load;
     CHARACTER_ROM_BANK_SIZE bank_size;
 };

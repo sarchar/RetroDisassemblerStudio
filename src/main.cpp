@@ -25,7 +25,7 @@
 #include "systems/nes/nes_system.h"
 #include "windows/rom_loader.h"
 #include "windows/nes/listing.h"
-#include "windows/nes/listing.h"
+#include "windows/nes/regions.h"
 
 #include "systems/expressions.h" // TODO temp
 
@@ -33,12 +33,10 @@
 
 using namespace std;
 
-MyApp::MyApp(int argc, char* argv[])
+MyApp::MyApp(int, char*[])
     : Application("Retro Disassembler Studio", 1600, 1000),
       request_exit(false), show_imgui_demo(false)
 {
-    ((void)argc);
-    ((void)argv);
     BaseProject::RegisterProjectInformation(NES::Project::GetInformationStatic());
 
     BaseExpressionNodeCreator::RegisterBaseExpressionNodes();
@@ -51,6 +49,7 @@ MyApp::MyApp(int argc, char* argv[])
 #   define REGISTER_WINDOW_TYPE(className) \
         create_window_functions[className::GetWindowClassStatic()] = std::bind(&className::CreateWindow);
     REGISTER_WINDOW_TYPE(NES::Listing);
+    REGISTER_WINDOW_TYPE(NES::Windows::MemoryRegions);
 #   undef REGISTER_WINDOW_TYPE
 }
 
@@ -112,8 +111,8 @@ bool MyApp::OnWindowCreated()
 
     // Create a style
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowPadding.x    = 4;
-    style.WindowPadding.y    = 4;
+    style.WindowPadding.x    = 1;
+    style.WindowPadding.y    = 1;
     style.FramePadding.x     = 3;
     style.FramePadding.y     = 3;
     style.CellPadding.x      = 2;
@@ -471,6 +470,7 @@ void MyApp::RenderMainMenuBar()
 
             for(auto &t : test_roms) {
                 if(ImGui::MenuItem(t.c_str())) {
+                    CloseProject();
                     CreateNewProject(t);
                 }
             }
@@ -493,6 +493,11 @@ void MyApp::RenderMainMenuBar()
             //!}
             if(ImGui::MenuItem("Listing")) {
                 auto wnd = NES::Listing::CreateWindow();
+                AddWindow(wnd);
+            }
+
+            if(ImGui::MenuItem("Memory")) {
+                auto wnd = NES::Windows::MemoryRegions::CreateWindow();
                 AddWindow(wnd);
             }
             ImGui::EndMenu();
@@ -829,7 +834,7 @@ void MyApp::DisassemblyPopup()
 
         // create the disassembly thread
         popups.disassembly.thread = make_unique<std::thread>(std::bind(&NES::System::DisassemblyThread, system));
-        cout << "[Listing::DisassemblyPopup] started disassembly thread" << endl;
+        cout << "[MyApp::DisassemblyPopup] started disassembly thread" << endl;
     }
 
     // center this window
@@ -848,7 +853,7 @@ void MyApp::DisassemblyPopup()
         if(popups.disassembly.thread) {
             popups.disassembly.thread->join();
             popups.disassembly.thread = nullptr;
-            cout << "[Listing::DisassemblyPopup] disassembly thread exited" << endl;
+            cout << "[MyApp::DisassemblyPopup] disassembly thread exited" << endl;
         }
         
         ImGui::CloseCurrentPopup();

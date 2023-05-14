@@ -42,6 +42,7 @@ add_executable(${PROJECT_NAME}
                src/windows/rom_loader.cpp
 
                src/windows/nes/listing.cpp
+               src/windows/nes/regions.cpp
                )
 
 target_include_directories(${PROJECT_NAME} PRIVATE "src/")

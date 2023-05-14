@@ -117,6 +117,24 @@ void System::GetBanksForAddress(GlobalMemoryLocation const& where, vector<u16>& 
     }
 }
 
+int System::GetNumMemoryRegions() const
+{
+    return 2 + cartridge->GetNumMemoryRegions();
+}
+
+std::shared_ptr<MemoryRegion> System::GetMemoryRegionByIndex(int i)
+{
+    switch(i) {
+    case 0:
+        return ppu_registers;
+    case 1:
+        return io_registers;
+    default:
+        return cartridge->GetMemoryRegionByIndex(i - 2);
+    }
+    return nullptr;
+}
+
 std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const& where)
 {
     static shared_ptr<MemoryRegion> empty_ptr;

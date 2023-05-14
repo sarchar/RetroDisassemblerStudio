@@ -39,8 +39,9 @@ public:
     void GetEntryPoint(NES::GlobalMemoryLocation*);
     bool CanBank(GlobalMemoryLocation const&);
     void GetBanksForAddress(GlobalMemoryLocation const&, std::vector<u16>&);
-
+    int GetNumMemoryRegions() const;
     std::shared_ptr<MemoryRegion> GetMemoryRegion(GlobalMemoryLocation const&);
+    std::shared_ptr<MemoryRegion> GetMemoryRegionByIndex(int);
     std::shared_ptr<MemoryObject> GetMemoryObject(GlobalMemoryLocation const&);
 
     void MarkMemoryAsUndefined(GlobalMemoryLocation const&);

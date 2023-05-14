@@ -10,6 +10,7 @@
 #include "systems/nes/nes_system.h"
 #include "util.h"
 #include "windows/nes/listing.h"
+#include "windows/nes/regions.h"
 
 using namespace std;
 
@@ -149,8 +150,16 @@ bool Project::CreateNewProjectFromFile(string const& file_path_name)
 
 void Project::CreateDefaultWorkspace()
 {
-    auto wnd = Listing::CreateWindow();
-    MyApp::Instance()->AddWindow(wnd);
+    auto app = MyApp::Instance();
+
+    shared_ptr<BaseWindow> wnd = Windows::MemoryRegions::CreateWindow();
+    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+    app->AddWindow(wnd);
+
+    wnd = Listing::CreateWindow();
+    wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
+    app->AddWindow(wnd);
+
 }
 
 bool Project::Save(std::ostream& os, std::string& errmsg) 

@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
+#include "main.h"
 #include "windows/base_window.h"
 
 using namespace std;
@@ -38,7 +39,7 @@ string BaseWindow::GetRandomID()
 }
 
 BaseWindow::BaseWindow(string const& tag)
-    : windowless(false), open(true), focused(false), docked(false), enable_nav(true), window_tag(tag)
+    : windowless(false), open(true), focused(false), docked(false), enable_nav(true), window_tag(tag), initial_dock_position(DOCK_NONE)
 {
     // create the signals
     window_closed = make_shared<window_closed_t>();
@@ -108,11 +109,48 @@ void BaseWindow::RenderGUI()
         focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) 
             && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId);
         RenderContent();
+
+        // only scan input if the window is receiving focus
+        if(focused) CheckInput();
     }
 
     ImGui::End(); // always call end regardless of Begin()'s return value
 
-    if(!local_open) {
-        CloseWindow();
+    // close window if ImGui requested
+    if(!local_open) CloseWindow();
+}
+
+
+void BaseWindow::PreRenderContent()
+{
+    if(initial_dock_position != DOCK_NONE) {
+        auto app = MyApp::Instance();
+        if(app->HasDockBuilder()) {
+            int dock_node_id = -1;
+
+            switch(initial_dock_position) {
+            case DOCK_LEFT:
+                dock_node_id = app->GetDockBuilderLeftID();
+                break;
+
+            case DOCK_RIGHT:
+                dock_node_id = app->GetDockBuilderRightID();
+                break;
+
+            case DOCK_BOTTOM:
+                dock_node_id = app->GetDockBuilderBottomID();
+                break;
+
+            case DOCK_ROOT:
+                dock_node_id = app->GetDockBuilderRootID();
+                break;
+
+            default:
+                break;
+            }
+
+            // Initialize this window on specified dock
+            ImGui::SetNextWindowDockID(dock_node_id, ImGuiCond_Appearing);
+        }
     }
 }

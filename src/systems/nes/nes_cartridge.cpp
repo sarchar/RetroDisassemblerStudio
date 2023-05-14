@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <sstream>
 
 #include "systems/nes/nes_cartridge.h"
 
@@ -71,7 +72,9 @@ void Cartridge::CreateMemoryRegions()
             assert(false); // Unhandled mapper
         }
 
-        auto bank = make_shared<ProgramRomBank>(system, load_address, bank_size);
+        stringstream ss;
+        ss << "PRGROM$" << hex << setfill('0') << setw(2) << uppercase << i;
+        auto bank = make_shared<ProgramRomBank>(system, i, ss.str(), load_address, bank_size);
         program_rom_banks.push_back(bank);
     }
 
@@ -102,7 +105,9 @@ void Cartridge::CreateMemoryRegions()
             assert(false); // Unhandled mapper
         }
 
-        auto bank = make_shared<CharacterRomBank>(system, load_address, bank_size);
+        stringstream ss;
+        ss << "CHRROM$" << hex << setfill('0') << setw(2) << uppercase << i;
+        auto bank = make_shared<CharacterRomBank>(system, i, ss.str(), load_address, bank_size);
         character_rom_banks.push_back(bank);
     }
 }
@@ -140,6 +145,18 @@ bool Cartridge::CanBank(GlobalMemoryLocation const& where)
         }
     }
 
+}
+
+int Cartridge::GetNumMemoryRegions() const
+{
+    // TODO need one for SRAM?
+    return program_rom_banks.size() + character_rom_banks.size();
+}
+
+std::shared_ptr<MemoryRegion> Cartridge::GetMemoryRegionByIndex(int i)
+{
+    if(i >= program_rom_banks.size()) return character_rom_banks.at(i - program_rom_banks.size());
+    return program_rom_banks.at(i);
 }
 
 std::shared_ptr<MemoryRegion> Cartridge::GetMemoryRegion(GlobalMemoryLocation const& where)

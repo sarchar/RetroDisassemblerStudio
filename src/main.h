@@ -30,7 +30,19 @@ public:
     void operator=(MyApp const&) = delete;
     virtual ~MyApp();
 
+    // Windows
     void AddWindow(std::shared_ptr<BaseWindow>);
+
+    template <class T>
+    std::shared_ptr<T> FindMostRecentWindow() {
+        //TODO manage MRU stack
+        for(auto &wnd : managed_windows) {
+            if(auto as_wnd = wnd->As<T>()) {
+                return as_wnd;
+            }
+        }
+        return nullptr;
+    }
 
     // Helper dialog boxes
     bool OKPopup(std::string const& title, std::string const& message);

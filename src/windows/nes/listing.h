@@ -20,6 +20,7 @@ public:
     virtual char const * const GetWindowClass() { return Listing::GetWindowClassStatic(); }
     static char const * const GetWindowClassStatic() { return "NES::Listing"; }
 
+    void GoToAddress(GlobalMemoryLocation const&);
     void GoToAddress(u32);
 
     // signals
@@ -31,12 +32,11 @@ public:
 
 protected:
     void UpdateContent(double deltaTime) override;
-    void PreRenderContent() override;
     void RenderContent() override;
 
 private:
     void ClearForwardHistory();
-    void CheckInput();
+    void CheckInput() override;
 
     void LabelCreated(std::shared_ptr<Label> const&, bool);
     void DisassemblyStopped(GlobalMemoryLocation const&);
