@@ -84,6 +84,20 @@ public:
     std::shared_ptr<Label> GetOrCreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
     std::shared_ptr<Label> CreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
     std::shared_ptr<Label> EditLabel(GlobalMemoryLocation const&, std::string const&, int nth, bool was_user_edited = false);
+    void                   InsertLabel(std::shared_ptr<Label>&);
+
+    // Comments
+    void GetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, std::string& out) {
+        if(auto memory_region = GetMemoryRegion(where)) {
+            memory_region->GetComment(where, type, out);
+        }
+    }
+
+    void SetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, std::string const& comment) {
+        if(auto memory_region = GetMemoryRegion(where)) {
+            memory_region->SetComment(where, type, comment);
+        }
+    }
 
     // Disassembly
     std::shared_ptr<Disassembler> GetDisassembler() { return disassembler; }

@@ -228,6 +228,10 @@ shared_ptr<Label> System::EditLabel(GlobalMemoryLocation const& where, string co
     return nullptr;
 }
 
+void System::InsertLabel(shared_ptr<Label>& label)
+{
+    label_database[label->GetString()] = label;
+}
 
 void System::InitDisassembly(GlobalMemoryLocation const& where)
 {

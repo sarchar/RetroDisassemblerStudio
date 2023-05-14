@@ -199,6 +199,7 @@ void Labels::RenderContent()
                     } else {
                         ss << setw(2) << loc.prg_rom_bank;
                     }
+                    ss << ":";
                 }
                 ss << setw(4) << loc.address;
                 ImGui::Text("%s", ss.str().c_str());

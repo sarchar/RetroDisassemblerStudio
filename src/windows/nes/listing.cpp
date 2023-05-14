@@ -144,6 +144,14 @@ void Listing::CheckInput()
         system->MarkMemoryAsUndefined(current_selection);
     }
 
+    if(ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+        current_selection = current_selection + -1;
+    }
+
+    if(ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+        current_selection = current_selection + 1;
+    }
+
     for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
         ImWchar c = io.InputQueueCharacters[i]; 
 
@@ -163,6 +171,10 @@ void Listing::CheckInput()
 
         case L'l': // create a label
             listing_command->emit(shared_from_this(), "CreateLabel", current_selection);
+            break;
+
+        case L';': // edit comment
+            listing_command->emit(shared_from_this(), "EditEOLComment", current_selection);
             break;
 
         case L'd': // start disassembly

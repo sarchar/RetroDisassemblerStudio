@@ -145,9 +145,7 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
         break;
     }
 
-    if(region_offset == 0) {
-        obj->comments.eol = make_shared<string>("this is the first comment of the bank");
-    }
+    // count up # of lines for the EOL comment
 }
 
 void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_node, u32 region_offset, u8* data, int count)
@@ -980,8 +978,10 @@ bool MemoryRegion::Load(std::istream& is, std::string& errmsg)
         if(!obj->Load(is, errmsg)) return false;
         
         //TODO put labels in the systems's label database
-        if(obj->labels.size()) {
-            cout << "[MemoryRegion::Load] need to register " << obj->labels.size() << " labels" << endl;
+        if(auto system = parent_system.lock()) {
+            for(auto& label : obj->labels) {
+                system->InsertLabel(label);
+            }
         }
 
         // set all memory locations offset..offset+size-1 to the object

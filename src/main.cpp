@@ -13,6 +13,7 @@
 
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "misc/cpp/imgui_stdlib.h"
 
 #define USE_IMGUI_TABLES
 #include "ImGuiFileDialog.h"
@@ -21,9 +22,11 @@
 #include "main.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
+#include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 #include "windows/rom_loader.h"
+#include "windows/nes/labels.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/regions.h"
 
@@ -412,7 +415,7 @@ void MyApp::RenderMainMenuBar()
                 }
             }
 
-            if(ImGui::MenuItem("Save Project As...", "", nullptr, (bool)current_project)) {
+            if(do_save_as || ImGui::MenuItem("Save Project As...", "", nullptr, (bool)current_project)) {
                 std::string default_file = current_project->GetRomFileName(); // current loaded file name
 
                 // get only the base filename
@@ -491,6 +494,11 @@ void MyApp::RenderMainMenuBar()
             //!    auto wnd = SNESMemory::CreateWindow();
             //!    AddWindow(wnd);
             //!}
+            if(ImGui::MenuItem("Labels")) {
+                auto wnd = NES::Windows::Labels::CreateWindow();
+                AddWindow(wnd);
+            }
+
             if(ImGui::MenuItem("Listing")) {
                 auto wnd = NES::Listing::CreateWindow();
                 AddWindow(wnd);
@@ -628,6 +636,7 @@ void MyApp::RenderGUI()
 void MyApp::RenderPopups()
 {
     if(current_project) {
+        EditCommentPopup();
         CreateLabelPopup();
         DisassemblyPopup();
         GoToAddressPopup();
@@ -744,7 +753,10 @@ void MyApp::ListingWindowCommand(shared_ptr<BaseWindow> const& wnd, string const
         if(cmd == "CreateLabel") {
             popups.create_label.uhg = make_shared<NES::GlobalMemoryLocation>(where);
             popups.create_label.show = true;
-
+        } else if(cmd == "EditEOLComment") {
+            popups.edit_comment.uhg = make_shared<NES::GlobalMemoryLocation>(where);
+            popups.edit_comment.type = (int)NES::MemoryObject::COMMENT_TYPE_EOL;
+            popups.edit_comment.show = true;
         } else if(cmd == "DisassemblyRequested") {
             // if currently disassembling, ignore the request
             if(popups.disassembly.thread) return;
@@ -812,6 +824,53 @@ void MyApp::CreateLabelPopup()
     }
 
     if(should_close || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+}
+
+void MyApp::EditCommentPopup() 
+{
+    //bool  InputTextMultiline(const char* label, std::string* str, const ImVec2& size = ImVec2(0, 0), ImGuiInputTextFlags flags = 0, ImGuiInputTextCallback callback = nullptr, void* user_data = nullptr);
+    auto title = popups.edit_comment.title.c_str();
+    // TODO this should be generic
+    auto system = current_project->GetSystem<NES::System>();
+    if(!system) return;
+
+    if(!ImGui::IsPopupOpen(title) && popups.edit_comment.show) {
+        popups.edit_comment.show = false;
+        popups.edit_comment.buf[0] = '\0';
+
+        NES::GlobalMemoryLocation* where = static_cast<NES::GlobalMemoryLocation*>(popups.edit_comment.uhg.get());
+        system->GetComment(*where, (NES::MemoryObject::COMMENT_TYPE)popups.edit_comment.type, popups.edit_comment.buf);
+
+        ImGui::OpenPopup(title);
+    }
+
+    // center this window
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    // return if the dialog isn't open
+    if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) return;
+
+    ImGui::Text("Enter comment:");
+
+    // focus on the text input if nothing else is selected
+    if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
+
+    // if either Enter is pressed or OK clicked, create the label
+    ImVec2 button_size(ImGui::GetFontSize() * 7.0f, 0.0f);
+    ImGui::InputTextMultiline("Comment", &popups.edit_comment.buf, ImVec2(0, 0), ImGuiInputTextFlags_AllowTabInput);
+
+    if(ImGui::Button("OK", button_size) || (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_Enter))) {
+        // set the comment
+        NES::GlobalMemoryLocation* where = static_cast<NES::GlobalMemoryLocation*>(popups.edit_comment.uhg.get());
+        system->SetComment(*where, (NES::MemoryObject::COMMENT_TYPE)popups.edit_comment.type, popups.edit_comment.buf);
+        popups.edit_comment.uhg = nullptr;
+        ImGui::CloseCurrentPopup();
+    } else if(ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         ImGui::CloseCurrentPopup();
     }
 
@@ -943,6 +1002,12 @@ void MyApp::LoadProjectPopup()
         if(!popups.load_project.loading) {
             popups.load_project.thread->join();
             popups.load_project.thread = nullptr;
+
+            // TODO this should go away once the workspace is saved in the project file
+            if(!popups.load_project.errored) {
+                current_project->CreateDefaultWorkspace();
+            }
+
             ImGui::CloseCurrentPopup();
         }
 

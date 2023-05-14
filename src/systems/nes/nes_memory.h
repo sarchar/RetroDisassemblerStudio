@@ -133,6 +133,10 @@ struct MemoryObject {
         TYPE_ARRAY
     };
 
+    enum COMMENT_TYPE {
+        COMMENT_TYPE_EOL
+    };
+
     TYPE type = TYPE_UNDEFINED;
     bool backed = false; // false if the data is uninitialized memory
 
@@ -169,8 +173,32 @@ struct MemoryObject {
     std::string FormatInstructionField(std::shared_ptr<Disassembler> disassembler = nullptr);
     std::string FormatOperandField(u32 = 0, std::shared_ptr<Disassembler> disassembler = nullptr);
 
+    void GetComment(COMMENT_TYPE type, std::string& out) {
+        out.clear();
+
+        switch(type) {
+        case COMMENT_TYPE_EOL:
+            if(comments.eol) out = std::string(*comments.eol);
+            break;
+        }
+    }
+
     bool Save(std::ostream&, std::string&);
     bool Load(std::istream&, std::string&);
+
+private:
+    void SetComment(COMMENT_TYPE type, std::string const& comment) {
+        switch(type) {
+        case COMMENT_TYPE_EOL:
+            comments.eol = std::make_shared<std::string>(comment);
+            break;
+        default:
+            assert(false);
+            break;
+        }
+    }
+
+    friend class MemoryRegion;
 };
 
 // MemoryRegion represents a region of memory on the system
@@ -221,6 +249,20 @@ public:
 
     // Code
     bool MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_count);
+
+    // Comments
+    void GetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, std::string& out) {
+        if(auto memory_object = GetMemoryObject(where)) {
+            memory_object->GetComment(type, out);
+        }
+    }
+
+    void SetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, std::string const& s) {
+        if(auto memory_object = GetMemoryObject(where)) {
+            memory_object->SetComment(type, s);
+            UpdateMemoryObject(where);
+        }
+    }
 
     // Load and save
     virtual bool Save(std::ostream&, std::string&);

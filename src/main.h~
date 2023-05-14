@@ -80,7 +80,6 @@ private:
 
     // Popups. Each of these are called every frame
     void RenderPopups();
-    void EditCommentPopup();
     void CreateLabelPopup();
     void DisassemblyPopup();
     void GoToAddressPopup();
@@ -115,9 +114,9 @@ private:
         struct {
             std::string title = "Edit Comment...";
             bool        show  = false;
-            std::string buf;
+            int         edit;
+            char        buf[64];
             std::shared_ptr<void> uhg; // TODO need a base class for GlobalMemoryLocation
-            int         type;
         } edit_comment;
 
         struct {

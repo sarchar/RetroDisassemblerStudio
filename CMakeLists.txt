@@ -16,6 +16,7 @@ add_executable(${PROJECT_NAME}
                libs/imgui/imgui_draw.cpp
                libs/imgui/imgui_tables.cpp
                libs/imgui/imgui_widgets.cpp
+               libs/imgui/misc/cpp/imgui_stdlib.cpp
 
                libs/imgui/backends/imgui_impl_glfw.cpp
                libs/imgui/backends/imgui_impl_opengl3.cpp
