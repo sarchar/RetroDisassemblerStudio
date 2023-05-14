@@ -53,7 +53,7 @@ private:
     char   new_label_buffer[64] = "";
 
     // signal connections
-    System::label_created_t::signal_connection_t label_created_connection;;
+    System::label_created_t::signal_connection_t label_created_connection;
     System::disassembly_stopped_t::signal_connection_t disassembly_stopped_connection;
 
 public:

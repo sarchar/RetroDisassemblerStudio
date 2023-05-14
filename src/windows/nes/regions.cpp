@@ -56,10 +56,10 @@ void MemoryRegions::RenderContent()
     ImVec2 outer_size = ImGui::GetWindowSize();
 
     if (ImGui::BeginTable("MemoryRegionsTable", 3, flags, outer_size)) {
-        // The first column will use the default _WidthStretch when ScrollX is Off and _WidthFixed when ScrollX is On
         ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Base", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Base", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
 
         for(int i = 0; i < system->GetNumMemoryRegions(); i++) {

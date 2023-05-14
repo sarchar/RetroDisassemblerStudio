@@ -47,6 +47,19 @@ public:
     void MarkMemoryAsUndefined(GlobalMemoryLocation const&);
     void MarkMemoryAsWords(GlobalMemoryLocation const&, u32 byte_count);
 
+    int GetSortableMemoryLocation(GlobalMemoryLocation const& s) {
+        int ret = s.address;
+        if(CanBank(s)) {
+            int bank = s.prg_rom_bank;
+            if(s.is_chr) {
+                ret += 0x01000000;
+                bank = s.chr_rom_bank;
+            }
+            ret += 0x010000 * bank;
+        }
+        return ret;
+    }
+
     // Listings
     void GetListingItems(GlobalMemoryLocation const&, std::vector<std::shared_ptr<NES::ListingItem>>& out);
 
@@ -58,6 +71,14 @@ public:
     std::shared_ptr<Label> FindLabel(std::string const& label_str) {
         if(label_database.contains(label_str)) return label_database[label_str];
         return nullptr;
+    }
+
+    template <typename F>
+    void IterateLabels(F const* cb) {
+        for(auto iter : label_database) {
+            std::shared_ptr<Label> label = iter.second;
+            (*cb)(label);
+        }
     }
     
     std::shared_ptr<Label> GetOrCreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);

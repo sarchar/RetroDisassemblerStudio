@@ -281,6 +281,7 @@ void Listing::RenderContent()
         }
 
         if(ImGui::SmallButton("R")) adjust_columns = !adjust_columns;
+        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Show Column Resizers");
 
         if(need_pop) ImGui::PopStyleColor(1);
 
@@ -305,7 +306,7 @@ void Listing::RenderContent()
         ImGuiListClipper clipper;
         u32 total_listing_items = memory_region->GetTotalListingItems();
         //cout << "total_listing_items = 0x" << hex << total_listing_items << endl;
-        clipper.Begin(total_listing_items); // TODO: get the current bank and determine the number of elements
+        clipper.Begin(total_listing_items);
         
         // Force the clipper to include a range that also includes the row we want to jump to
         // we have a buffer of 100 lines so ImGui can calculate row heights

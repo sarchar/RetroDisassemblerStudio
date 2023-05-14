@@ -371,8 +371,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
         // only for valid destination addresses do we create an expression. others get the default
         // disasembler output and the user will have to create the expression manually
         auto target_object = GetMemoryObject(target_location);
-        if(target_object) {
-            // create a label at that address if there isn't one yet
+        if(target_object && target_object->labels.size() == 0) { // create a label at that address if there isn't one yet
             stringstream ss;
             if(isrel) ss << ".";
             else      ss << "L_";

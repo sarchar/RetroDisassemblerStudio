@@ -41,6 +41,7 @@ add_executable(${PROJECT_NAME}
                src/windows/base_window.cpp
                src/windows/rom_loader.cpp
 
+               src/windows/nes/labels.cpp
                src/windows/nes/listing.cpp
                src/windows/nes/regions.cpp
                )

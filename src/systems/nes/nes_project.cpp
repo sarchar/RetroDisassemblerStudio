@@ -9,6 +9,7 @@
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 #include "util.h"
+#include "windows/nes/labels.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/regions.h"
 
@@ -152,7 +153,11 @@ void Project::CreateDefaultWorkspace()
 {
     auto app = MyApp::Instance();
 
-    shared_ptr<BaseWindow> wnd = Windows::MemoryRegions::CreateWindow();
+    shared_ptr<BaseWindow> wnd = Windows::Labels::CreateWindow();
+    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+    app->AddWindow(wnd);
+
+    wnd = Windows::MemoryRegions::CreateWindow();
     wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
     app->AddWindow(wnd);
 
