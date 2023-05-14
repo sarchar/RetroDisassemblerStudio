@@ -42,7 +42,7 @@ public:
     int GetNumMemoryRegions() const;
     std::shared_ptr<MemoryRegion> GetMemoryRegion(GlobalMemoryLocation const&);
     std::shared_ptr<MemoryRegion> GetMemoryRegionByIndex(int);
-    std::shared_ptr<MemoryObject> GetMemoryObject(GlobalMemoryLocation const&);
+    std::shared_ptr<MemoryObject> GetMemoryObject(GlobalMemoryLocation const&, int* offset = NULL);
 
     void MarkMemoryAsUndefined(GlobalMemoryLocation const&);
     void MarkMemoryAsWords(GlobalMemoryLocation const&, u32 byte_count);
@@ -117,6 +117,7 @@ public:
 
 private:
     // Memory
+    std::shared_ptr<NES::RAMRegion> cpu_ram;
     std::shared_ptr<NES::PPURegistersRegion> ppu_registers;
     std::shared_ptr<NES::IORegistersRegion> io_registers;
     std::shared_ptr<NES::Cartridge> cartridge;

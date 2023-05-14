@@ -16,9 +16,11 @@ int Accum::base_expression_node_id = 0;
 
 void OperandAddressOrLabel::Print(std::ostream& ostream) const {
     if(auto system = MyApp::Instance()->GetProject()->GetSystem<System>()) {
-        if(auto memory_object = system->GetMemoryObject(where)) {
+        int offset = 0;
+        if(auto memory_object = system->GetMemoryObject(where, &offset)) {
             if(nth < memory_object->labels.size()) {
                 ostream << memory_object->labels[nth]->GetString();
+                if(offset > 0) ostream << "+" << offset;
                 return;
             }
         }

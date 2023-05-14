@@ -329,9 +329,22 @@ void MemoryRegion::InitializeEmpty()
          << hex << uppercase << setfill('0') << setw(4) << base_address << endl;
 }
 
-shared_ptr<MemoryObject> MemoryRegion::GetMemoryObject(GlobalMemoryLocation const& where)
+shared_ptr<MemoryObject> MemoryRegion::GetMemoryObject(GlobalMemoryLocation const& where, int* offset)
 {
-    return object_refs[ConvertToRegionOffset(where.address)];
+    int region_offset = ConvertToRegionOffset(where.address);
+    auto ret = object_refs[region_offset];
+
+    if(offset != NULL) {
+        auto cur = object_refs[region_offset];
+        while(cur == ret && region_offset > 0) {
+            region_offset -= 1;
+            cur = object_refs[region_offset];
+        };
+
+        *offset = (ConvertToRegionOffset(where.address) - region_offset) - 1;
+    }
+
+    return ret;
 }
 
 // to mark data as undefined, we just delete the current node and recreate new bytes in its place
@@ -1128,6 +1141,16 @@ shared_ptr<CharacterRomBank> CharacterRomBank::Load(std::istream& is, std::strin
     return chr_bank;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// CPU RAM $0000-$0800 (mirroed every $800 bytes)
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+RAMRegion::RAMRegion(shared_ptr<System>& system)
+    : MemoryRegion(system, "RAM")
+{
+    base_address = 0x0000;
+    region_size  = 0x0800;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // PPU registers $2000-$2008 (mirroed every 8 bytes until 0x3FFF)

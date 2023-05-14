@@ -226,7 +226,7 @@ public:
     void                           InitializeFromData(u8* data, int count);
     void                           ReinitializeFromObjectRefs();
 
-    std::shared_ptr<MemoryObject>  GetMemoryObject(GlobalMemoryLocation const&);
+    std::shared_ptr<MemoryObject>  GetMemoryObject(GlobalMemoryLocation const&, int* offset = NULL);
     void                           UpdateMemoryObject(GlobalMemoryLocation const&);
 
     MemoryObject::TYPE             GetMemoryObjectType(GlobalMemoryLocation const& where) { return GetMemoryObject(where)->type; }
@@ -335,6 +335,12 @@ private:
     int chr_rom_bank;
     CHARACTER_ROM_BANK_LOAD bank_load;
     CHARACTER_ROM_BANK_SIZE bank_size;
+};
+
+class RAMRegion : public MemoryRegion {
+public:
+    RAMRegion(std::shared_ptr<System>&);
+    virtual ~RAMRegion() {}
 };
 
 class PPURegistersRegion : public MemoryRegion {

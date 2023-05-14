@@ -40,7 +40,9 @@ void System::CreateMemoryRegions()
     auto selfptr = dynamic_pointer_cast<System>(base_system);
     assert(selfptr);
     
-    // TODO RAM
+    cpu_ram       = make_shared<RAMRegion>(selfptr);
+    cpu_ram->InitializeEmpty();
+
     ppu_registers = make_shared<PPURegistersRegion>(selfptr); // 0x2000-0x3FFF
     ppu_registers->InitializeEmpty();
 
@@ -119,18 +121,20 @@ void System::GetBanksForAddress(GlobalMemoryLocation const& where, vector<u16>& 
 
 int System::GetNumMemoryRegions() const
 {
-    return 2 + cartridge->GetNumMemoryRegions();
+    return 3 + cartridge->GetNumMemoryRegions();
 }
 
 std::shared_ptr<MemoryRegion> System::GetMemoryRegionByIndex(int i)
 {
     switch(i) {
     case 0:
-        return ppu_registers;
+        return cpu_ram;
     case 1:
+        return ppu_registers;
+    case 2:
         return io_registers;
     default:
-        return cartridge->GetMemoryRegionByIndex(i - 2);
+        return cartridge->GetMemoryRegionByIndex(i - 3);
     }
     return nullptr;
 }
@@ -140,8 +144,8 @@ std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const
     static shared_ptr<MemoryRegion> empty_ptr;
     assert(!where.is_chr); // TODO
 
-    if(where.address < 0x2000) {
-        return empty_ptr;
+    if(where.address < cpu_ram->GetEndAddress()) {
+        return cpu_ram;
     } else if(where.address < ppu_registers->GetEndAddress()) {
         return ppu_registers;
     } else if(where.address < io_registers->GetEndAddress()) {
@@ -153,10 +157,10 @@ std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const
     }
 }
 
-std::shared_ptr<MemoryObject> System::GetMemoryObject(GlobalMemoryLocation const& where)
+std::shared_ptr<MemoryObject> System::GetMemoryObject(GlobalMemoryLocation const& where, int* offset)
 {
     if(auto memory_region = GetMemoryRegion(where)) {
-        return memory_region->GetMemoryObject(where);
+        return memory_region->GetMemoryObject(where, offset);
     }
 
     return nullptr;
@@ -478,6 +482,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
 bool System::Save(std::ostream& os, std::string& errmsg)
 {
     // save the non-cartridge memory regions
+    if(!cpu_ram->Save(os, errmsg)) return false;
     if(!ppu_registers->Save(os, errmsg)) return false;
     if(!io_registers->Save(os, errmsg)) return false;
 
@@ -493,7 +498,10 @@ bool System::Load(std::istream& is, std::string& errmsg)
     auto selfptr = dynamic_pointer_cast<System>(base_system);
     assert(selfptr);
 
-     // load registers
+    // load registers
+    cpu_ram = make_shared<RAMRegion>(selfptr);
+    if(!cpu_ram->Load(is, errmsg)) return false;
+
     ppu_registers = make_shared<PPURegistersRegion>(selfptr); // 0x2000-0x3FFF
     if(!ppu_registers->Load(is, errmsg)) return false;
 
