@@ -209,10 +209,6 @@ void Listing::CheckInput()
 
     if(ImGui::IsKeyPressed(ImGuiKey_DownArrow)) MoveSelectionDown();
 
-    if(ImGui::IsKeyPressed(ImGuiKey_Enter)) {
-        editing = true;
-    }
-
     for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
         ImWchar c = io.InputQueueCharacters[i]; 
 
@@ -232,31 +228,22 @@ void Listing::CheckInput()
 
         case L'l': // create or edit a label
         {
-            auto labels = system->GetLabelsAt(current_selection);
-            if(labels.size()) {
-                int nth = 0;
-                popups.create_label.buf = labels.at(nth)->GetString();
-                popups.create_label.edit = nth;
-            } else {
-                popups.create_label.buf = "";
-                popups.create_label.edit  = -1;
-            }
-
+            popups.create_label.buf = "";
             popups.create_label.show = true;
             popups.create_label.title = "Create new label";
             popups.create_label.where = current_selection;
             break;
         }
 
-        case L';': // edit EOL comment
-        {
-            popups.edit_comment.title = "Edit EOL comment";
-            popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_EOL;
-            popups.edit_comment.show  = true;
-            popups.edit_comment.where = current_selection;
-            system->GetComment(current_selection, popups.edit_comment.type, popups.edit_comment.buf);
-            break;
-        }
+        //!case L';': // edit EOL comment
+        //!{
+        //!    popups.edit_comment.title = "Edit EOL comment";
+        //!    popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_EOL;
+        //!    popups.edit_comment.show  = true;
+        //!    popups.edit_comment.where = current_selection;
+        //!    system->GetComment(current_selection, popups.edit_comment.type, popups.edit_comment.buf);
+        //!    break;
+        //!}
 
         case L':': // edit pre comment
         {
@@ -293,6 +280,12 @@ void Listing::CheckInput()
             popups.goto_address.show = true;
             popups.goto_address.buf = "";
             break;
+
+        case L'F': // very hacky (F)ollow address button
+        {
+            Follow();
+            break;
+        }
 
         case L'p': // create pointer at cursor (apply a label to the address pointed by the word at this location)
         {
@@ -354,12 +347,6 @@ void Listing::CheckInput()
             }
 
 
-            break;
-        }
-
-        case L'F': // very hacky (F)ollow address button
-        {
-            Follow();
             break;
         }
 
@@ -434,10 +421,10 @@ void Listing::RenderContent()
                 GlobalMemoryLocation current_address(current_selection); // start with a copy since we're in the same memory region
                 current_address.address = listing_item_iterator->GetCurrentAddress();
 
-                // then use the address to grab all the listing items belonging to the address
                 //cout << "row = 0x" << row << " current_address.address = 0x" << hex << current_address.address << endl;
 
-                bool selected_row = (listing_item_index == row);//(current_address.address == current_selection.address);
+                // selected_row will tell the listing item if it should check inputs
+                bool selected_row = (listing_item_index == row);
 
                 // Begin a new row and next column
                 ImGui::TableNextRow();
@@ -454,14 +441,14 @@ void Listing::RenderContent()
                     }
 
                     // do follow on double click
-                    if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                        Follow();
-                    }
+                    //!if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                    //!    Follow();
+                    //!}
 
                     ImGui::SameLine();
                 }
 
-                listing_item->RenderContent(system, current_address, adjust_columns, editing && selected_row);
+                listing_item->RenderContent(system, current_address, adjust_columns, selected_row);
 
                 // Only after the row has been rendered and it was the last element in the table,
                 // we can use ScrollToItem() to get the item focused in the middle of the view.
@@ -492,14 +479,8 @@ void Listing::RenderPopups()
         if(ret > 0) {
             if(popups.create_label.buf.size() > 0) {
                 //TODO verify valid label (no spaces, etc)
-                // dialog was OK'd
-                if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || popups.create_label.edit == -1) {
-                    // add the label
-                    system->CreateLabel(popups.create_label.where, popups.create_label.buf, true);
-                } else {
-                    // replace the label
-                    system->EditLabel(popups.create_label.where, popups.create_label.buf, 0, true);
-                }
+                // dialog was OK'd, add the label
+                system->CreateLabel(popups.create_label.where, popups.create_label.buf, true);
             }
         }
         popups.create_label.show = false;

@@ -250,6 +250,7 @@ public:
 
     template <class T>
     void Set(T& t) { root = t; }
+    void Set(std::string const&);
 
     bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) { 
         return root->Evaluate(helper, result); 
@@ -284,6 +285,9 @@ public:
 
 protected:
     std::shared_ptr<BaseExpressionNode> root;
+
+private:
+    std::shared_ptr<BaseExpressionNode> Parse(std::string const&);
 };
 
 ////////////////////////////////////////////////////////////////////////////////

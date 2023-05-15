@@ -125,8 +125,9 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
         obj->listing_items.push_back(make_shared<ListingItemBlankLine>());
     }
 
-    for(auto& label : obj->labels) {
-        obj->listing_items.push_back(make_shared<ListingItemLabel>(label));
+    for(int nth = 0; nth < obj->labels.size(); nth++) {
+        auto& label = obj->labels[nth];
+        obj->listing_items.push_back(make_shared<ListingItemLabel>(label, nth));
     }
 
     if(obj->comments.pre) {

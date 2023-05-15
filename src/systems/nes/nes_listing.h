@@ -90,14 +90,21 @@ public:
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
 
 private:
+    enum {
+        EDIT_NONE,
+        EDIT_OPERAND_EXPRESSION,
+        EDIT_EOL_COMMENT
+    } edit_mode = EDIT_NONE;
+
     int line;
-    std::string line_content;
+    bool started_editing = false;
+    std::string edit_buffer;
 };
 
 class ListingItemLabel : public ListingItem {
 public:
-    ListingItemLabel(std::shared_ptr<Label> const& _label)
-        : ListingItem(), label(_label) 
+    ListingItemLabel(std::shared_ptr<Label> const& _label, int _nth)
+        : ListingItem(), label(_label), nth(_nth), editing(false)
     { }
     virtual ~ListingItemLabel() { }
 
@@ -105,6 +112,10 @@ public:
 
 private:
     std::shared_ptr<Label> const& label;
+    int nth;
+    std::string edit_buffer;
+    bool editing;
+    bool started_editing;
 };
 
 }

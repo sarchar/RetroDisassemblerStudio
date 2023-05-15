@@ -51,8 +51,6 @@ private:
     int    jump_to_selection    = 0;
     char   new_label_buffer[64] = "";
 
-    bool   editing = false;
-
     // signal connections
     System::label_created_t::signal_connection_t label_created_connection;
     System::disassembly_stopped_t::signal_connection_t disassembly_stopped_connection;

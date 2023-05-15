@@ -22,7 +22,7 @@ namespace NES {
 
 unsigned long ListingItem::common_inner_table_flags = ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_Resizable;
 
-void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
+void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -38,7 +38,7 @@ void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryL
     }
 }
 
-void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
+void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -57,7 +57,7 @@ void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemor
     }
 }
 
-void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
+void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -104,7 +104,7 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
     }
 }
 
-void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
+void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -114,7 +114,7 @@ void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemo
 
     if(ImGui::BeginTable("listing_item_comment2", 2, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
         ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed, 4.0f);
-        ImGui::TableSetupColumn("Comment", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Comment", ImGuiTableColumnFlags_WidthStretch);
 
         ImGui::TableNextRow();
         
@@ -124,13 +124,17 @@ void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemo
         ImGui::TableNextColumn();
         string precomment;
         system->GetComment(where, MemoryObject::COMMENT_TYPE_PRE, precomment); // TODO multiline
-        ImGui::Text("; %s", precomment.c_str());
+        if(selected) {
+            ImGui::InputTextMultiline("", &precomment, ImVec2(0, 0), 0);
+        } else {
+            ImGui::Text("; %s", precomment.c_str());
+        }
 
         ImGui::EndTable();
     }
 }
 
-void ListingItemPostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
+void ListingItemPostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -158,7 +162,7 @@ void ListingItemPostComment::RenderContent(shared_ptr<System>& system, GlobalMem
 
 
 
-void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
+void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -166,40 +170,97 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         table_flags |= ImGuiTableFlags_BordersInnerV;
     }
 
-    if(auto memory_object = system->GetMemoryObject(where)) {
-        auto disassembler = system->GetDisassembler();
+    auto memory_object = system->GetMemoryObject(where);
+    if(!memory_object) return;
+    auto disassembler = system->GetDisassembler();
 
-        if(ImGui::BeginTable("listing_item_code", 5, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
-            ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
-            ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
-            ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
-            ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
-            ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthFixed);
+    if(selected && edit_mode == EDIT_NONE) {
+        if(ImGui::IsKeyPressed(ImGuiKey_Semicolon)) { // edit the EOL comment
+            system->GetComment(where, MemoryObject::COMMENT_TYPE_EOL, edit_buffer);
+            edit_mode = EDIT_EOL_COMMENT;
+            started_editing = true;
+        } else if(ImGui::IsKeyPressed(ImGuiKey_Enter)) { // edit the operand expression
+            edit_buffer = memory_object->FormatOperandField(0, disassembler);
+            edit_mode = EDIT_OPERAND_EXPRESSION;
+            started_editing = true;
+        }
+    } 
 
-            ImGui::TableNextRow();
-        
-            ImGui::TableNextColumn();
-            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200));
-            ImGui::Text("$%02X:0x%04X", where.prg_rom_bank, where.address);
+    if(!selected) {
+        switch(edit_mode) {
+        case EDIT_EOL_COMMENT:
+            system->SetComment(where, MemoryObject::COMMENT_TYPE_EOL, edit_buffer);
+            break;
+        case EDIT_OPERAND_EXPRESSION:
+            cout << "Parse expression: " << edit_buffer << endl;
+            break;
+        }
+    }
 
-            ImGui::TableNextColumn(); // spacing
+    if(!selected || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        edit_mode = EDIT_NONE;
+    }
+
+
+    if(ImGui::BeginTable("listing_item_code", 5, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+        ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthFixed);
+
+        ImGui::TableNextRow();
     
-            ImGui::TableNextColumn();
-            ImGui::Text("%s", memory_object->FormatInstructionField(disassembler).c_str());
+        ImGui::TableNextColumn();
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200));
+        ImGui::Text("$%02X:0x%04X", where.prg_rom_bank, where.address);
 
-            ImGui::TableNextColumn();
-            if(editing) {
-                //InputText(const char* label, std::string* str, ImGuiInputTextFlags flags = 0, ImGuiInputTextCallback callback = nullptr, void* user_data = nullptr);
-                ImGui::InputText("", &line_content);
-            } else {
-                line_content = memory_object->FormatOperandField(0, disassembler);
-                ImGui::Text("%s", line_content.c_str());
+        ImGui::TableNextColumn(); // spacing
+
+        ImGui::TableNextColumn();
+        ImGui::Text("%s", memory_object->FormatInstructionField(disassembler).c_str());
+
+        ImGui::TableNextColumn();
+        if(edit_mode == EDIT_OPERAND_EXPRESSION) {
+            if(started_editing) {
+                ImGui::SetKeyboardFocusHere();
+                started_editing = false;
             }
+            if(ImGui::InputText("", &edit_buffer, ImGuiInputTextFlags_EnterReturnsTrue)) {
+                cout << "Parse expression: " << edit_buffer << endl;
+                edit_mode = EDIT_NONE;
+            }
+        } else {
+            string operand = memory_object->FormatOperandField(0, disassembler);
+            ImGui::Text("%s", operand.c_str());
+            if(ImGui::IsMouseDoubleClicked(0)) { // edit on double click
+                edit_buffer = operand;
+                edit_mode = EDIT_OPERAND_EXPRESSION;
+                started_editing = true;
+            }
+        }
 
-            ImGui::TableNextColumn();
-            string eolcomment;
-            system->GetComment(where, MemoryObject::COMMENT_TYPE_EOL, eolcomment); // TODO multiline
-            if(eolcomment.size()) ImGui::Text("; %s", eolcomment.c_str());
+        ImGui::TableNextColumn();
+        if(edit_mode == EDIT_EOL_COMMENT) {
+            if(started_editing) {
+                ImGui::SetKeyboardFocusHere();
+                started_editing = false;
+            }
+            if(ImGui::InputText("", &edit_buffer, ImGuiInputTextFlags_EnterReturnsTrue)) {
+                system->SetComment(where, MemoryObject::COMMENT_TYPE_EOL, edit_buffer);
+                edit_mode = EDIT_NONE;
+            }
+        } else {
+            string eol_comment;
+            system->GetComment(where, MemoryObject::COMMENT_TYPE_EOL, eol_comment); // TODO multiline
+            if(eol_comment.size()) {
+                ImGui::Text("; %s", eol_comment.c_str());
+                if(ImGui::IsMouseDoubleClicked(0)) { // edit on double click
+                    edit_buffer = eol_comment;
+                    edit_mode = EDIT_EOL_COMMENT;
+                    started_editing = true;
+                }
+            }
         }
 
         ImGui::EndTable();
@@ -207,12 +268,23 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
 }
 
 
-void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
+void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
         table_flags &= ~ImGuiTableFlags_NoBordersInBody;
         table_flags |= ImGuiTableFlags_BordersInnerV;
+    }
+    
+    if(selected && ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+        editing = true;
+        started_editing = true;
+    }
+
+    if(editing) {
+        if(!selected || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // must stop editing, discard
+            editing = false;
+        }
     }
 
     if(ImGui::BeginTable("listing_item_label", 2, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
@@ -224,7 +296,29 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
         ImGui::Text("        ");
 
         ImGui::TableNextColumn();
-        ImGui::Text("%s:", label->GetString().c_str());
+
+        if(editing) {
+            if(started_editing) {
+                ImGui::SetKeyboardFocusHere();
+                edit_buffer = label->GetString();
+                started_editing = false;
+            }
+
+            if(ImGui::InputText("", &edit_buffer, ImGuiInputTextFlags_EnterReturnsTrue)) {
+                if(edit_buffer.size() > 0) {
+                    system->EditLabel(where, edit_buffer, nth, true);
+                }
+                editing = false;
+            }
+        } else {
+            ImGui::Text("%s:", label->GetString().c_str());
+
+            // start editing the label if double click happened
+            if(selected && ImGui::IsMouseDoubleClicked(0)) {
+                editing = true;
+                started_editing = true;
+            }
+        }
     
         ImGui::EndTable();
     }
