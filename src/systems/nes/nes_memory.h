@@ -114,6 +114,7 @@ struct MemoryObjectTreeNode {
         
         std::shared_ptr<ListingItem>& GetListingItem();
         u32 GetCurrentAddress();
+        u32 GetListingItemIndex() const { return listing_item_index; }
 
         iterator& operator++();
     };
@@ -146,6 +147,7 @@ struct MemoryObject {
 
     std::vector<std::shared_ptr<Label>> labels;
     std::vector<std::shared_ptr<ListingItem>> listing_items;
+    int primary_listing_item_index;
 
     std::shared_ptr<Expression> operand_expression;
 

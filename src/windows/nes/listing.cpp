@@ -29,7 +29,7 @@ shared_ptr<Listing> Listing::CreateWindow()
 }
 
 Listing::Listing()
-    : BaseWindow("NES::Listing")
+    : BaseWindow("NES::Listing"), current_selection_listing_item(0)
 {
     SetTitle("Listing");
     SetNav(false); // disable navigation
@@ -50,6 +50,9 @@ Listing::Listing()
         // initialize the first selection to the entry point of the program
         // TODO save last location as well as location history?
         system->GetEntryPoint(&current_selection);
+        if(auto memory_object = system->GetMemoryObject(current_selection)) {
+            current_selection_listing_item = memory_object->primary_listing_item_index;
+        }
         jump_to_selection = JUMP_TO_SELECTION_START_VALUE; // TODO this is stupid, I wish I could scroll within one or 
                                                            // two frames (given we have to calculate the row sizes at least once)
     }
@@ -85,6 +88,13 @@ void Listing::GoToAddress(GlobalMemoryLocation const& address)
     selection_history_back.push(current_selection); // save the current location to the history
     ClearForwardHistory();                          // and clear the forward history
     current_selection = address;
+
+    if(auto system = current_system.lock()) {
+        if(auto memory_object = system->GetMemoryObject(current_selection)) {
+            current_selection_listing_item = memory_object->primary_listing_item_index;
+        }
+    }
+
     jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
 }
 
@@ -133,6 +143,39 @@ void Listing::ClearForwardHistory()
     while(selection_history_forward.size()) selection_history_forward.pop();
 }
 
+void Listing::MoveSelectionUp()
+{
+    auto system = current_system.lock();
+    if(!system) return;
+
+    auto memory_object = system->GetMemoryObject(current_selection);
+    if(!memory_object) return;
+
+    if(current_selection_listing_item == 0) {
+        if(auto memory_object = system->GetMemoryObject(current_selection + -1)) {
+            current_selection = current_selection + -memory_object->GetSize();
+            current_selection_listing_item = memory_object->listing_items.size() - 1;
+        }
+    } else {
+        current_selection_listing_item -= 1;
+    }
+}
+
+void Listing::MoveSelectionDown()
+{
+    auto system = current_system.lock();
+    if(!system) return;
+
+    auto memory_object = system->GetMemoryObject(current_selection);
+    if(!memory_object) return;
+
+    current_selection_listing_item += 1;
+    if(current_selection_listing_item >= memory_object->listing_items.size()) {
+        current_selection = current_selection + memory_object->GetSize();
+        current_selection_listing_item = 0;
+    }
+}
+
 void Listing::CheckInput()
 {
     ImGuiIO& io = ImGui::GetIO();
@@ -143,17 +186,17 @@ void Listing::CheckInput()
     // handle back button
     if(ImGui::IsKeyPressed(ImGuiKey_MouseX1) && selection_history_back.size()) {
         selection_history_forward.push(current_selection);
-        current_selection = selection_history_back.top();
+        GlobalMemoryLocation dest = selection_history_back.top();
         selection_history_back.pop();
-        jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+        GoToAddress(dest);
     }
 
     // handle forward button
     if(ImGui::IsKeyPressed(ImGuiKey_MouseX2) && selection_history_forward.size()) {
         selection_history_back.push(current_selection);
-        current_selection = selection_history_forward.top();
+        GlobalMemoryLocation dest = selection_history_forward.top();
         selection_history_forward.pop();
-        jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+        GoToAddress(dest);
     }
 
     // handle delete button
@@ -162,17 +205,9 @@ void Listing::CheckInput()
         system->MarkMemoryAsUndefined(current_selection);
     }
 
-    if(ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
-        if(auto memory_object = system->GetMemoryObject(current_selection + -1)) {
-            current_selection = current_selection + -memory_object->GetSize();
-        }
-    }
+    if(ImGui::IsKeyPressed(ImGuiKey_UpArrow)) MoveSelectionUp();
 
-    if(ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
-        if(auto memory_object = system->GetMemoryObject(current_selection)) {
-            current_selection = current_selection + memory_object->GetSize();
-        }
-    }
+    if(ImGui::IsKeyPressed(ImGuiKey_DownArrow)) MoveSelectionDown();
 
     if(ImGui::IsKeyPressed(ImGuiKey_Enter)) {
         editing = true;
@@ -184,15 +219,11 @@ void Listing::CheckInput()
         // TODO really should be using signals and emit to broadcast these messages
         switch(c) {
         case L'j': // move current_selection down
-            if(auto memory_object = system->GetMemoryObject(current_selection)) {
-                current_selection = current_selection + memory_object->GetSize();
-            }
+            MoveSelectionDown();
             break;
 
         case L'k': // move current_selection up
-            if(auto memory_object = system->GetMemoryObject(current_selection + -1)) {
-                current_selection = current_selection + -memory_object->GetSize();
-            }
+            MoveSelectionUp();
             break;
 
         case L'w': // mark data as a word
@@ -385,8 +416,8 @@ void Listing::RenderContent()
         
         // Force the clipper to include a range that also includes the row we want to jump to
         // we have a buffer of 100 lines so ImGui can calculate row heights
+        u32 listing_item_index = memory_region->GetListingIndexByAddress(current_selection) + current_selection_listing_item;
         if(jump_to_selection > 0) {
-            u32 listing_item_index = memory_region->GetListingIndexByAddress(current_selection);
             clipper.ForceDisplayRangeByIndices(listing_item_index - 25, listing_item_index + 25);
         }
 
@@ -406,7 +437,7 @@ void Listing::RenderContent()
                 // then use the address to grab all the listing items belonging to the address
                 //cout << "row = 0x" << row << " current_address.address = 0x" << hex << current_address.address << endl;
 
-                bool selected_row = (current_address.address == current_selection.address);
+                bool selected_row = (listing_item_index == row);//(current_address.address == current_selection.address);
 
                 // Begin a new row and next column
                 ImGui::TableNextRow();
@@ -419,6 +450,7 @@ void Listing::RenderContent()
                     sprintf(buf, "##selectable_row%d", row);
                     if (ImGui::Selectable(buf, selected_row, selectable_flags)) {
                         current_selection = current_address;
+                        current_selection_listing_item = listing_item_iterator->GetListingItemIndex();
                     }
 
                     // do follow on double click

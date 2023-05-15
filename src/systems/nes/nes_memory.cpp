@@ -133,6 +133,9 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
         obj->listing_items.push_back(make_shared<ListingItemPreComment>(0));
     }
 
+    // the primary index is used to focus on code or data when moving to locations
+    obj->primary_listing_item_index = obj->listing_items.size();
+
     switch(obj->type) {
     case MemoryObject::TYPE_UNDEFINED:
     case MemoryObject::TYPE_BYTE:

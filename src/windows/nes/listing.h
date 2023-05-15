@@ -33,6 +33,8 @@ protected:
 private:
     void ClearForwardHistory();
     void CheckInput() override;
+    void MoveSelectionUp();
+    void MoveSelectionDown();
 
     void LabelCreated(std::shared_ptr<Label> const&, bool);
     void DisassemblyStopped(GlobalMemoryLocation const&);
@@ -40,6 +42,7 @@ private:
 private:
     std::weak_ptr<System>            current_system;
     GlobalMemoryLocation             current_selection;
+    int                              current_selection_listing_item;
     std::stack<GlobalMemoryLocation> selection_history_back;
     std::stack<GlobalMemoryLocation> selection_history_forward;
 
