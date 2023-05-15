@@ -25,11 +25,6 @@ public:
     void Follow();
 
     // signals
-    // listing_command is used to trigger events that are not immediate - things like opening popups or asking the user
-    // for information. other things the listing window does that are immediate (like changing memory object types) are
-    // executed directly without the signal
-    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&, std::string const& cmd, GlobalMemoryLocation const& where)>> listing_command_t;
-    std::shared_ptr<listing_command_t> listing_command;
 
 protected:
     void UpdateContent(double deltaTime) override;
@@ -58,6 +53,38 @@ private:
     // signal connections
     System::label_created_t::signal_connection_t label_created_connection;
     System::disassembly_stopped_t::signal_connection_t disassembly_stopped_connection;
+
+    struct {
+        struct {
+            std::string title;
+            bool        show  = false;
+            int         edit;
+            std::string buf;
+            GlobalMemoryLocation where;
+        } create_label;
+
+        struct {
+            std::string title = "Disassembling...";
+            std::shared_ptr<std::thread> thread = nullptr;
+            bool        show  = false;
+        } disassembly;
+
+        struct {
+            std::string title;
+            bool        show  = false;
+            std::string buf;
+            MemoryObject::COMMENT_TYPE type;
+            GlobalMemoryLocation where;
+        } edit_comment;
+
+        struct {
+            std::string title = "Go to address...";
+            std::string buf;
+            bool        show = false;
+        } goto_address;
+    } popups;
+
+    void RenderPopups();
 
 public:
     static std::shared_ptr<Listing> CreateWindow();

@@ -45,7 +45,25 @@ public:
     }
 
     // Helper dialog boxes
-    bool OKPopup(std::string const& title, std::string const& message);
+    // Poups must be called every frame even if they're not open
+    bool OKPopup(std::string const& title, std::string const& content, 
+            bool resizeable = false);
+    int  InputNamePopup(std::string const& title, std::string const& label, std::string* buffer, 
+            bool enter_returns_true = true, 
+            bool resizeable = false);
+
+    int  InputHexPopup(std::string const& title, std::string const& label, std::string* buffer, 
+            bool enter_returns_true = true, 
+            bool resizeable = false);
+
+    int  InputMultilinePopup(std::string const& title, std::string const& label, std::string* buffer, 
+            bool resizeable = false);
+
+    // This is kind of a silly thing to do, but setting done to true means the dialog has been
+    // showing and should now close (via CloseCurrentPopup)
+    int  WaitPopup(std::string const& title, std::string const& content, bool done = false,
+            bool cancelable = false,
+            bool resizeable = false);
 
     // Project
     std::shared_ptr<BaseProject> GetProject() { return current_project; }
@@ -78,12 +96,13 @@ private:
 
     void ListingWindowCommand(std::shared_ptr<BaseWindow> const&, std::string const&, NES::GlobalMemoryLocation const&);
 
-    // Popups. Each of these are called every frame
+    // Popups
+    bool StartPopup(std::string const&, bool);
+    int  EndPopup(int, bool show_ok = true, bool show_cancel = true, bool allow_escape = true);
     void RenderPopups();
+
     void EditCommentPopup();
-    void CreateLabelPopup();
     void DisassemblyPopup();
-    void GoToAddressPopup();
     void SaveProjectPopup();
     void SaveProjectThread();
     void LoadProjectPopup();
@@ -105,35 +124,6 @@ private:
     // Global popups
     struct {
         struct {
-            std::string title = "Create new label...";
-            bool        show  = false;
-            int         edit;
-            char        buf[64];
-            std::shared_ptr<void> uhg; // TODO need a base class for GlobalMemoryLocation
-        } create_label;
-
-        struct {
-            std::string title = "Edit Comment...";
-            bool        show  = false;
-            std::string buf;
-            std::shared_ptr<void> uhg; // TODO need a base class for GlobalMemoryLocation
-            int         type;
-        } edit_comment;
-
-        struct {
-            std::shared_ptr<std::thread> thread = nullptr;
-            std::string title = "Disassembling...";
-            bool        show  = false;
-        } disassembly;
-
-        struct {
-            std::shared_ptr<BaseWindow> listing;
-            std::string title = "Go to address...";
-            char        buf[64];
-            bool        show = false;
-        } goto_address;
-
-        struct {
             std::string title = "Saving Project...";
             std::shared_ptr<std::thread> thread;
             bool show = false;
@@ -151,6 +141,7 @@ private:
             std::string errmsg;
         } load_project;
     } popups;
+    std::string current_popup_title;
 
 private:
     std::shared_ptr<BaseProject> current_project;

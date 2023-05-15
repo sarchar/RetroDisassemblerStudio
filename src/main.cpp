@@ -222,10 +222,6 @@ void MyApp::CreateINIWindows()
 
 void MyApp::AddWindow(shared_ptr<BaseWindow> window)
 {
-    // TODO HACK ALERT! need a clearly way of catching these signals
-    if(auto listing = dynamic_pointer_cast<NES::Listing>(window)) {
-        *listing->listing_command += std::bind(&MyApp::ListingWindowCommand, this, placeholders::_1, placeholders::_2, placeholders::_3);
-    }
     *window->window_closed += std::bind(&MyApp::ManagedWindowClosedHandler, this, placeholders::_1);
 
     managed_windows.push_back(window);
@@ -635,13 +631,6 @@ void MyApp::RenderGUI()
 
 void MyApp::RenderPopups()
 {
-    if(current_project) {
-        EditCommentPopup();
-        CreateLabelPopup();
-        DisassemblyPopup();
-        GoToAddressPopup();
-    }
-
     LoadProjectPopup();
     SaveProjectPopup();
 }
@@ -661,32 +650,132 @@ void MyApp::CloseProject()
     BaseWindow::ResetWindowIDs();
 }
 
-bool MyApp::OKPopup(std::string const& title, std::string const& message)
+bool MyApp::StartPopup(std::string const& title, bool resizeable)
 {
-    ImGui::OpenPopup(title.c_str());
-
-    // center this window
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    bool ret = false;
-    if (ImGui::BeginPopupModal(title.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoResize)) {
-        // TODO get word wrapping working. For now it just seems broken.
-        //ImVec2 size = ImGui::GetMainViewport()->Size;
-        //ImGui::PushTextWrapPos(size.x * 0.67);//ImGui::GetContentRegionAvailWidth());
-        //ImGui::TextUnformatted(message.c_str());
-        ImGui::Text(message.c_str());
-
-        if (ImGui::Button("OK", ImVec2(120, 0))) { 
-            ImGui::CloseCurrentPopup(); 
-            ret = true;
-        }
-
-        //ImGui::PopTextWrapPos();
-        ImGui::EndPopup();
+    auto ctitle = title.c_str();
+    if(title != current_popup_title) {
+        assert(current_popup_title == ""); // shouldn't be opening two popups at once
+        current_popup_title = title;
+        ImGui::OpenPopup(title.c_str());
     }
 
+    // center the popup
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    // configure flags
+    ImGuiWindowFlags popup_flags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize;
+    if(!resizeable) popup_flags |= ImGuiWindowFlags_NoResize;
+
+    // no further rendering if the dialog isn't visible
+    if(!ImGui::BeginPopupModal(ctitle, nullptr, popup_flags)) return false;
+
+    return true;
+}
+
+int MyApp::EndPopup(int ret, bool show_ok, bool show_cancel, bool allow_escape)
+{
+    ImVec2 button_size(ImGui::GetFontSize() * 5.0f, 0.0f);
+    if(show_ok) {
+        // if OK is pressed return 1
+        if(ImGui::Button("OK", button_size)) ret = 1;
+    }
+
+    if(show_cancel) {
+        // if Cancel or escape are pressed return -1
+        if(show_ok) ImGui::SameLine();
+        if(ImGui::Button("Cancel", button_size)) ret = -1;
+    }
+
+    if(allow_escape && ImGui::IsKeyPressed(ImGuiKey_Escape)) ret = -1;
+
+    // If the window is closing call CloseCurrentPopup
+    if(ret != 0) {
+        current_popup_title = "";
+        ImGui::CloseCurrentPopup();
+    }
+
+    // Always end
+    ImGui::EndPopup();
     return ret;
+}
+
+bool MyApp::OKPopup(std::string const& title, std::string const& content, bool resizeable)
+{
+    int ret = 0;
+
+    // no further rendering if the dialog isn't visible
+    if(!StartPopup(title, resizeable)) return 0;
+
+    ImGui::Text("%s", content.c_str());
+
+    return EndPopup(ret);
+}
+
+int MyApp::InputNamePopup(std::string const& title, std::string const& label, std::string* buffer, bool enter_returns_true, bool resizeable)
+{
+    int ret = 0;
+
+    // no further rendering if the dialog isn't visible
+    if(!StartPopup(title, resizeable)) return 0;
+
+    // focus on the text input if nothing else is selected
+    if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
+
+    ImGuiInputTextFlags input_flags = (enter_returns_true) ? ImGuiInputTextFlags_EnterReturnsTrue : 0;
+    if(ImGui::InputText(label.c_str(), buffer, input_flags)) ret = 1; // enter was pressed
+
+    return EndPopup(ret);
+}
+
+int MyApp::InputHexPopup(std::string const& title, std::string const& label, std::string* buffer, bool enter_returns_true, bool resizeable)
+{
+    // no further rendering if the dialog isn't visible
+    if(!StartPopup(title, resizeable)) return 0;
+
+    // focus on the text input if nothing else is selected
+    if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
+
+    int ret = 0;
+    ImGuiInputTextFlags input_flags = (enter_returns_true) ? ImGuiInputTextFlags_EnterReturnsTrue : 0;
+    input_flags |= ImGuiInputTextFlags_CharsHexadecimal;
+    if(ImGui::InputText(label.c_str(), buffer, input_flags)) ret = 1; // enter was pressed
+
+    return EndPopup(ret);
+}
+
+int MyApp::InputMultilinePopup(std::string const& title, std::string const& label, std::string* buffer, bool resizeable)
+{
+    int ret = 0;
+
+    // no further rendering if the dialog isn't visible
+    if(!StartPopup(title, resizeable)) return 0;
+
+    // focus on the text input if nothing else is selected
+    if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
+
+    ImGuiInputTextFlags input_flags = ImGuiInputTextFlags_AllowTabInput;
+    ImGui::InputTextMultiline(label.c_str(), buffer, ImVec2(0, 0), input_flags);
+
+    // allow ctrl+enter to close the multiline
+    if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_Enter)) ret = 1;
+
+    return EndPopup(ret);
+}
+
+int MyApp::WaitPopup(std::string const& title, std::string const& content, bool done, bool cancelable, bool resizeable)
+{
+    int ret = 0;
+
+    // no further rendering if the dialog isn't visible
+    if(!StartPopup(title, resizeable)) return 0;
+
+    // Show the content of the dialog
+    ImGui::Text("%s", content.c_str());
+
+    if(done) ret = 1;
+
+    return EndPopup(ret, false, cancelable, false);
 }
 
 void MyApp::OnKeyPress(int glfw_key, int scancode, int action, int mods)
@@ -744,244 +833,6 @@ void MyApp::ProjectCreatedHandler(std::shared_ptr<BaseWindow> project_creator_wi
 
     // create the default workspace for the new system
     current_project->CreateDefaultWorkspace();
-}
-
-void MyApp::ListingWindowCommand(shared_ptr<BaseWindow> const& wnd, string const& cmd, NES::GlobalMemoryLocation const& where)
-{
-    // TODO this should be generic
-    if(auto system = current_project->GetSystem<NES::System>()) {
-        if(cmd == "CreateLabel") {
-            popups.create_label.uhg = make_shared<NES::GlobalMemoryLocation>(where);
-            popups.create_label.show = true;
-        } else if(cmd == "EditEOLComment") {
-            popups.edit_comment.uhg = make_shared<NES::GlobalMemoryLocation>(where);
-            popups.edit_comment.type = (int)NES::MemoryObject::COMMENT_TYPE_EOL;
-            popups.edit_comment.show = true;
-        } else if(cmd == "EditPreComment") {
-            popups.edit_comment.uhg = make_shared<NES::GlobalMemoryLocation>(where);
-            popups.edit_comment.type = (int)NES::MemoryObject::COMMENT_TYPE_PRE;
-            popups.edit_comment.show = true;
-        } else if(cmd == "EditPostComment") {
-            popups.edit_comment.uhg = make_shared<NES::GlobalMemoryLocation>(where);
-            popups.edit_comment.type = (int)NES::MemoryObject::COMMENT_TYPE_POST;
-            popups.edit_comment.show = true;
-        } else if(cmd == "DisassemblyRequested") {
-            // if currently disassembling, ignore the request
-            if(popups.disassembly.thread) return;
-        
-            system->InitDisassembly(where);
-            popups.disassembly.show = true;
-        } else if(cmd == "GoToAddress") {
-            popups.goto_address.listing = wnd;
-            popups.goto_address.show = true;
-        }
-    }
-}
-
-void MyApp::CreateLabelPopup() 
-{
-    auto title = popups.create_label.title.c_str();
-    bool should_close = false;
-
-    // TODO this should be generic
-    auto system = current_project->GetSystem<NES::System>();
-    if(!system) return;
-
-    if(!ImGui::IsPopupOpen(title) && popups.create_label.show) {
-        popups.create_label.show = false;
-        popups.create_label.buf[0] = '\0';
-        popups.create_label.edit = -1;
-
-        NES::GlobalMemoryLocation* where = static_cast<NES::GlobalMemoryLocation*>(popups.create_label.uhg.get());
-        auto labels = system->GetLabelsAt(*where);
-        if(labels.size()) {
-            int nth = 0;
-            strncpy(popups.create_label.buf, labels.at(nth)->GetString().c_str(), sizeof(popups.create_label.buf));
-            popups.create_label.edit = nth;
-        }
-
-        ImGui::OpenPopup(title);
-    }
-
-    // center this window
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    // return if the dialog isn't open
-    if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) return;
-
-    // focus on the text input if nothing else is selected
-    if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
-
-    // if either Enter is pressed or OK clicked, create the label
-    ImVec2 button_size(ImGui::GetFontSize() * 7.0f, 0.0f);
-    if(ImGui::InputText("Label", popups.create_label.buf, sizeof(popups.create_label.buf), ImGuiInputTextFlags_EnterReturnsTrue)
-       || ImGui::Button("OK", button_size)) {
-        string lstr(popups.create_label.buf);
-        NES::GlobalMemoryLocation* where = static_cast<NES::GlobalMemoryLocation*>(popups.create_label.uhg.get());
-
-        if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || popups.create_label.edit == -1) {
-            // add the label
-            system->CreateLabel(*where, lstr, true);
-        } else {
-            // replace the label
-            system->EditLabel(*where, lstr, 0, true);
-        }
-
-        should_close = true;
-    }
-
-    if(should_close || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-        ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::EndPopup();
-}
-
-void MyApp::EditCommentPopup() 
-{
-    //bool  InputTextMultiline(const char* label, std::string* str, const ImVec2& size = ImVec2(0, 0), ImGuiInputTextFlags flags = 0, ImGuiInputTextCallback callback = nullptr, void* user_data = nullptr);
-    auto title = popups.edit_comment.title.c_str();
-    // TODO this should be generic
-    auto system = current_project->GetSystem<NES::System>();
-    if(!system) return;
-
-    if(!ImGui::IsPopupOpen(title) && popups.edit_comment.show) {
-        popups.edit_comment.show = false;
-        popups.edit_comment.buf[0] = '\0';
-
-        NES::GlobalMemoryLocation* where = static_cast<NES::GlobalMemoryLocation*>(popups.edit_comment.uhg.get());
-        system->GetComment(*where, (NES::MemoryObject::COMMENT_TYPE)popups.edit_comment.type, popups.edit_comment.buf);
-
-        ImGui::OpenPopup(title);
-    }
-
-    // center this window
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    // return if the dialog isn't open
-    if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) return;
-
-    ImGui::Text("Enter comment:");
-
-    // focus on the text input if nothing else is selected
-    if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
-
-    // if either Enter is pressed or OK clicked, create the label
-    ImVec2 button_size(ImGui::GetFontSize() * 7.0f, 0.0f);
-    ImGui::InputTextMultiline("Comment", &popups.edit_comment.buf, ImVec2(0, 0), ImGuiInputTextFlags_AllowTabInput);
-
-    if(ImGui::Button("OK", button_size) || (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_Enter))) {
-        // set the comment
-        NES::GlobalMemoryLocation* where = static_cast<NES::GlobalMemoryLocation*>(popups.edit_comment.uhg.get());
-        system->SetComment(*where, (NES::MemoryObject::COMMENT_TYPE)popups.edit_comment.type, popups.edit_comment.buf);
-        popups.edit_comment.uhg = nullptr;
-        ImGui::CloseCurrentPopup();
-    } else if(ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-        ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::EndPopup();
-}
-
-
-void MyApp::DisassemblyPopup()
-{
-    auto title = popups.disassembly.title.c_str();
-    
-    // TODO this should be generic and we can use current_system->DisassemblyThread
-    auto system = current_project->GetSystem<NES::System>();
-    if(!system) return;
-
-    // Check if the dialog needs to be opened
-    if(!ImGui::IsPopupOpen(title) && popups.disassembly.show) {
-        ImGui::OpenPopup(title);
-        popups.disassembly.show = false;
-
-        // create the disassembly thread
-        popups.disassembly.thread = make_unique<std::thread>(std::bind(&NES::System::DisassemblyThread, system));
-        cout << "[MyApp::DisassemblyPopup] started disassembly thread" << endl;
-    }
-
-    // center this window
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // center on the current Listing window?
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    // Return if the dialog isn't open
-    ImGuiWindowFlags popup_flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings; // TODO generate better flags
-    if(!ImGui::BeginPopupModal(title, nullptr, popup_flags)) return;
-
-    // Render the content of the dialog
-    ImGui::Text("Disassembling...");
-
-    // Check if the disassembly is done
-    if(!system->IsDisassembling()) {
-        if(popups.disassembly.thread) {
-            popups.disassembly.thread->join();
-            popups.disassembly.thread = nullptr;
-            cout << "[MyApp::DisassemblyPopup] disassembly thread exited" << endl;
-        }
-        
-        ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::EndPopup();
-}
-
-void MyApp::GoToAddressPopup() 
-{
-    auto title = popups.goto_address.title.c_str();
-    bool should_close = false;
-
-    // TODO this should be generic and we can use current_system->DisassemblyThread
-    auto system = current_project->GetSystem<NES::System>();
-    if(!system) return;
-
-    if(!ImGui::IsPopupOpen(title) && popups.goto_address.show) {
-        popups.goto_address.show = false;
-
-        popups.goto_address.buf[0] = '\0';
-
-        ImGui::OpenPopup(title);
-    }
-
-    // center this window
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    // return if the dialog isn't open
-    if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) return;
-
-    // focus on the text input if nothing else is selected
-    if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
-
-    // if either Enter is pressed or OK clicked, create the label
-    // TODO allow expressions
-    ImVec2 button_size(ImGui::GetFontSize() * 7.0f, 0.0f);
-    if(ImGui::InputText("Address (hex)", popups.goto_address.buf, sizeof(popups.goto_address.buf), 
-                ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CharsHexadecimal) || ImGui::Button("OK", button_size)) {
-
-        // parse the address given
-        stringstream ss;
-        ss << hex << popups.goto_address.buf;
-        u32 address;
-        ss >> address;
-
-        // let Listing do the heavy work of interpreting the address and which bank it would be in
-        // call listing directly rather than use a signal, since it's not really a global event -- it's specific to the
-        // listing window that requested the goto address
-        shared_ptr<NES::Listing> listing = dynamic_pointer_cast<NES::Listing>(popups.goto_address.listing);
-        if(listing) listing->GoToAddress(address);
-
-        should_close = true;
-    }
-
-    if(should_close || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-        ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::EndPopup();
 }
 
 void MyApp::LoadProjectPopup()

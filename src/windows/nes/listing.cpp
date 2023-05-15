@@ -35,7 +35,6 @@ Listing::Listing()
     SetNav(false); // disable navigation
     
     // create internal signals
-    listing_command = make_shared<listing_command_t>();
 
     if(auto system = (MyApp::Instance()->GetProject()->GetSystem<System>())) {
         // grab a weak_ptr so we don't have to continually use dynamic_pointer_cast
@@ -200,28 +199,68 @@ void Listing::CheckInput()
             system->MarkMemoryAsWords(current_selection, 2);
             break;
 
-        case L'l': // create a label
-            listing_command->emit(shared_from_this(), "CreateLabel", current_selection);
+        case L'l': // create or edit a label
+        {
+            auto labels = system->GetLabelsAt(current_selection);
+            if(labels.size()) {
+                int nth = 0;
+                popups.create_label.buf = labels.at(nth)->GetString();
+                popups.create_label.edit = nth;
+            } else {
+                popups.create_label.buf = "";
+                popups.create_label.edit  = -1;
+            }
+
+            popups.create_label.show = true;
+            popups.create_label.title = "Create new label";
+            popups.create_label.where = current_selection;
             break;
+        }
 
         case L';': // edit EOL comment
-            listing_command->emit(shared_from_this(), "EditEOLComment", current_selection);
+        {
+            popups.edit_comment.title = "Edit EOL comment";
+            popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_EOL;
+            popups.edit_comment.show  = true;
+            popups.edit_comment.where = current_selection;
+            system->GetComment(current_selection, popups.edit_comment.type, popups.edit_comment.buf);
             break;
+        }
 
         case L':': // edit pre comment
-            listing_command->emit(shared_from_this(), "EditPreComment", current_selection);
+        {
+            popups.edit_comment.title = "Edit pre-comment";
+            popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_PRE;
+            popups.edit_comment.show  = true;
+            popups.edit_comment.where = current_selection;
+            system->GetComment(current_selection, popups.edit_comment.type, popups.edit_comment.buf);
             break;
+        }
 
         case L'o': // edit post comment
-            listing_command->emit(shared_from_this(), "EditPostComment", current_selection);
+        {
+            popups.edit_comment.title = "Edit post-comment";
+            popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_POST;
+            popups.edit_comment.show  = true;
+            popups.edit_comment.where = current_selection;
+            system->GetComment(current_selection, popups.edit_comment.type, popups.edit_comment.buf);
             break;
+        }
 
         case L'd': // start disassembly
-            listing_command->emit(shared_from_this(), "DisassemblyRequested", current_selection);
+        {
+            if(!popups.disassembly.thread) { // should never happen
+                system->InitDisassembly(current_selection);
+                popups.disassembly.thread = make_unique<std::thread>(std::bind(&System::DisassemblyThread, system));
+                popups.disassembly.show = true;
+                cout << "[Listing::CheckInput] started disassembly thread" << endl;
+            }
             break;
+        }
 
         case L'g': // go to address
-            listing_command->emit(shared_from_this(), "GoToAddress", current_selection);
+            popups.goto_address.show = true;
+            popups.goto_address.buf = "";
             break;
 
         case L'p': // create pointer at cursor (apply a label to the address pointed by the word at this location)
@@ -302,6 +341,7 @@ void Listing::CheckInput()
     if(ImGui::IsKeyDown(ImGuiKey_Tab) && !(io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper)) {
         jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
     }
+    
 }
 
 void Listing::RenderContent() 
@@ -404,6 +444,72 @@ void Listing::RenderContent()
     }
 
     ImGui::PopStyleVar(2);
+
+    RenderPopups();
+}
+
+void Listing::RenderPopups() 
+{
+    int ret;
+
+    auto system = current_system.lock();
+    if(!system) return;
+
+    if(popups.create_label.show 
+            && (ret = MyApp::Instance()->InputNamePopup(popups.create_label.title, "Label", &popups.create_label.buf)) != 0) {
+        if(ret > 0) {
+            if(popups.create_label.buf.size() > 0) {
+                //TODO verify valid label (no spaces, etc)
+                // dialog was OK'd
+                if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || popups.create_label.edit == -1) {
+                    // add the label
+                    system->CreateLabel(popups.create_label.where, popups.create_label.buf, true);
+                } else {
+                    // replace the label
+                    system->EditLabel(popups.create_label.where, popups.create_label.buf, 0, true);
+                }
+            }
+        }
+        popups.create_label.show = false;
+    }
+
+    if(popups.disassembly.show
+            && (ret = MyApp::Instance()->WaitPopup(popups.disassembly.title, "Disassembling...", !system->IsDisassembling())) != 0) {
+        if(popups.disassembly.thread) {
+            popups.disassembly.thread->join();
+            popups.disassembly.thread = nullptr;
+            cout << "[Listing::DisassemblyPopup] disassembly thread exited" << endl;
+        }
+        popups.disassembly.show = false;
+    }
+
+    if(popups.edit_comment.show 
+            && (ret = MyApp::Instance()->InputMultilinePopup(popups.edit_comment.title, "Comment", &popups.edit_comment.buf)) != 0) {
+        if(ret > 0) {
+            if(popups.edit_comment.buf.size() > 0) {
+                system->SetComment(popups.edit_comment.where, popups.edit_comment.type, popups.edit_comment.buf);
+            } else {
+                cout << "TODO: delete comment";
+            }
+        }
+        popups.edit_comment.show = false;
+    }
+
+    if(popups.goto_address.show 
+            && (ret = MyApp::Instance()->InputHexPopup(popups.goto_address.title, "Address (hex)", &popups.goto_address.buf)) != 0) {
+        if(ret > 0) {
+            if(popups.goto_address.buf.size() > 0) {
+                // parse the address given (TODO verify it's valid?)
+                stringstream ss;
+                ss << hex << popups.goto_address.buf;
+                u32 address;
+                ss >> address;
+                
+                GoToAddress(address);
+            }
+        }
+        popups.goto_address.show = false;
+    }
 }
 
 void Listing::LabelCreated(shared_ptr<Label> const& label, bool was_user_created)
