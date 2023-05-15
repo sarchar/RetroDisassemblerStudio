@@ -51,6 +51,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE "src/")
 target_include_directories(${PROJECT_NAME} PRIVATE "${PROJECT_BINARY_DIR}")
 target_include_directories(${PROJECT_NAME} PRIVATE "libs/imgui/")
 target_include_directories(${PROJECT_NAME} PRIVATE "libs/imgui/backends")
+target_include_directories(${PROJECT_NAME} PRIVATE "libs/imgui/misc/cpp")
 target_include_directories(${PROJECT_NAME} PRIVATE "libs/ImGuiFileDialog")
 
 target_link_libraries(${PROJECT_NAME} glfw gl3w)

@@ -22,6 +22,7 @@ public:
 
     void GoToAddress(GlobalMemoryLocation const&);
     void GoToAddress(u32);
+    void Follow();
 
     // signals
     // listing_command is used to trigger events that are not immediate - things like opening popups or asking the user
@@ -51,6 +52,8 @@ private:
 
     int    jump_to_selection    = 0;
     char   new_label_buffer[64] = "";
+
+    bool   editing = false;
 
     // signal connections
     System::label_created_t::signal_connection_t label_created_connection;

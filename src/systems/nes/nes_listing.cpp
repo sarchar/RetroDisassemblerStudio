@@ -6,6 +6,7 @@
 
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "imgui_stdlib.h"
 
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_label.h"
@@ -21,7 +22,7 @@ namespace NES {
 
 unsigned long ListingItem::common_inner_table_flags = ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_Resizable;
 
-void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
+void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -37,7 +38,7 @@ void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryL
     }
 }
 
-void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
+void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -56,7 +57,7 @@ void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemor
     }
 }
 
-void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
+void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -103,7 +104,7 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
     }
 }
 
-void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
+void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -129,7 +130,7 @@ void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemo
     }
 }
 
-void ListingItemPostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
+void ListingItemPostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -157,7 +158,7 @@ void ListingItemPostComment::RenderContent(shared_ptr<System>& system, GlobalMem
 
 
 
-void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
+void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -168,8 +169,6 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
     if(auto memory_object = system->GetMemoryObject(where)) {
         auto disassembler = system->GetDisassembler();
 
-        u8 op = memory_object->code.opcode;
-        u8 sz = disassembler->GetInstructionSize(op);
         if(ImGui::BeginTable("listing_item_code", 5, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
             ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
             ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
@@ -183,14 +182,19 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200));
             ImGui::Text("$%02X:0x%04X", where.prg_rom_bank, where.address);
 
-            ImGui::TableNextColumn();
-            // nothing
+            ImGui::TableNextColumn(); // spacing
     
             ImGui::TableNextColumn();
             ImGui::Text("%s", memory_object->FormatInstructionField(disassembler).c_str());
 
             ImGui::TableNextColumn();
-            ImGui::Text("%s", memory_object->FormatOperandField(0, disassembler).c_str());
+            if(editing) {
+                //InputText(const char* label, std::string* str, ImGuiInputTextFlags flags = 0, ImGuiInputTextCallback callback = nullptr, void* user_data = nullptr);
+                ImGui::InputText("", &line_content);
+            } else {
+                line_content = memory_object->FormatOperandField(0, disassembler);
+                ImGui::Text("%s", line_content.c_str());
+            }
 
             ImGui::TableNextColumn();
             string eolcomment;
@@ -203,7 +207,7 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
 }
 
 
-void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags)
+void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool editing)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {

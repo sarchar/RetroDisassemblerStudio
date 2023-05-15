@@ -62,6 +62,25 @@ Listing::~Listing()
 {
 }
 
+// Try following the operand parameter to its destination
+// TODO this should be way more complicated, parsing operand expression and all
+// TODO actually, can't we just evaluate the operand expression?
+void Listing::Follow()
+{
+    if(auto system = current_system.lock()) {
+        if(auto memory_object = system->GetMemoryObject(current_selection)) {
+            u16 dest = 0;
+            if(memory_object->type == MemoryObject::TYPE_CODE) {
+                dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
+            } else if(memory_object->type == MemoryObject::TYPE_WORD) {
+                dest = memory_object->hval;
+            }
+
+            GoToAddress(dest);
+        }
+    }
+}
+
 void Listing::GoToAddress(GlobalMemoryLocation const& address)
 {
     selection_history_back.push(current_selection); // save the current location to the history
@@ -154,6 +173,10 @@ void Listing::CheckInput()
         if(auto memory_object = system->GetMemoryObject(current_selection)) {
             current_selection = current_selection + memory_object->GetSize();
         }
+    }
+
+    if(ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+        editing = true;
     }
 
     for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
@@ -266,21 +289,7 @@ void Listing::CheckInput()
 
         case L'F': // very hacky (F)ollow address button
         {
-            // TODO this should be way more complicated, parsing operand types and all
-            auto memory_region = system->GetMemoryRegion(current_selection);
-            if(memory_region) {
-                auto memory_object = memory_region->GetMemoryObject(current_selection);
-                if(memory_object) {
-                    u16 dest = 0;
-                    if(memory_object->type == MemoryObject::TYPE_CODE) {
-                        dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
-                    } else if(memory_object->type == MemoryObject::TYPE_WORD) {
-                        dest = memory_object->hval;
-                    }
-
-                    GoToAddress(dest);
-                }
-            }
+            Follow();
             break;
         }
 
@@ -371,10 +380,16 @@ void Listing::RenderContent()
                     if (ImGui::Selectable(buf, selected_row, selectable_flags)) {
                         current_selection = current_address;
                     }
+
+                    // do follow on double click
+                    if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                        Follow();
+                    }
+
                     ImGui::SameLine();
                 }
 
-                listing_item->RenderContent(system, current_address, adjust_columns);
+                listing_item->RenderContent(system, current_address, adjust_columns, editing && selected_row);
 
                 // Only after the row has been rendered and it was the last element in the table,
                 // we can use ScrollToItem() to get the item focused in the middle of the view.

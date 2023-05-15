@@ -18,7 +18,7 @@ public:
     ListingItem() {}
     virtual ~ListingItem() {}
 
-    virtual void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) = 0;
+    virtual void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) = 0;
 
 protected:
 };
@@ -30,7 +30,7 @@ public:
     { }
     virtual ~ListingItemUnknown() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
 };
 
 class ListingItemBlankLine : public ListingItem {
@@ -40,7 +40,7 @@ public:
     { }
     virtual ~ListingItemBlankLine() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
 };
 
 class ListingItemData : public ListingItem {
@@ -50,7 +50,7 @@ public:
     { }
     virtual ~ListingItemData() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
 
 private:
     u32 internal_offset;
@@ -63,7 +63,7 @@ public:
     { }
     virtual ~ListingItemPreComment() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
 private:
     int line;
 };
@@ -75,7 +75,7 @@ public:
     { }
     virtual ~ListingItemPostComment() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
 private:
     int line;
 };
@@ -87,10 +87,11 @@ public:
     { }
     virtual ~ListingItemCode() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
 
 private:
     int line;
+    std::string line_content;
 };
 
 class ListingItemLabel : public ListingItem {
@@ -100,7 +101,7 @@ public:
     { }
     virtual ~ListingItemLabel() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
 
 private:
     std::shared_ptr<Label> const& label;

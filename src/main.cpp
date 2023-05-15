@@ -13,7 +13,7 @@
 
 #include "imgui.h"
 #include "imgui_internal.h"
-#include "misc/cpp/imgui_stdlib.h"
+#include "imgui_stdlib.h"
 
 #define USE_IMGUI_TABLES
 #include "ImGuiFileDialog.h"
