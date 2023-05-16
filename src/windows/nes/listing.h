@@ -43,6 +43,7 @@ private:
     std::weak_ptr<System>            current_system;
     GlobalMemoryLocation             current_selection;
     int                              current_selection_listing_item;
+    int                              hovered_listing_item_index;
     std::stack<GlobalMemoryLocation> selection_history_back;
     std::stack<GlobalMemoryLocation> selection_history_forward;
 

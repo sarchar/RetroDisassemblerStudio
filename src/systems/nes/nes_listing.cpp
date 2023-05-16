@@ -24,7 +24,7 @@ namespace NES {
 
 unsigned long ListingItem::common_inner_table_flags = ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_Resizable;
 
-void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
+void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -40,7 +40,7 @@ void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryL
     }
 }
 
-void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
+void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -59,7 +59,7 @@ void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemor
     }
 }
 
-void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
+void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -77,7 +77,7 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         ImGui::TableNextRow();
     
         ImGui::TableNextColumn();
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200));
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200, (selected || hovered) ? 128 : 255));
         ImGui::Text("$%02X:0x%04X", where.prg_rom_bank, where.address);
 
         ImGui::TableNextColumn(); // spacing
@@ -125,7 +125,7 @@ bool ListingItemData::IsEditing() const
     return false;
 }
 
-void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
+void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -160,7 +160,7 @@ bool ListingItemPreComment::IsEditing() const
     return false;
 }
 
-void ListingItemPostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
+void ListingItemPostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -191,7 +191,7 @@ bool ListingItemPostComment::IsEditing() const
     return false;
 }
 
-void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
+void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -229,7 +229,7 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         ImGui::TableNextRow();
     
         ImGui::TableNextColumn();
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200));
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200, (selected || hovered) ? 128 : 255));
         ImGui::Text("$%02X:0x%04X", where.prg_rom_bank, where.address);
 
         ImGui::TableNextColumn(); // spacing
@@ -262,10 +262,13 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
             if(parse_operand_expression && ParseOperandExpression(system, where)) {
                 edit_mode = EDIT_NONE;
             }
+
+            // when editing, we want this column to take the rest of the row
+            goto end_table;
         } else {
             string operand = memory_object->FormatOperandField(0, disassembler);
             ImGui::Text("%s", operand.c_str());
-            if(ImGui::IsMouseDoubleClicked(0)) { // edit on double click
+            if(hovered && ImGui::IsMouseDoubleClicked(0)) { // edit on double click
                 EditOperandExpression(system, where);
             }
         }
@@ -285,7 +288,7 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
             system->GetComment(where, MemoryObject::COMMENT_TYPE_EOL, eol_comment); // TODO multiline
             if(eol_comment.size()) {
                 ImGui::Text("; %s", eol_comment.c_str());
-                if(ImGui::IsMouseDoubleClicked(0)) { // edit on double click
+                if(hovered && ImGui::IsMouseDoubleClicked(0)) { // edit on double click
                     edit_buffer = eol_comment;
                     edit_mode = EDIT_EOL_COMMENT;
                     started_editing = true;
@@ -293,6 +296,7 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
             }
         }
 
+end_table:
         ImGui::EndTable();
     }
 }
@@ -355,7 +359,7 @@ bool ListingItemCode::IsEditing() const
     return edit_mode != EDIT_NONE;
 }
 
-void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
+void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {

@@ -32,7 +32,7 @@ Listing::Listing()
     : BaseWindow("NES::Listing"), current_selection_listing_item(0)
 {
     SetTitle("Listing");
-    SetNav(false); // disable navigation
+    //SetNav(false); // disable navigation
     
     // create internal signals
 
@@ -429,33 +429,33 @@ void Listing::RenderContent()
 
                 //cout << "row = 0x" << row << " current_address.address = 0x" << hex << current_address.address << endl;
 
-                // selected_row will tell the listing item if it should check inputs
-                bool selected_row = (listing_item_index == row);
+                // selected and hovered let the listing item know how to behave wrt to inputs
+                bool selected = (listing_item_index == row);
+                bool hovered  = (hovered_listing_item_index == row);
 
                 // Begin a new row and next column
                 ImGui::TableNextRow();
-                ImGui::TableNextColumn();
 
-                // Create the hidden selectable item
-                {
-                    ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
-                    char buf[32];
-                    sprintf(buf, "##selectable_row%d", row);
-                    if (ImGui::Selectable(buf, selected_row, selectable_flags)) {
+                // set the background color
+                ImU32 const row_color = ImGui::GetColorU32(hovered ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
+                if(selected || hovered) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, row_color);
+
+                ImGui::TableNextColumn(); // start the content of the listing item
+                listing_item->RenderContent(system, current_address, adjust_columns, selected, hovered); // render the content
+
+                // if the item has determined to be editing something, take note
+                if(listing_item->IsEditing()) editing_listing_item = true;
+
+                // update the currently hovered and selected row
+                if(ImGui::IsItemHovered()) {
+                    hovered_listing_item_index = row;
+
+                    // if the mouse was clicked on this row, change the selection as well
+                    if(ImGui::IsMouseClicked(0)) {
                         current_selection = current_address;
                         current_selection_listing_item = listing_item_iterator->GetListingItemIndex();
                     }
-
-                    // do follow on double click
-                    //!if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                    //!    Follow();
-                    //!}
-
-                    ImGui::SameLine();
                 }
-
-                listing_item->RenderContent(system, current_address, adjust_columns, selected_row);
-                if(listing_item->IsEditing()) editing_listing_item = true;
 
                 // Only after the row has been rendered and it was the last element in the table,
                 // we can use ScrollToItem() to get the item focused in the middle of the view.
