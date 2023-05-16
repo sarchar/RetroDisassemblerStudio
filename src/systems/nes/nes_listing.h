@@ -19,6 +19,7 @@ public:
     virtual ~ListingItem() {}
 
     virtual void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) = 0;
+    virtual bool IsEditing() const = 0;
 
 protected:
 };
@@ -31,6 +32,7 @@ public:
     virtual ~ListingItemUnknown() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
+    bool IsEditing() const override { return false; }
 };
 
 class ListingItemBlankLine : public ListingItem {
@@ -41,6 +43,7 @@ public:
     virtual ~ListingItemBlankLine() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
+    bool IsEditing() const override { return false; }
 };
 
 class ListingItemData : public ListingItem {
@@ -51,6 +54,7 @@ public:
     virtual ~ListingItemData() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
+    bool IsEditing() const override;
 
 private:
     u32 internal_offset;
@@ -64,6 +68,7 @@ public:
     virtual ~ListingItemPreComment() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
+    bool IsEditing() const override;
 private:
     int line;
 };
@@ -76,6 +81,7 @@ public:
     virtual ~ListingItemPostComment() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
+    bool IsEditing() const override;
 private:
     int line;
 };
@@ -88,7 +94,10 @@ public:
     virtual ~ListingItemCode() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
+
+    void EditOperandExpression(std::shared_ptr<System>&, GlobalMemoryLocation const&);
     bool ParseOperandExpression(std::shared_ptr<System>&, GlobalMemoryLocation const&);
+    bool IsEditing() const override;
 
 private:
     enum {
@@ -114,6 +123,7 @@ public:
     virtual ~ListingItemLabel() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
+    bool IsEditing() const override;
 
 private:
     std::shared_ptr<Label> const& label;

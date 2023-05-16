@@ -183,6 +183,9 @@ void Listing::CheckInput()
     auto system = current_system.lock();
     if(!system) return;
 
+    // don't process keypresses while editing a listing item
+    if(editing_listing_item) return;
+
     // handle back button
     if(ImGui::IsKeyPressed(ImGuiKey_MouseX1) && selection_history_back.size()) {
         selection_history_forward.push(current_selection);
@@ -209,6 +212,10 @@ void Listing::CheckInput()
 
     if(ImGui::IsKeyPressed(ImGuiKey_DownArrow)) MoveSelectionDown();
 
+    if(ImGui::IsKeyDown(ImGuiKey_Tab) && !(io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper)) {
+        jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+    }
+ 
     for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
         ImWchar c = io.InputQueueCharacters[i]; 
 
@@ -355,11 +362,7 @@ void Listing::CheckInput()
 
         }
     }
-
-    if(ImGui::IsKeyDown(ImGuiKey_Tab) && !(io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper)) {
-        jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
-    }
-    
+   
 }
 
 void Listing::RenderContent() 
@@ -367,6 +370,9 @@ void Listing::RenderContent()
     // All access goes through the system
     auto system = current_system.lock();
     if(!system) return;
+
+    // reset the editing flag
+    editing_listing_item = false;
 
     {
         bool need_pop = false;
@@ -449,6 +455,7 @@ void Listing::RenderContent()
                 }
 
                 listing_item->RenderContent(system, current_address, adjust_columns, selected_row);
+                if(listing_item->IsEditing()) editing_listing_item = true;
 
                 // Only after the row has been rendered and it was the last element in the table,
                 // we can use ScrollToItem() to get the item focused in the middle of the view.

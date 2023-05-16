@@ -120,6 +120,11 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
     }
 }
 
+bool ListingItemData::IsEditing() const 
+{
+    return false;
+}
+
 void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
@@ -140,14 +145,19 @@ void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemo
         ImGui::TableNextColumn();
         string precomment;
         system->GetComment(where, MemoryObject::COMMENT_TYPE_PRE, precomment); // TODO multiline
-        if(selected) {
-            ImGui::InputTextMultiline("", &precomment, ImVec2(0, 0), 0);
-        } else {
+        //!if(selected) {
+        //!    ImGui::InputTextMultiline("", &precomment, ImVec2(0, 0), 0);
+        //!} else {
             ImGui::Text("; %s", precomment.c_str());
-        }
+        //!}
 
         ImGui::EndTable();
     }
+}
+
+bool ListingItemPreComment::IsEditing() const 
+{
+    return false;
 }
 
 void ListingItemPostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
@@ -176,7 +186,10 @@ void ListingItemPostComment::RenderContent(shared_ptr<System>& system, GlobalMem
     }
 }
 
-
+bool ListingItemPostComment::IsEditing() const 
+{
+    return false;
+}
 
 void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
 {
@@ -196,9 +209,7 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
             edit_mode = EDIT_EOL_COMMENT;
             started_editing = true;
         } else if(ImGui::IsKeyPressed(ImGuiKey_Enter)) { // edit the operand expression
-            edit_buffer = memory_object->FormatOperandField(0, disassembler);
-            edit_mode = EDIT_OPERAND_EXPRESSION;
-            started_editing = true;
+            EditOperandExpression(system, where);
         }
     } 
 
@@ -255,9 +266,7 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
             string operand = memory_object->FormatOperandField(0, disassembler);
             ImGui::Text("%s", operand.c_str());
             if(ImGui::IsMouseDoubleClicked(0)) { // edit on double click
-                edit_buffer = operand;
-                edit_mode = EDIT_OPERAND_EXPRESSION;
-                started_editing = true;
+                EditOperandExpression(system, where);
             }
         }
 
@@ -285,6 +294,24 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         }
 
         ImGui::EndTable();
+    }
+}
+
+void ListingItemCode::EditOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
+{
+    auto disassembler = system->GetDisassembler();
+    if(auto memory_object = system->GetMemoryObject(where)) {
+        switch(disassembler->GetAddressingMode(memory_object->code.opcode)) {
+        case AM_IMPLIED:
+        case AM_ACCUM:
+            break;
+
+        default:
+            edit_buffer = memory_object->FormatOperandField(0, disassembler);
+            edit_mode = EDIT_OPERAND_EXPRESSION;
+            started_editing = true;
+            break;
+        }
     }
 }
 
@@ -321,6 +348,11 @@ bool ListingItemCode::ParseOperandExpression(shared_ptr<System>& system, GlobalM
     }
 
     return false;
+}
+
+bool ListingItemCode::IsEditing() const 
+{
+    return edit_mode != EDIT_NONE;
 }
 
 void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
@@ -377,6 +409,11 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
     
         ImGui::EndTable();
     }
+}
+
+bool ListingItemLabel::IsEditing() const 
+{
+    return editing;
 }
 
 
