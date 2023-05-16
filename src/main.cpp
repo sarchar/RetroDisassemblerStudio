@@ -528,14 +528,16 @@ void MyApp::RenderMainMenuBar()
 				auto node_creator =	Expression().GetNodeCreator();
                 shared_ptr<ExpressionHelper> helper = make_shared<ExpressionHelper>(node_creator);
 
-                make_shared<Expression>()->Set(string("1+2"));
-                make_shared<Expression>()->Set(string("1 + 2"));
-                make_shared<Expression>()->Set(string("3 * (1 + -5)"));
-                make_shared<Expression>()->Set(string("Function(%0010 | $10) << 5"));
+                string errmsg;
+                int errloc;
+                make_shared<Expression>()->Set(string("1+2"), errmsg, errloc);
+                make_shared<Expression>()->Set(string("1 + 2"), errmsg, errloc);
+                make_shared<Expression>()->Set(string("3 * (1 + -5)"), errmsg, errloc);
+                make_shared<Expression>()->Set(string("Function(%0010 | $10) << 5"), errmsg, errloc);
 
                 // and an expression that goes through all the nodes:
                 auto expr = make_shared<Expression>();
-                expr->Set(string("~(+5 << 2 + -20 | $20 * 2 ^ %1010 / 2 & 200 >> (3 + !0) - 10 **3), Func(two, 3)"));
+                expr->Set(string("~(+5 << 2 + -20 | $20 * 2 ^ %1010 / 2 & 200 >> (3 + !0) - 10 **3), Func(two, 3)"), errmsg, errloc);
 
                 // evaluate that first element
                 if(auto list = dynamic_pointer_cast<BaseExpressionNodes::ExpressionList>(expr->GetRoot())) {
@@ -547,6 +549,11 @@ void MyApp::RenderMainMenuBar()
                         cout << "evaluation failed" << endl;
                     }
                 }
+
+                // make some expression errors
+                make_shared<Expression>()->Set(string("Function(3(5))"), errmsg, errloc);
+                make_shared<Expression>()->Set(string("1 + ?5"), errmsg, errloc);
+                make_shared<Expression>()->Set(string("/35"), errmsg, errloc);
             }
             ImGui::EndMenu();
         }

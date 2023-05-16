@@ -24,7 +24,7 @@ public:
     };
 
     Tenderizer(istream& _input_stream)
-        : input_stream(_input_stream), current_meat(Meat::_HUNGRY)
+        : input_stream(_input_stream), current_meat(Meat::_HUNGRY), location(0)
     {
         Gobble();
     }
@@ -32,6 +32,7 @@ public:
     Meat GetCurrentMeat() const { return current_meat; }
     string GetDisplayText() const { return display_text.str(); }
     string GetMeatText() const { return meat_text.str(); }
+    int GetLocation() const { return location; }
 
     bool Errored() const { return current_meat == Meat::YUCKY; }
     bool Finished() const { return Errored() || current_meat == Meat::END; }
@@ -42,6 +43,7 @@ public:
     {
         char c = input_stream.get();
         display_text << c;
+        location++;
         return c;
     }
 
@@ -160,6 +162,7 @@ private:
     stringstream display_text;
     stringstream meat_text;
     Meat         current_meat;
+    int          location;
 };
 
 std::vector<std::shared_ptr<BaseExpressionNodeCreator::BaseExpressionNodeInfo>> BaseExpressionNodeCreator::expression_nodes;
@@ -264,11 +267,15 @@ BaseExpression::~BaseExpression()
 }
 
 // Parse the expression in 's' and set it to the root node
-void BaseExpression::Set(std::string const& s, bool start_list)
+bool BaseExpression::Set(std::string const& s, std::string& errmsg, int& errloc, bool start_list)
 {
+    errmsg = "";
+    errloc = 0;
+
     istringstream iss{s};
     shared_ptr<Tenderizer> tenderizer = make_shared<Tenderizer>(iss);
 
+#if 0 // testing
     cout << "meal: " << s << endl;
     while(!tenderizer->Finished()) {
         auto m = tenderizer->GetCurrentMeat();
@@ -278,13 +285,28 @@ void BaseExpression::Set(std::string const& s, bool start_list)
 
     iss = istringstream{s};
     tenderizer = make_shared<Tenderizer>(iss);
+#endif
+
     auto node_creator = GetNodeCreator();
-    root = start_list ? ParseExpressionList(tenderizer, node_creator) : ParseExpression(tenderizer, node_creator);
+
+    // the user can disable the initial expression list and limit it to a single expression
+    root = start_list ? ParseExpressionList(tenderizer, node_creator, errmsg, errloc) 
+                      : ParseExpression(tenderizer, node_creator, errmsg, errloc);
+
     if(!root) {
-        cout << "could not parse epxression: \"" << s << "\"" << endl;
+        cout << "[BaseExpression::Set] could not parse expression, pos " << dec << (errloc + 1) << ": " << errmsg << endl;
+        cout << "expression -> \"" << s << "\"" << endl;
     }
 
-    cout << "Text reprint: " << *this << endl;
+#ifndef NDEBUG
+    else { // valid root, so make sure it matches our input
+        stringstream ts;
+        ts << *this;
+        assert(ts.str() == s);
+    }
+#endif
+
+    return (bool)root;
 }
  
 // I have to thank Chris French for his excellent guide on writing a simple LL(1) parser. 
@@ -302,11 +324,11 @@ void BaseExpression::Set(std::string const& s, bool start_list)
 // expression_list_tail: COMMA expression expression_list_tail
 //                     | // nothing
 //                     ;
-shared_ptr<BaseExpressionNode> BaseExpression::ParseExpressionList(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+shared_ptr<BaseExpressionNode> BaseExpression::ParseExpressionList(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
     vector<BaseExpressionNodes::BaseExpressionNodeListEntry> list;
 
-    auto expr = ParseExpression(tenderizer, node_creator);
+    auto expr = ParseExpression(tenderizer, node_creator, errmsg, errloc);
     if(!expr) return nullptr;
     list.push_back(BaseExpressionNodes::BaseExpressionNodeListEntry{
         .display = "",
@@ -316,7 +338,7 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseExpressionList(shared_ptr<Te
     while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::COMMA) {
         string display = tenderizer->GetDisplayText();
         tenderizer->Gobble();
-        auto expr = ParseExpression(tenderizer, node_creator);
+        auto expr = ParseExpression(tenderizer, node_creator, errmsg, errloc);
         if(!expr) return nullptr;
         list.push_back(BaseExpressionNodes::BaseExpressionNodeListEntry{
             .display = display,
@@ -334,9 +356,9 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseExpressionList(shared_ptr<Te
 // expression: or_expr
 //           ;
 // 
-shared_ptr<BaseExpressionNode> BaseExpression::ParseExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+shared_ptr<BaseExpressionNode> BaseExpression::ParseExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
-    return ParseOrExpression(tenderizer, node_creator);
+    return ParseOrExpression(tenderizer, node_creator, errmsg, errloc);
 }
 
 //TODO make all the Parsers virtual so that a subclass and interject its own precedence inbetween others
@@ -352,18 +374,16 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseExpression(shared_ptr<Tender
 //                | // EMPTY
 //                ;
 //
-shared_ptr<BaseExpressionNode> BaseExpression::ParseOrExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+shared_ptr<BaseExpressionNode> BaseExpression::ParseOrExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
-    auto lhs = ParseXorExpression(tenderizer, node_creator);
+    auto lhs = ParseXorExpression(tenderizer, node_creator, errmsg, errloc);
+    if(!lhs) return nullptr;
 
     while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::PIPE) {
         string display = tenderizer->GetDisplayText();
         tenderizer->Gobble();
-        auto rhs = ParseXorExpression(tenderizer, node_creator);
-        if(!rhs) {
-            return nullptr;
-        }
-
+        auto rhs = ParseXorExpression(tenderizer, node_creator, errmsg, errloc);
+        if(!rhs) return nullptr;
         lhs = node_creator->CreateOrOp(lhs, display, rhs);
     }
 
@@ -379,18 +399,16 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseOrExpression(shared_ptr<Tend
 //                 | // EMPTY
 //                 ;
 // 
-shared_ptr<BaseExpressionNode> BaseExpression::ParseXorExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+shared_ptr<BaseExpressionNode> BaseExpression::ParseXorExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
-    auto lhs = ParseAndExpression(tenderizer, node_creator);
+    auto lhs = ParseAndExpression(tenderizer, node_creator, errmsg, errloc);
+    if(!lhs) return nullptr;
 
     while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::CARET) {
         string display = tenderizer->GetDisplayText();
         tenderizer->Gobble();
-        auto rhs = ParseAndExpression(tenderizer, node_creator);
-        if(!rhs) {
-            return nullptr;
-        }
-
+        auto rhs = ParseAndExpression(tenderizer, node_creator, errmsg, errloc);
+        if(!rhs) return nullptr;
         lhs = node_creator->CreateXorOp(lhs, display, rhs);
     }
 
@@ -406,18 +424,16 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseXorExpression(shared_ptr<Ten
 //                 | // EMPTY
 //                 ;
 // 
-shared_ptr<BaseExpressionNode> BaseExpression::ParseAndExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+shared_ptr<BaseExpressionNode> BaseExpression::ParseAndExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
-    auto lhs = ParseShiftExpression(tenderizer, node_creator);
+    auto lhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+    if(!lhs) return nullptr;
 
     while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::AMPERSAND) {
         string display = tenderizer->GetDisplayText();
         tenderizer->Gobble();
-        auto rhs = ParseShiftExpression(tenderizer, node_creator);
-        if(!rhs) {
-            return nullptr;
-        }
-
+        auto rhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+        if(!rhs) return nullptr;
         lhs = node_creator->CreateAndOp(lhs, display, rhs);
     }
 
@@ -434,9 +450,10 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseAndExpression(shared_ptr<Ten
 //                | // EMPTY
 //                ;
 // 
-shared_ptr<BaseExpressionNode> BaseExpression::ParseShiftExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+shared_ptr<BaseExpressionNode> BaseExpression::ParseShiftExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
-    auto lhs = ParseAddExpression(tenderizer, node_creator);
+    auto lhs = ParseAddExpression(tenderizer, node_creator, errmsg, errloc);
+    if(!lhs) return nullptr;
 
     for(bool done = false; !done;) {
         string display = tenderizer->GetDisplayText();
@@ -444,10 +461,8 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseShiftExpression(shared_ptr<T
         case Tenderizer::Meat::LSHIFT:
         {
             tenderizer->Gobble();
-            auto rhs = ParseAddExpression(tenderizer, node_creator);
-            if(!rhs) {
-                return nullptr;
-            }
+            auto rhs = ParseAddExpression(tenderizer, node_creator, errmsg, errloc);
+            if(!rhs) return nullptr;
             lhs = node_creator->CreateLShiftOp(lhs, display, rhs);
             break;
         }
@@ -455,10 +470,8 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseShiftExpression(shared_ptr<T
         case Tenderizer::Meat::RSHIFT:
         {
             tenderizer->Gobble();
-            auto rhs = ParseAddExpression(tenderizer, node_creator);
-            if(!rhs) {
-                return nullptr;
-            }
+            auto rhs = ParseAddExpression(tenderizer, node_creator, errmsg, errloc);
+            if(!rhs) return nullptr;
             lhs = node_creator->CreateRShiftOp(lhs, display, rhs);
             break;
         }
@@ -483,9 +496,10 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseShiftExpression(shared_ptr<T
 //              | // EMPTY
 //              ;
 //
-shared_ptr<BaseExpressionNode> BaseExpression::ParseAddExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+shared_ptr<BaseExpressionNode> BaseExpression::ParseAddExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
-    auto lhs = ParseMulExpression(tenderizer, node_creator);
+    auto lhs = ParseMulExpression(tenderizer, node_creator, errmsg, errloc);
+    if(!lhs) return nullptr;
 
     for(bool done = false; !done;) {
         string display = tenderizer->GetDisplayText();
@@ -493,10 +507,8 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseAddExpression(shared_ptr<Ten
         case Tenderizer::Meat::PLUS:
         {
             tenderizer->Gobble();
-            auto rhs = ParseMulExpression(tenderizer, node_creator);
-            if(!rhs) {
-                return nullptr;
-            }
+            auto rhs = ParseMulExpression(tenderizer, node_creator, errmsg, errloc);
+            if(!rhs) return nullptr;
             lhs = node_creator->CreateAddOp(lhs, display, rhs);
             break;
         }
@@ -504,10 +516,8 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseAddExpression(shared_ptr<Ten
         case Tenderizer::Meat::MINUS:
         {
             tenderizer->Gobble();
-            auto rhs = ParseMulExpression(tenderizer, node_creator);
-            if(!rhs) {
-                return nullptr;
-            }
+            auto rhs = ParseMulExpression(tenderizer, node_creator, errmsg, errloc);
+            if(!rhs) return nullptr;
             lhs = node_creator->CreateSubtractOp(lhs, display, rhs);
             break;
         }
@@ -535,9 +545,10 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseAddExpression(shared_ptr<Ten
 //
 // TODO may want a modulo operator but might need to use the word MOD since '%' is gobbled by binary numbers like %0101_1001
 //
-shared_ptr<BaseExpressionNode> BaseExpression::ParseMulExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+shared_ptr<BaseExpressionNode> BaseExpression::ParseMulExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
-    auto lhs = ParsePowerExpression(tenderizer, node_creator);
+    auto lhs = ParsePowerExpression(tenderizer, node_creator, errmsg, errloc);
+    if(!lhs) return nullptr;
 
     for(bool done = false; !done;) {
         string display = tenderizer->GetDisplayText();
@@ -545,10 +556,8 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseMulExpression(shared_ptr<Ten
         case Tenderizer::Meat::ASTERISK:
         {
             tenderizer->Gobble();
-            auto rhs = ParsePowerExpression(tenderizer, node_creator);
-            if(!rhs) {
-                return nullptr;
-            }
+            auto rhs = ParsePowerExpression(tenderizer, node_creator, errmsg, errloc);
+            if(!rhs) return nullptr;
             lhs = node_creator->CreateMultiplyOp(lhs, display, rhs);
             break;
         }
@@ -556,10 +565,8 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseMulExpression(shared_ptr<Ten
         case Tenderizer::Meat::SLASH:
         {
             tenderizer->Gobble();
-            auto rhs = ParsePowerExpression(tenderizer, node_creator);
-            if(!rhs) {
-                return nullptr;
-            }
+            auto rhs = ParsePowerExpression(tenderizer, node_creator, errmsg, errloc);
+            if(!rhs) return nullptr;
             lhs = node_creator->CreateDivideOp(lhs, display, rhs);
             break;
         }
@@ -581,17 +588,16 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseMulExpression(shared_ptr<Ten
 //                | // EMPTY
 //                ;
 // 
-shared_ptr<BaseExpressionNode> BaseExpression::ParsePowerExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+shared_ptr<BaseExpressionNode> BaseExpression::ParsePowerExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
-    auto lhs = ParseUnaryExpression(tenderizer, node_creator);
+    auto lhs = ParseUnaryExpression(tenderizer, node_creator, errmsg, errloc);
+    if(!lhs) return nullptr;
 
     while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::POWER) {
         string display = tenderizer->GetDisplayText();
         tenderizer->Gobble();
-        auto rhs = ParseUnaryExpression(tenderizer, node_creator);
-        if(!rhs) {
-            return nullptr;
-        }
+        auto rhs = ParseUnaryExpression(tenderizer, node_creator, errmsg, errloc);
+        if(!rhs) return nullptr;
         lhs = node_creator->CreatePowerOp(lhs, display, rhs);
     }
 
@@ -606,52 +612,44 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParsePowerExpression(shared_ptr<T
 //     |        BANG primary
 //     |        primary
 //     ;
-shared_ptr<BaseExpressionNode> BaseExpression::ParseUnaryExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+shared_ptr<BaseExpressionNode> BaseExpression::ParseUnaryExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
     string display = tenderizer->GetDisplayText();
     switch(tenderizer->GetCurrentMeat()) {
     case Tenderizer::Meat::PLUS:
     {
         tenderizer->Gobble();
-        auto rhs = ParsePrimaryExpression(tenderizer, node_creator);
-        if(!rhs) {
-            return nullptr;
-        }
+        auto rhs = ParsePrimaryExpression(tenderizer, node_creator, errmsg, errloc);
+        if(!rhs) return nullptr;
         return node_creator->CreatePositiveOp(display, rhs);
     }
 
     case Tenderizer::Meat::MINUS:
     {
         tenderizer->Gobble();
-        auto rhs = ParsePrimaryExpression(tenderizer, node_creator);
-        if(!rhs) {
-            return nullptr;
-        }
+        auto rhs = ParsePrimaryExpression(tenderizer, node_creator, errmsg, errloc);
+        if(!rhs) return nullptr;
         return node_creator->CreateNegateOp(display, rhs);
     }
 
     case Tenderizer::Meat::TILDE:
     {
         tenderizer->Gobble();
-        auto rhs = ParsePrimaryExpression(tenderizer, node_creator);
-        if(!rhs) {
-            return nullptr;
-        }
+        auto rhs = ParsePrimaryExpression(tenderizer, node_creator, errmsg, errloc);
+        if(!rhs) return nullptr;
         return node_creator->CreateBinaryNotOp(display, rhs);
     }
 
     case Tenderizer::Meat::BANG:
     {
         tenderizer->Gobble();
-        auto rhs = ParsePrimaryExpression(tenderizer, node_creator);
-        if(!rhs) {
-            return nullptr;
-        }
+        auto rhs = ParsePrimaryExpression(tenderizer, node_creator, errmsg, errloc);
+        if(!rhs) return nullptr;
         return node_creator->CreateLogicalNotOp(display, rhs);
     }
 
     default:
-        return ParsePrimaryExpression(tenderizer, node_creator);
+        return ParsePrimaryExpression(tenderizer, node_creator, errmsg, errloc);
     }
 }
 
@@ -662,7 +660,7 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseUnaryExpression(shared_ptr<T
 //        | LPAREN expression RPAREN
 //        ;
 //
-shared_ptr<BaseExpressionNode> BaseExpression::ParsePrimaryExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+shared_ptr<BaseExpressionNode> BaseExpression::ParsePrimaryExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
     string display = tenderizer->GetDisplayText();
     switch(tenderizer->GetCurrentMeat()) {
@@ -674,14 +672,14 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParsePrimaryExpression(shared_ptr
         if(tenderizer->GetCurrentMeat() == Tenderizer::Meat::LPAREN) { // optional function call
             string lp_display = tenderizer->GetDisplayText();
             tenderizer->Gobble();
-            auto args = ParseExpressionList(tenderizer, node_creator);
+            auto args = ParseExpressionList(tenderizer, node_creator, errmsg, errloc);
 
             if(tenderizer->GetCurrentMeat() == Tenderizer::Meat::RPAREN) {
                 string rp_display = tenderizer->GetDisplayText();
                 tenderizer->Gobble();
                 return node_creator->CreateFunctionCall(display, name, lp_display, args, rp_display);
             } else {
-                return nullptr;
+                goto invalid_token;
             }
         }
 
@@ -709,31 +707,40 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParsePrimaryExpression(shared_ptr
         char* endptr;
         s64 val = strtoll(numptr, &endptr, base);
         if(*endptr != '\0') {
-            cout << "invalid constant: " << num << endl;
+            stringstream ss;
+            ss << "Invalid constant `" << tenderizer->GetMeatText() << "` (written \"" << tenderizer->GetDisplayText() << "\")";
+            errmsg = ss.str();
+            errloc = tenderizer->GetLocation();
             return nullptr;
         }
+
         return node_creator->CreateConstant(val, display);
     }
 
     case Tenderizer::Meat::LPAREN:
     {
         tenderizer->Gobble();
-        auto value = ParseExpression(tenderizer, node_creator);
+        auto value = ParseExpression(tenderizer, node_creator, errmsg, errloc);
 
         if(tenderizer->GetCurrentMeat() == Tenderizer::Meat::RPAREN) {
             string rp_display = tenderizer->GetDisplayText();
             tenderizer->Gobble();
             return node_creator->CreateParens(display, value, rp_display);
         } else {
-            return nullptr;
+            goto invalid_token;
         }
     }
 
     default:
-        // any other token at this point is invalid
-        cout << "invalid token encountered: " << magic_enum::enum_name(tenderizer->GetCurrentMeat()) << endl;
-        return nullptr;
+        break;
     }
+
+invalid_token:
+    stringstream ss;
+    ss << "Unexpected token `" << magic_enum::enum_name(tenderizer->GetCurrentMeat()) << "` (written \"" << tenderizer->GetDisplayText() << "\")";
+    errmsg = ss.str();
+    errloc = tenderizer->GetLocation();
+    return nullptr;
 }
 
 std::ostream& operator<<(std::ostream& stream, BaseExpression const& e)
