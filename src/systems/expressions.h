@@ -11,6 +11,81 @@
 
 #include "util.h"
 
+class Tenderizer {
+public:
+    enum class Meat {
+        _HUNGRY,   // init state
+        YUCKY,     // invalid token
+        NAME, CONSTANT,
+        PLUS, MINUS, BANG,
+        ASTERISK, SLASH,
+        LSHIFT, RSHIFT,
+        CARET, PIPE, AMPERSAND, TILDE,
+        POWER,
+        LANGLE, RANGLE,
+        LPAREN, RPAREN,
+        COMMA,
+        HASH,
+        END        // end of tile
+    };
+
+    Tenderizer(std::istream&);
+
+    Meat GetCurrentMeat() const { return current_meat; }
+    std::string GetDisplayText() const { return display_text.str(); }
+    std::string GetMeatText() const { return meat_text.str(); }
+    int GetLocation() const { return location; }
+
+    bool Errored() const { return current_meat == Meat::YUCKY; }
+    bool Finished() const { return Errored() || current_meat == Meat::END; }
+
+
+    // Bite whatever's on the ground
+    inline char Bite()
+    {
+        char c = input_stream.get();
+        display_text << c;
+        location++;
+        return c;
+    }
+
+    // Peck at the floor until we find food
+    inline char Peck()
+    {
+        char c;
+        do {
+            c = Bite();
+        } while(c == ' ' || c == '\t');
+        return c;
+    }
+
+    // Look, but don't peck
+    inline char Look()
+    {
+        return input_stream.peek();
+    }
+
+    // Mmmm keep biting for a while
+    inline void Satisfied()
+    {
+        char c = Look();
+        while(c == ' ' || c == '\t') {
+            Bite();
+            c = Look();
+        }
+    }
+
+    void Gobble(); // gobble, gobble
+
+private:
+    std::istream&     input_stream;
+    std::stringstream display_text;
+    std::stringstream meat_text;
+    Meat              current_meat;
+    int               location;
+};
+
+
 namespace BaseExpressionNodes {
     class Name;
 }

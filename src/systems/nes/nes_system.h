@@ -16,6 +16,7 @@ namespace NES {
 
 class Cartridge;
 class Disassembler;
+class Expression;
 class Label;
 class ProgramRomBank;
 
@@ -46,6 +47,7 @@ public:
 
     void MarkMemoryAsUndefined(GlobalMemoryLocation const&);
     void MarkMemoryAsWords(GlobalMemoryLocation const&, u32 byte_count);
+    void SetOperandExpression(GlobalMemoryLocation const&, std::shared_ptr<Expression> const&);
 
     int GetSortableMemoryLocation(GlobalMemoryLocation const& s) {
         int ret = s.address;

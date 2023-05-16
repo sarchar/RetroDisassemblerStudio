@@ -6,164 +6,96 @@
 
 using namespace std;
 
-class Tenderizer {
-public:
-    enum class Meat {
-        _HUNGRY,   // init state
-        YUCKY,     // invalid token
-        NAME, CONSTANT,
-        PLUS, MINUS, BANG,
-        ASTERISK, SLASH,
-        LSHIFT, RSHIFT,
-        CARET, PIPE, AMPERSAND, TILDE,
-        POWER,
-        LANGLE, RANGLE,
-        LPAREN, RPAREN,
-        COMMA,
-        END        // end of tile
-    };
+Tenderizer::Tenderizer(istream& _input_stream)
+    : input_stream(_input_stream), current_meat(Meat::_HUNGRY), location(0)
+{
+    Gobble();
+}
 
-    Tenderizer(istream& _input_stream)
-        : input_stream(_input_stream), current_meat(Meat::_HUNGRY), location(0)
-    {
-        Gobble();
+void Tenderizer::Gobble() // gobble, gobble
+{
+    if(Finished()) return; // no more tokens
+
+    display_text.str(""); // clear text
+    display_text.clear(); // clear state/flags
+    meat_text.str("");
+    meat_text.clear();
+
+    char c = Peck();
+    if(!input_stream) {
+        current_meat = Meat::END;
+        return;
     }
 
-    Meat GetCurrentMeat() const { return current_meat; }
-    string GetDisplayText() const { return display_text.str(); }
-    string GetMeatText() const { return meat_text.str(); }
-    int GetLocation() const { return location; }
+    // record the food
+    meat_text << c;
 
-    bool Errored() const { return current_meat == Meat::YUCKY; }
-    bool Finished() const { return Errored() || current_meat == Meat::END; }
-
-
-    // Bite whatever's on the ground
-    inline char Bite()
-    {
-        char c = input_stream.get();
-        display_text << c;
-        location++;
-        return c;
-    }
-
-    // Peck at the floor until we find food
-    inline char Peck()
-    {
-        char c;
-        do {
-            c = Bite();
-        } while(c == ' ' || c == '\t');
-        return c;
-    }
-
-    // Look, but don't peck
-    inline char Look()
-    {
-        return input_stream.peek();
-    }
-
-    // Mmmm keep biting for a while
-    inline void Satisfied()
-    {
-        char c = Look();
-        while(c == ' ' || c == '\t') {
-            Bite();
-            c = Look();
-        }
-    }
-
-    void Gobble() // gobble, gobble
-    {
-        if(Finished()) return; // no more tokens
-
-        display_text.str(""); // clear text
-        display_text.clear(); // clear state/flags
-        meat_text.str("");
-        meat_text.clear();
-
-        char c = Peck();
-        if(!input_stream) {
-            current_meat = Meat::END;
-            return;
-        }
-
-        // record the food
-        meat_text << c;
-
-        // NAME :: cannot start with a digit
-        if(isalpha(c) || c == '_') {
-            // Eat! Look, bite, look, bite!
-            c = Look();
-            while(isalnum(c) || c == '_') {
-                meat_text << Bite();
-                c = Look();
-            }
-
-            current_meat = Meat::NAME;
-            return;
-        }
-
-        // NUMBER :: decimal, binary, and hex, and allow underscores for clarity
-        if(isdigit(c) || c == '$' || c == '%') {
-            bool is_hex = (c == '$');
-            bool is_bin = (c == '%');
-
-            // Try to eat up only a number!
-            c = Look();
-            while((is_bin && (c == '0' || c == '1'))
-                || (is_hex && isxdigit(c))
-                || (!is_bin && !is_hex && isdigit(c))
-                || c == '_') { 
-                meat_text << Bite();
-                c = Look();
-            }
-
-            current_meat = Meat::CONSTANT;
-            return;
-        }
-
-        if((c == '<' || c == '>') && (Look() == c)) { // LSHIFT and RSHIFT
+    // NAME :: cannot start with a digit
+    if(isalpha(c) || c == '_' || c == '.') {
+        // Eat! Look, bite, look, bite!
+        c = Look();
+        while(isalnum(c) || c == '_') {
             meat_text << Bite();
-            current_meat = (c == '<') ? Meat::LSHIFT : Meat::RSHIFT;
-        } else if(c == '*' && Look() == '*') { // POWER
-            meat_text << Bite();
-            current_meat = Meat::POWER;
-        /* } else if(other items) { */
-        } else {
-            // single letter meat items
-            switch(c) {
-            case '+': current_meat = Meat::PLUS      ; break;
-            case '-': current_meat = Meat::MINUS     ; break;
-            case '*': current_meat = Meat::ASTERISK  ; break;
-            case '/': current_meat = Meat::SLASH     ; break;
-            case '(': current_meat = Meat::LPAREN    ; break;
-            case ')': current_meat = Meat::RPAREN    ; break;
-            case '^': current_meat = Meat::CARET     ; break;
-            case '|': current_meat = Meat::PIPE      ; break;
-            case '&': current_meat = Meat::AMPERSAND ; break;
-            case '~': current_meat = Meat::TILDE     ; break;
-            case '<': current_meat = Meat::LANGLE    ; break;
-            case '>': current_meat = Meat::RANGLE    ; break;
-            case '!': current_meat = Meat::BANG      ; break;
-            case ',': current_meat = Meat::COMMA     ; break;
-            default:
-                current_meat = Meat::YUCKY;
-                return;
-            }
+            c = Look();
         }
 
-        // yummy
-        Satisfied();
+        current_meat = Meat::NAME;
+        return;
     }
 
-private:
-    istream&     input_stream;
-    stringstream display_text;
-    stringstream meat_text;
-    Meat         current_meat;
-    int          location;
-};
+    // NUMBER :: decimal, binary, and hex, and allow underscores for clarity
+    if(isdigit(c) || c == '$' || c == '%') {
+        bool is_hex = (c == '$');
+        bool is_bin = (c == '%');
+
+        // Try to eat up only a number!
+        c = Look();
+        while((is_bin && (c == '0' || c == '1'))
+            || (is_hex && isxdigit(c))
+            || (!is_bin && !is_hex && isdigit(c))
+            || c == '_') { 
+            meat_text << Bite();
+            c = Look();
+        }
+
+        current_meat = Meat::CONSTANT;
+        return;
+    }
+
+    if((c == '<' || c == '>') && (Look() == c)) { // LSHIFT and RSHIFT
+        meat_text << Bite();
+        current_meat = (c == '<') ? Meat::LSHIFT : Meat::RSHIFT;
+    } else if(c == '*' && Look() == '*') { // POWER
+        meat_text << Bite();
+        current_meat = Meat::POWER;
+    /* } else if(other items) { */
+    } else {
+        // single letter meat items
+        switch(c) {
+        case '+': current_meat = Meat::PLUS      ; break;
+        case '-': current_meat = Meat::MINUS     ; break;
+        case '*': current_meat = Meat::ASTERISK  ; break;
+        case '/': current_meat = Meat::SLASH     ; break;
+        case '(': current_meat = Meat::LPAREN    ; break;
+        case ')': current_meat = Meat::RPAREN    ; break;
+        case '^': current_meat = Meat::CARET     ; break;
+        case '|': current_meat = Meat::PIPE      ; break;
+        case '&': current_meat = Meat::AMPERSAND ; break;
+        case '~': current_meat = Meat::TILDE     ; break;
+        case '<': current_meat = Meat::LANGLE    ; break;
+        case '>': current_meat = Meat::RANGLE    ; break;
+        case '!': current_meat = Meat::BANG      ; break;
+        case ',': current_meat = Meat::COMMA     ; break;
+        case '#': current_meat = Meat::HASH      ; break;
+        default:
+            current_meat = Meat::YUCKY;
+            return;
+        }
+    }
+
+    // yummy
+    Satisfied();
+}
 
 std::vector<std::shared_ptr<BaseExpressionNodeCreator::BaseExpressionNodeInfo>> BaseExpressionNodeCreator::expression_nodes;
 

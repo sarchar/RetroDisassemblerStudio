@@ -88,6 +88,7 @@ public:
     virtual ~ListingItemCode() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool) override;
+    bool ParseOperandExpression(std::shared_ptr<System>&, GlobalMemoryLocation const&);
 
 private:
     enum {
@@ -99,6 +100,10 @@ private:
     int line;
     bool started_editing = false;
     std::string edit_buffer;
+
+    bool parse_operand_expression = false;
+    bool wait_dialog = false;
+    std::string parse_errmsg;
 };
 
 class ListingItemLabel : public ListingItem {

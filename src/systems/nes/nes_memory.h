@@ -267,6 +267,7 @@ public:
 
     // Code
     bool MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_count);
+    void SetOperandExpression(GlobalMemoryLocation const& where, std::shared_ptr<Expression> const&);
 
     // Comments
     void GetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, std::string& out) {

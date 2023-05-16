@@ -250,6 +250,9 @@ public:
     std::shared_ptr<BaseExpressionNodeCreator> GetNodeCreator() override {
         return std::make_shared<ExpressionNodeCreator>();
     }
+
+protected:
+    std::shared_ptr<BaseExpressionNode> ParseExpression(std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&) override;
 };
 
 };

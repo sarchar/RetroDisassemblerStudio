@@ -8,13 +8,15 @@
 #include "imgui_internal.h"
 #include "imgui_stdlib.h"
 
+#include "main.h"
+#include "util.h"
+
 #include "systems/nes/nes_disasm.h"
+#include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
 #include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
-
-#include "util.h"
 
 using namespace std;
 
@@ -186,17 +188,6 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         }
     } 
 
-    if(!selected) {
-        switch(edit_mode) {
-        case EDIT_EOL_COMMENT:
-            system->SetComment(where, MemoryObject::COMMENT_TYPE_EOL, edit_buffer);
-            break;
-        case EDIT_OPERAND_EXPRESSION:
-            cout << "Parse expression: " << edit_buffer << endl;
-            break;
-        }
-    }
-
     if(!selected || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         edit_mode = EDIT_NONE;
     }
@@ -227,7 +218,9 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
                 started_editing = false;
             }
             if(ImGui::InputText("", &edit_buffer, ImGuiInputTextFlags_EnterReturnsTrue)) {
-                cout << "Parse expression: " << edit_buffer << endl;
+                parse_operand_expression = true;
+            }
+            if(parse_operand_expression && ParseOperandExpression(system, where)) {
                 edit_mode = EDIT_NONE;
             }
         } else {
@@ -267,6 +260,34 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
     }
 }
 
+bool ListingItemCode::ParseOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
+{
+    if(!wait_dialog) {
+        int errloc;
+
+        auto expr = make_shared<Expression>();
+        if(expr->Set(edit_buffer, parse_errmsg, errloc)) {
+            // successfully parsed the expression, so set it
+            system->SetOperandExpression(where, expr);
+            parse_operand_expression = false;
+            return true;
+        } else {
+            wait_dialog = true;
+            stringstream ss;
+            ss << "The input expression isn't valid: " << parse_errmsg << " at position " << (errloc + 1);
+            parse_errmsg = ss.str();
+        }
+    }
+
+    if(wait_dialog) {
+        if(MyApp::Instance()->OKPopup("Operand parse error", parse_errmsg)) {
+            wait_dialog = false;
+            parse_operand_expression = false;
+        }
+    }
+
+    return false;
+}
 
 void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected)
 {

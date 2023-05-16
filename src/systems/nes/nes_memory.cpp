@@ -505,6 +505,12 @@ bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_
     return true;
 }
 
+void MemoryRegion::SetOperandExpression(GlobalMemoryLocation const& where, std::shared_ptr<Expression> const& expr)
+{
+    if(auto memory_object = GetMemoryObject(where)) {
+        memory_object->operand_expression = expr;
+    }
+}
 
 u32 MemoryRegion::GetListingIndexByAddress(GlobalMemoryLocation const& where)
 {

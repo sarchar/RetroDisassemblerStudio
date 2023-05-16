@@ -178,6 +178,13 @@ void System::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count
     memory_region->MarkMemoryAsWords(where, byte_count);
 }
 
+void System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<Expression> const& expr)
+{
+    if(auto memory_region = GetMemoryRegion(where)) {
+        memory_region->SetOperandExpression(where, expr);
+    }
+}
+
 std::vector<std::shared_ptr<Label>> const& System::GetLabelsAt(GlobalMemoryLocation const& where)
 {
     static vector<shared_ptr<Label>> empty_vector;
