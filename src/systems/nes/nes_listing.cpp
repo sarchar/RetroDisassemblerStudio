@@ -67,9 +67,10 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         table_flags |= ImGuiTableFlags_BordersInnerV;
     }
 
-    if(ImGui::BeginTable("listing_item_code", 5, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+    if(ImGui::BeginTable("listing_item_code", 6, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
         ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Raw", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthFixed);
@@ -79,10 +80,23 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200));
         ImGui::Text("$%02X:0x%04X", where.prg_rom_bank, where.address);
 
-        ImGui::TableNextColumn();
-        // nothing
+        ImGui::TableNextColumn(); // spacing
+
     
         if(auto memory_object = system->GetMemoryObject(where)) {
+            ImGui::TableNextColumn(); // raw display
+            {
+                int objsize = memory_object->GetSize();
+                stringstream ss;
+                ss << hex << setfill('0') << uppercase;
+                for(int i = 0; i < objsize; i++) {
+                    ss << setw(2) << (int)((u8*)&memory_object->bval)[i];
+                    if(i != (objsize - 1)) ss << " ";
+                }
+
+                ImGui::Text("%s", ss.str().c_str());
+            }
+
             ImGui::TableNextColumn();
             ImGui::Text("%s", memory_object->FormatInstructionField().c_str());
 
@@ -193,9 +207,10 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
     }
 
 
-    if(ImGui::BeginTable("listing_item_code", 5, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+    if(ImGui::BeginTable("listing_item_code", 6, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
         ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Raw", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthFixed);
@@ -207,6 +222,19 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         ImGui::Text("$%02X:0x%04X", where.prg_rom_bank, where.address);
 
         ImGui::TableNextColumn(); // spacing
+
+        ImGui::TableNextColumn();
+        {
+            int objsize = memory_object->GetSize();
+            stringstream ss;
+            ss << hex << setfill('0') << uppercase;
+            for(int i = 0; i < objsize; i++) {
+                ss << setw(2) << (int)((u8*)&memory_object->bval)[i];
+                if(i != (objsize - 1)) ss << " ";
+            }
+
+            ImGui::Text("%s", ss.str().c_str());
+        }
 
         ImGui::TableNextColumn();
         ImGui::Text("%s", memory_object->FormatInstructionField(disassembler).c_str());
@@ -260,6 +288,12 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
     }
 }
 
+// TODO
+// parsing the expression should determine if Names can be converted to Labels or Defines at parse time
+// any Name that can't be converted can be left as a Name operand
+// and then that doesn't determine if a parsed expression is a legal NES expression
+// we should have a validate instruction that makes sure that the opcode matches the operand expression
+// and that all names are valid. Evaluate() should always be possible after accounting for addressing modes
 bool ListingItemCode::ParseOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
 {
     if(!wait_dialog) {
