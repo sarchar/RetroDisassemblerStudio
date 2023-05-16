@@ -405,8 +405,8 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
 
         // if the destination is not valid memory, we can't really create an OperandAddressOrLabel node
         auto root = is_valid ? nc->CreateOperandAddressOrLabel(target_location, 0, string(buf))
-                             : (is16 ? nc->CreateConstantU16(target_location.address, buf)
-                                     : nc->CreateConstantU8(target_location.address, buf));
+                             : (is16 ? nc->CreateConstant(target_location.address, buf)
+                                     : nc->CreateConstant(target_location.address, buf));
 
         // wrap the address/label with whatever is necessary to format this instruction
         if(am == AM_ABSOLUTE_X || am == AM_ZEROPAGE_X) {
@@ -441,7 +441,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
         char buf[4];
         snprintf(buf, sizeof(buf), "$%02X", imm);
 
-        auto root = nc->CreateConstantU8(imm, string(buf));
+        auto root = nc->CreateConstant(imm, string(buf));
         root = nc->CreateImmediate("#", root);
         expr->Set(root);
 

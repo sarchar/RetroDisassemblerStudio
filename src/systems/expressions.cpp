@@ -12,12 +12,14 @@ public:
         _HUNGRY,   // init state
         YUCKY,     // invalid token
         NAME, CONSTANT,
-        PLUS, MINUS,
+        PLUS, MINUS, BANG,
         ASTERISK, SLASH,
         LSHIFT, RSHIFT,
         CARET, PIPE, AMPERSAND, TILDE,
+        POWER,
         LANGLE, RANGLE,
         LPAREN, RPAREN,
+        COMMA,
         END        // end of tile
     };
 
@@ -31,7 +33,7 @@ public:
     string GetDisplayText() const { return display_text.str(); }
     string GetMeatText() const { return meat_text.str(); }
 
-    bool Errored() const { return current_meat == Meat::Yucky; }
+    bool Errored() const { return current_meat == Meat::YUCKY; }
     bool Finished() const { return Errored() || current_meat == Meat::END; }
 
 
@@ -119,10 +121,12 @@ public:
             return;
         }
 
-        // LSHIFT and RSHIFT
-        if((c == '<' || c == '>') && (Look() == c)) {
+        if((c == '<' || c == '>') && (Look() == c)) { // LSHIFT and RSHIFT
             meat_text << Bite();
             current_meat = (c == '<') ? Meat::LSHIFT : Meat::RSHIFT;
+        } else if(c == '*' && Look() == '*') { // POWER
+            meat_text << Bite();
+            current_meat = Meat::POWER;
         /* } else if(other items) { */
         } else {
             // single letter meat items
@@ -139,6 +143,8 @@ public:
             case '~': current_meat = Meat::TILDE     ; break;
             case '<': current_meat = Meat::LANGLE    ; break;
             case '>': current_meat = Meat::RANGLE    ; break;
+            case '!': current_meat = Meat::BANG      ; break;
+            case ',': current_meat = Meat::COMMA     ; break;
             default:
                 current_meat = Meat::YUCKY;
                 return;
@@ -180,12 +186,6 @@ std::ostream& operator<<(std::ostream& stream, BaseExpressionNode const& node)
     std::ios_base::fmtflags saveflags(stream.flags());
 
     node.Print(stream);
-    //!stream << *e.root;
-    //!stream << "GlobalMemoryLocation(address=0x" << std::hex << std::setw(4) << std::setfill('0') << std::uppercase << p.address;
-    //!stream << ", prg_rom_bank=" << std::dec << std::setw(0) << p.prg_rom_bank;
-    //!stream << ", chr_rom_bank=" << std::dec << std::setw(0) << p.chr_rom_bank;
-    //!stream << ", is_chr=" << p.is_chr;
-    //!stream << ")";
 
     stream.flags(saveflags);
     return stream;
@@ -202,12 +202,33 @@ BaseExpressionNodeCreator::~BaseExpressionNodeCreator()
 void BaseExpressionNodeCreator::RegisterBaseExpressionNodes()
 {
     RegisterBaseExpressionNode<BaseExpressionNodes::Constant<u8>>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::Constant<s8>>();
     RegisterBaseExpressionNode<BaseExpressionNodes::Constant<u16>>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::Constant<s16>>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::Constant<u32>>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::Constant<s32>>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::Constant<u64>>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::Constant<s64>>();
     RegisterBaseExpressionNode<BaseExpressionNodes::Name>();
     RegisterBaseExpressionNode<BaseExpressionNodes::AddOp>();
     RegisterBaseExpressionNode<BaseExpressionNodes::SubtractOp>();
     RegisterBaseExpressionNode<BaseExpressionNodes::MultiplyOp>();
     RegisterBaseExpressionNode<BaseExpressionNodes::DivideOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::PowerOp>();
+
+    RegisterBaseExpressionNode<BaseExpressionNodes::OrOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::XorOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::AndOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::LShiftOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::RShiftOp>();
+
+    RegisterBaseExpressionNode<BaseExpressionNodes::PositiveOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::NegateOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::BinaryNotOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::LogicalNotOp>();
+
+    RegisterBaseExpressionNode<BaseExpressionNodes::FunctionCall>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::ExpressionList>();
 }
 
 bool BaseExpressionNodeCreator::Save(shared_ptr<BaseExpressionNode> const& node, ostream& os, string& errmsg)
@@ -243,7 +264,7 @@ BaseExpression::~BaseExpression()
 }
 
 // Parse the expression in 's' and set it to the root node
-void BaseExpression::Set(std::string const& s)
+void BaseExpression::Set(std::string const& s, bool start_list)
 {
     istringstream iss{s};
     shared_ptr<Tenderizer> tenderizer = make_shared<Tenderizer>(iss);
@@ -253,6 +274,465 @@ void BaseExpression::Set(std::string const& s)
         auto m = tenderizer->GetCurrentMeat();
         cout << "\tmeat: " << magic_enum::enum_name(m) << " display: \"" << tenderizer->GetDisplayText() << "\" text: \"" << tenderizer->GetMeatText() << "\"" << endl;
         tenderizer->Gobble();
+    }
+
+    iss = istringstream{s};
+    tenderizer = make_shared<Tenderizer>(iss);
+    auto node_creator = GetNodeCreator();
+    root = start_list ? ParseExpressionList(tenderizer, node_creator) : ParseExpression(tenderizer, node_creator);
+    if(!root) {
+        cout << "could not parse epxression: \"" << s << "\"" << endl;
+    }
+
+    cout << "Text reprint: " << *this << endl;
+}
+ 
+// I have to thank Chris French for his excellent guide on writing a simple LL(1) parser. 
+// As you can tell, my code largely follows the format of his, with some changes.
+//
+// Reference: https://unclechromedome.org/c++-tutorials/expression-parser/index.html
+//
+// Below starts my expression parser (the lexer is above in the class Tenderizer).
+//
+// Expression list allows for instructions or functions with multiple arguments
+// 
+// expression_list: expression expression_list_tail
+//                ;
+//
+// expression_list_tail: COMMA expression expression_list_tail
+//                     | // nothing
+//                     ;
+shared_ptr<BaseExpressionNode> BaseExpression::ParseExpressionList(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+{
+    vector<BaseExpressionNodes::BaseExpressionNodeListEntry> list;
+
+    auto expr = ParseExpression(tenderizer, node_creator);
+    if(!expr) return nullptr;
+    list.push_back(BaseExpressionNodes::BaseExpressionNodeListEntry{
+        .display = "",
+        .node    = expr
+    });
+
+    while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::COMMA) {
+        string display = tenderizer->GetDisplayText();
+        tenderizer->Gobble();
+        auto expr = ParseExpression(tenderizer, node_creator);
+        if(!expr) return nullptr;
+        list.push_back(BaseExpressionNodes::BaseExpressionNodeListEntry{
+            .display = display,
+            .node    = expr
+        });
+    }
+
+    if(list.size() == 1) return list[0].node;
+    else return node_creator->CreateList(list);
+}
+
+// 
+// Simple wrapper for clearity
+// 
+// expression: or_expr
+//           ;
+// 
+shared_ptr<BaseExpressionNode> BaseExpression::ParseExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+{
+    return ParseOrExpression(tenderizer, node_creator);
+}
+
+//TODO make all the Parsers virtual so that a subclass and interject its own precedence inbetween others
+//this should allow the subclass to create system specific nodes like IndexedX. However, the tokenizer has to support all
+//syntax for the entire program.
+//
+// OR (|) C++ precedence 13
+//
+// or_expr: xor_expr or_expr_tail
+//           ;
+// 
+// or_expr_tail: PIPE xor_expr or_expr_tail
+//                | // EMPTY
+//                ;
+//
+shared_ptr<BaseExpressionNode> BaseExpression::ParseOrExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+{
+    auto lhs = ParseXorExpression(tenderizer, node_creator);
+
+    while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::PIPE) {
+        string display = tenderizer->GetDisplayText();
+        tenderizer->Gobble();
+        auto rhs = ParseXorExpression(tenderizer, node_creator);
+        if(!rhs) {
+            return nullptr;
+        }
+
+        lhs = node_creator->CreateOrOp(lhs, display, rhs);
+    }
+
+    return lhs;
+}
+
+// XOR (^) C++ precedence 12
+// 
+// xor_expr: and_expr xor_expr_tail
+//            ;
+// 
+// xor_expr_tail: CARET and_expr xor_expr_tail
+//                 | // EMPTY
+//                 ;
+// 
+shared_ptr<BaseExpressionNode> BaseExpression::ParseXorExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+{
+    auto lhs = ParseAndExpression(tenderizer, node_creator);
+
+    while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::CARET) {
+        string display = tenderizer->GetDisplayText();
+        tenderizer->Gobble();
+        auto rhs = ParseAndExpression(tenderizer, node_creator);
+        if(!rhs) {
+            return nullptr;
+        }
+
+        lhs = node_creator->CreateXorOp(lhs, display, rhs);
+    }
+
+    return lhs;
+}
+
+// AND (&) C++ precedence 11
+// 
+// and_expr: shift_expr and_expr_tail
+//            ;
+// 
+// and_expr_tail: AMPERSAND shift_expr and_expr_tail
+//                 | // EMPTY
+//                 ;
+// 
+shared_ptr<BaseExpressionNode> BaseExpression::ParseAndExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+{
+    auto lhs = ParseShiftExpression(tenderizer, node_creator);
+
+    while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::AMPERSAND) {
+        string display = tenderizer->GetDisplayText();
+        tenderizer->Gobble();
+        auto rhs = ParseShiftExpression(tenderizer, node_creator);
+        if(!rhs) {
+            return nullptr;
+        }
+
+        lhs = node_creator->CreateAndOp(lhs, display, rhs);
+    }
+
+    return lhs;
+}
+
+// BIT SHIFTS (<<, >>) C++ precedence 7
+// 
+// shift_expr: add_expr shift_expr_tail
+//              ;
+// 
+// shift_expr_tail: LSHIFT add_expr shift_expr_tail
+//                | RSHIFT add_expr shift_expr tail
+//                | // EMPTY
+//                ;
+// 
+shared_ptr<BaseExpressionNode> BaseExpression::ParseShiftExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+{
+    auto lhs = ParseAddExpression(tenderizer, node_creator);
+
+    for(bool done = false; !done;) {
+        string display = tenderizer->GetDisplayText();
+        switch(tenderizer->GetCurrentMeat()) {
+        case Tenderizer::Meat::LSHIFT:
+        {
+            tenderizer->Gobble();
+            auto rhs = ParseAddExpression(tenderizer, node_creator);
+            if(!rhs) {
+                return nullptr;
+            }
+            lhs = node_creator->CreateLShiftOp(lhs, display, rhs);
+            break;
+        }
+
+        case Tenderizer::Meat::RSHIFT:
+        {
+            tenderizer->Gobble();
+            auto rhs = ParseAddExpression(tenderizer, node_creator);
+            if(!rhs) {
+                return nullptr;
+            }
+            lhs = node_creator->CreateRShiftOp(lhs, display, rhs);
+            break;
+        }
+
+        default:
+            done = true;
+            break;
+        }
+    }
+
+    return lhs;
+}
+
+//
+// ADDS (+, -) C++ precedence 6
+// 
+// add_expr: mul_expr add_expr_tail
+//         ;
+// 
+// add_expr_tail: PLUS mul_expr add_expr_tail
+//              | MINUS mul_expr add_expr_tail
+//              | // EMPTY
+//              ;
+//
+shared_ptr<BaseExpressionNode> BaseExpression::ParseAddExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+{
+    auto lhs = ParseMulExpression(tenderizer, node_creator);
+
+    for(bool done = false; !done;) {
+        string display = tenderizer->GetDisplayText();
+        switch(tenderizer->GetCurrentMeat()) {
+        case Tenderizer::Meat::PLUS:
+        {
+            tenderizer->Gobble();
+            auto rhs = ParseMulExpression(tenderizer, node_creator);
+            if(!rhs) {
+                return nullptr;
+            }
+            lhs = node_creator->CreateAddOp(lhs, display, rhs);
+            break;
+        }
+
+        case Tenderizer::Meat::MINUS:
+        {
+            tenderizer->Gobble();
+            auto rhs = ParseMulExpression(tenderizer, node_creator);
+            if(!rhs) {
+                return nullptr;
+            }
+            lhs = node_creator->CreateSubtractOp(lhs, display, rhs);
+            break;
+        }
+
+        default:
+            done = true;
+            break;
+        }
+    }
+
+    return lhs;
+}
+
+// 
+// MULTIPLIES (*, /) C++ precedence 5
+//
+// mul_expr: pow_expr mul_expr_tail
+//         ;
+// 
+// mul_expr_tail: MUL pow_expr mul_expr_tail
+//              | DIV pow_expr mul_expr_tail
+//              | MOD pow_expr mul_expr_tail  // TODO not implemented
+//              | // EMPTY
+//              ;
+//
+// TODO may want a modulo operator but might need to use the word MOD since '%' is gobbled by binary numbers like %0101_1001
+//
+shared_ptr<BaseExpressionNode> BaseExpression::ParseMulExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+{
+    auto lhs = ParsePowerExpression(tenderizer, node_creator);
+
+    for(bool done = false; !done;) {
+        string display = tenderizer->GetDisplayText();
+        switch(tenderizer->GetCurrentMeat()) {
+        case Tenderizer::Meat::ASTERISK:
+        {
+            tenderizer->Gobble();
+            auto rhs = ParsePowerExpression(tenderizer, node_creator);
+            if(!rhs) {
+                return nullptr;
+            }
+            lhs = node_creator->CreateMultiplyOp(lhs, display, rhs);
+            break;
+        }
+
+        case Tenderizer::Meat::SLASH:
+        {
+            tenderizer->Gobble();
+            auto rhs = ParsePowerExpression(tenderizer, node_creator);
+            if(!rhs) {
+                return nullptr;
+            }
+            lhs = node_creator->CreateDivideOp(lhs, display, rhs);
+            break;
+        }
+
+        default:
+            done = true;
+            break;
+        }
+    }
+
+    return lhs;
+}
+
+// 
+// pow_expr: unary_expr pow_expr_suffix
+//         ;
+// 
+// pow_expr_suffix: POW unary_expr
+//                | // EMPTY
+//                ;
+// 
+shared_ptr<BaseExpressionNode> BaseExpression::ParsePowerExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+{
+    auto lhs = ParseUnaryExpression(tenderizer, node_creator);
+
+    while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::POWER) {
+        string display = tenderizer->GetDisplayText();
+        tenderizer->Gobble();
+        auto rhs = ParseUnaryExpression(tenderizer, node_creator);
+        if(!rhs) {
+            return nullptr;
+        }
+        lhs = node_creator->CreatePowerOp(lhs, display, rhs);
+    }
+
+    return lhs;
+}
+
+// PREFIX (+, -, ~, !) C++ precedence 3
+//
+// unary_expr:  PLUS primary
+//     |        MINUS primary
+//     |        TILDE primary
+//     |        BANG primary
+//     |        primary
+//     ;
+shared_ptr<BaseExpressionNode> BaseExpression::ParseUnaryExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+{
+    string display = tenderizer->GetDisplayText();
+    switch(tenderizer->GetCurrentMeat()) {
+    case Tenderizer::Meat::PLUS:
+    {
+        tenderizer->Gobble();
+        auto rhs = ParsePrimaryExpression(tenderizer, node_creator);
+        if(!rhs) {
+            return nullptr;
+        }
+        return node_creator->CreatePositiveOp(display, rhs);
+    }
+
+    case Tenderizer::Meat::MINUS:
+    {
+        tenderizer->Gobble();
+        auto rhs = ParsePrimaryExpression(tenderizer, node_creator);
+        if(!rhs) {
+            return nullptr;
+        }
+        return node_creator->CreateNegateOp(display, rhs);
+    }
+
+    case Tenderizer::Meat::TILDE:
+    {
+        tenderizer->Gobble();
+        auto rhs = ParsePrimaryExpression(tenderizer, node_creator);
+        if(!rhs) {
+            return nullptr;
+        }
+        return node_creator->CreateBinaryNotOp(display, rhs);
+    }
+
+    case Tenderizer::Meat::BANG:
+    {
+        tenderizer->Gobble();
+        auto rhs = ParsePrimaryExpression(tenderizer, node_creator);
+        if(!rhs) {
+            return nullptr;
+        }
+        return node_creator->CreateLogicalNotOp(display, rhs);
+    }
+
+    default:
+        return ParsePrimaryExpression(tenderizer, node_creator);
+    }
+}
+
+// 
+// primary: NAME
+//        | NAME LPAREN expression_list RPAREN
+//        | CONSTANT
+//        | LPAREN expression RPAREN
+//        ;
+//
+shared_ptr<BaseExpressionNode> BaseExpression::ParsePrimaryExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator)
+{
+    string display = tenderizer->GetDisplayText();
+    switch(tenderizer->GetCurrentMeat()) {
+    case Tenderizer::Meat::NAME:
+    {
+        string name = tenderizer->GetMeatText();
+        tenderizer->Gobble();
+
+        if(tenderizer->GetCurrentMeat() == Tenderizer::Meat::LPAREN) { // optional function call
+            string lp_display = tenderizer->GetDisplayText();
+            tenderizer->Gobble();
+            auto args = ParseExpressionList(tenderizer, node_creator);
+
+            if(tenderizer->GetCurrentMeat() == Tenderizer::Meat::RPAREN) {
+                string rp_display = tenderizer->GetDisplayText();
+                tenderizer->Gobble();
+                return node_creator->CreateFunctionCall(display, name, lp_display, args, rp_display);
+            } else {
+                return nullptr;
+            }
+        }
+
+        return node_creator->CreateName(name);
+    }
+
+    case Tenderizer::Meat::CONSTANT:
+    {
+        string num = tenderizer->GetMeatText();
+        tenderizer->Gobble();
+
+        // remove "_" in the input string
+        strreplace(num, "_", "");
+        char const* numptr = num.c_str();
+
+        int base = 10; // parse decimal
+        if(num[0] == '$') { // parse hex number
+            base = 16;
+            numptr++;
+        } else if(num[0] == '%') { // parse binary number
+            base = 2;
+            numptr++;
+        }
+
+        char* endptr;
+        s64 val = strtoll(numptr, &endptr, base);
+        if(*endptr != '\0') {
+            cout << "invalid constant: " << num << endl;
+            return nullptr;
+        }
+        return node_creator->CreateConstant(val, display);
+    }
+
+    case Tenderizer::Meat::LPAREN:
+    {
+        tenderizer->Gobble();
+        auto value = ParseExpression(tenderizer, node_creator);
+
+        if(tenderizer->GetCurrentMeat() == Tenderizer::Meat::RPAREN) {
+            string rp_display = tenderizer->GetDisplayText();
+            tenderizer->Gobble();
+            return node_creator->CreateParens(display, value, rp_display);
+        } else {
+            return nullptr;
+        }
+    }
+
+    default:
+        // any other token at this point is invalid
+        cout << "invalid token encountered: " << magic_enum::enum_name(tenderizer->GetCurrentMeat()) << endl;
+        return nullptr;
     }
 }
 
@@ -279,6 +759,10 @@ int Constant<T>::base_expression_node_id = 0;
 int Name::base_expression_node_id = 0;
 template <s64 (*T)(s64, s64)>
 int BinaryOp<T>::base_expression_node_id = 0;
+template <s64 (*T)(s64)>
+int UnaryOp<T>::base_expression_node_id = 0;
+int FunctionCall::base_expression_node_id = 0;
+int ExpressionList::base_expression_node_id = 0;
 
 bool Parens::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
 {
@@ -368,7 +852,7 @@ std::shared_ptr<BinaryOp<T>> BinaryOp<T>::Load(std::istream& is, std::string& er
     string display;
     ReadString(is, display);
     if(!is.good()) {
-        errmsg = "Could not load Constant<T>";
+        errmsg = "Could not load BinaryOp<T>";
         return nullptr;
     }
 
@@ -377,6 +861,98 @@ std::shared_ptr<BinaryOp<T>> BinaryOp<T>::Load(std::istream& is, std::string& er
 
     return std::make_shared<BinaryOp<T>>(left, display, right);
 }
+
+template <s64 (*T)(s64)>
+bool UnaryOp<T>::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
+{
+    WriteString(os, display);
+    if(!creator->Save(right, os, errmsg)) return false;
+    return true;
+}
+
+template <s64 (*T)(s64)>
+std::shared_ptr<UnaryOp<T>> UnaryOp<T>::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& creator) 
+{
+    string display;
+    ReadString(is, display);
+    if(!is.good()) {
+        errmsg = "Could not load UnaryOp<T>";
+        return nullptr;
+    }
+
+    auto right = creator->Load(is, errmsg);
+    if(!right) return nullptr;
+
+    return std::make_shared<UnaryOp<T>>(display, right);
+}
+
+bool FunctionCall::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
+{
+    WriteString(os, display_name);
+    WriteString(os, name);
+    WriteString(os, lp_display);
+    if(!creator->Save(args, os, errmsg)) return false;
+    WriteString(os, rp_display);
+    return true;
+}
+
+std::shared_ptr<FunctionCall> FunctionCall::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& creator) 
+{
+    string display_name;
+    ReadString(is, display_name);
+
+    string name;
+    ReadString(is, name);
+
+    string lp_display;
+    ReadString(is, lp_display);
+
+    if(!is.good()) {
+        errmsg = "Could not load BinaryOp<T>";
+        return nullptr;
+    }
+
+    auto args = creator->Load(is, errmsg);
+    if(!args) return nullptr;
+
+    string rp_display;
+    ReadString(is, rp_display);
+
+    return std::make_shared<FunctionCall>(display_name, name, lp_display, args, rp_display);
+}
+
+bool ExpressionList::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
+{
+    WriteVarInt(os, list.size());
+    for(auto& le : list) {
+        WriteString(os, le.display);
+        if(!creator->Save(le.node, os, errmsg)) return false;
+    }
+    return true;
+}
+
+std::shared_ptr<ExpressionList> ExpressionList::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& creator) 
+{
+    vector<BaseExpressionNodeListEntry> list;
+
+    int count = ReadVarInt<int>(is);
+    for(int i = 0; i < count; i++) {
+        BaseExpressionNodeListEntry e;
+        ReadString(is, e.display);
+        if(!is.good()) {
+            errmsg = "Could not load ExpressionList";
+            return nullptr;
+        }
+        
+        e.node = creator->Load(is, errmsg);
+        if(!e.node) return nullptr;
+
+        list.push_back(e);
+    }
+
+    return std::make_shared<ExpressionList>(list);
+}
+
 
 }
 
