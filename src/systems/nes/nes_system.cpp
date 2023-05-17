@@ -611,6 +611,29 @@ int System::DisassemblyThread()
                 break;
             }
 
+            case 0x10: // the relative branch instructions fork: don't branch + take branch
+            case 0x30:
+            case 0x50:
+            case 0x70:
+            case 0x90:
+            case 0xB0:
+            case 0xD0:
+            case 0xF0:
+            {
+                u16 target = (u16)((s16)(current_loc.address + 2) + (s16)(s8)memory_object->code.operands[0]);
+
+                GlobalMemoryLocation target_location(current_loc);
+                target_location.address = target;
+
+                if(target >= memory_region->GetBaseAddress() && target < memory_region->GetEndAddress()) { // in the same bank
+                    locations.push_back(target_location);
+                } else if(target >= 0x8000 && !CanBank(target_location)) {
+                    locations.push_back(target_location);
+                }
+
+                break;
+            }
+
             case 0x60: // RTS
             case 0x6C: // JMP indirect
                 disassembling_inner = false;
@@ -683,10 +706,10 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
             if(target_object->labels.size() == 0) { // create a label at that address if there isn't one yet
                 stringstream ss;
                 if(isrel) ss << ".";
-                else      ss << "L_";
+                else      ss << "dp_";
                 ss << hex << setfill('0') << uppercase;
                 if(CanBank(target_location)) ss << setw(2) << target_location.prg_rom_bank;
-                ss << setw(4) << target_location.address;
+                ss << (is16 ? setw(4) : setw(2)) << target_location.address;
 
                 // no problem if this fails if the label already exists
                 label = CreateLabel(target_location, ss.str());
@@ -699,7 +722,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
         auto expr = make_shared<Expression>();
         auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
 
-        // TODO format in other bases?
+        // format the operand label display string
         char buf[6];
         if(is16 || isrel) {
             snprintf(buf, sizeof(buf), "$%04X", target_location.address);

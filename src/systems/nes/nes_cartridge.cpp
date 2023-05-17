@@ -94,7 +94,9 @@ void Cartridge::CreateMemoryRegions()
             // TODO MMC1 also supports 4K CHR banks that can be loaded into *either* low or high
             // will have to support memory regions that can change their base? or at least, leave 
             // it unset until the user specifies the base_address. but for now, we assume they're 
-            // swapped at 8K and always in the full memory
+            // swapped at 8K and always in the full memory. In fact it's probably not important
+            // what their base is, since they don't have address references contained within in the bank
+            // we could assume they all start at 0
             cout << "[NES::Cartridge::Prepare] warning: MMC1 cartridge has CHR ROM banks that aren't handled well" << endl;
             load_address = CHARACTER_ROM_BANK_LOAD_LOW;
             bank_size    = CHARACTER_ROM_BANK_SIZE_8K;
