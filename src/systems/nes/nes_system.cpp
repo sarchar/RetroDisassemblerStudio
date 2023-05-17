@@ -6,6 +6,8 @@
 #include <iomanip>
 #include <memory>
 
+#include "magic_enum.hpp"
+
 #include "systems/nes/nes_cartridge.h"
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_expressions.h"
@@ -178,10 +180,299 @@ void System::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count
     memory_region->MarkMemoryAsWords(where, byte_count);
 }
 
-void System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<Expression> const& expr)
+shared_ptr<ExpressionNodeCreator> System::GetNodeCreator()
 {
-    if(auto memory_region = GetMemoryRegion(where)) {
-        memory_region->SetOperandExpression(where, expr);
+    return make_shared<ExpressionNodeCreator>();
+}
+
+// convert names into labels or defines
+// at the root, convert Immediate, Accum, and IndexedX/Y
+bool System::ExploreExpressionNodeCallback(shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const& parent, int depth, void* userdata)
+{
+    ExploreExpressionNodeData* explore_data = (ExploreExpressionNodeData*)userdata;
+
+    // check names, and convert them into appropriate expression nodes
+    if(auto name = dynamic_pointer_cast<BaseExpressionNodes::Name>(node)) {
+        cout << depth << ": visited " << name->GetString() << endl;
+        auto str = name->GetString();
+        auto strl = strlower(str);
+
+        // convert to Accum mode only at depth 0
+        if(depth == 0) {
+            if(strl == "a") { // convert accumulator
+                node = GetNodeCreator()->CreateAccum(str);
+                cout << "Made Accum node" << endl;
+            }
+        }
+
+        // check names A, X, Y
+        if(strl == "x" || strl == "y" || strl == "a") {
+            // we may see them as indexed values at Layer 1, but only if the parent is an expression list
+            // we check length of list and position within the list later
+            assert(parent);
+            auto parent_list = dynamic_pointer_cast<BaseExpressionNodes::ExpressionList>(parent);
+            if(!parent_list || depth > 1) {
+                stringstream ss;
+                ss << "Invalid use of name '" << str << "'";
+                explore_data->errmsg = ss.str();
+                return false;
+            }
+        }
+
+        // try to look up the label
+        if(auto label = FindLabel(str)) {
+            // label exists, create a default display for it
+            stringstream ss;
+            ss << hex << setfill('0') << uppercase << "$";
+            auto loc = label->GetMemoryLocation();
+            if(loc.address < 0x100) ss << setw(2);
+            else ss << setw(4);
+            ss << loc.address;
+
+            // replace the current node with a OperandAddressOrLabel
+            node = GetNodeCreator()->CreateLabel(label, ss.str());
+        }
+    }
+
+    // only allow Immediate at the root node
+    if(auto immediate = dynamic_pointer_cast<ExpressionNodes::Immediate>(node)) {
+        if(depth != 0) {
+            explore_data->errmsg = "Invalid use of Immediate (#) mode";
+            return false;
+        }
+    }
+
+    // Convert indexed addressing modes at the root. Expressions nested one layer deep have already
+    // been created in the Expression::ParseParenExpression function
+    if(auto list = dynamic_pointer_cast<BaseExpressionNodes::ExpressionList>(node)) {
+        if(list->GetSize() != 2) {
+            explore_data->errmsg = "Invalid expression list (can only be length 2)";
+            return false;
+        }
+
+        string display;
+        auto name = dynamic_pointer_cast<BaseExpressionNodes::Name>(list->GetNode(1, &display));
+        string str = name ? strlower(name->GetString()) : "";
+        if(str != "x" && str != "y") {
+            explore_data->errmsg = "Invalid index (must be X or Y)";
+            return false;
+        }
+
+        // convert the node into IndexedX or Y
+        display = display + name->GetString();
+        auto value = list->GetNode(0);
+		auto node_creator = dynamic_pointer_cast<ExpressionNodeCreator>(Expression().GetNodeCreator());
+        if(str == "x") {
+            node = node_creator->CreateIndexedX(value, display);
+        } else {
+            node = node_creator->CreateIndexedY(value, display);
+        }
+    }
+
+    return true;
+}
+
+bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<Expression>& expr, std::string& errmsg)
+{
+    auto memory_region = GetMemoryRegion(where);
+    auto memory_object = GetMemoryObject(where);
+    if(!memory_region || !memory_object) {
+        errmsg = "Invalid address"; // shouldn't happen
+        return false; 
+    }
+
+    if(memory_object->type == MemoryObject::TYPE_UNDEFINED) {
+        errmsg = "Cannot set operand expression for undefined data types";
+        return false;
+    }
+
+    ExploreExpressionNodeData explore_data {
+        .where  = where,
+        .errmsg = errmsg
+    };
+
+    // Loop over every node (and change them to system nodes if necessary), validating some things along the way
+    auto cb = std::bind(&System::ExploreExpressionNodeCallback, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
+    if(!expr->Explore(cb, &explore_data)) return false;
+
+    // Now we need to do one more thing: determine the addressing mode of the expression and match it to
+    // the addressing mode of the current opcode. the size of the operand is encoded into the addressing mode
+    // so we also need to make sure the expression evaluates to something that fits in that size
+    ADDRESSING_MODE expression_mode;
+	s64 operand_value;
+    if(!DetermineAddressingMode(expr, &expression_mode, &operand_value, errmsg)) return false;
+
+    // Now we check that the resulting mode matches the addressing mode of the opcode
+    // TODO in the future, we will allow changing of the opcode to match the new addressing mode, but that requires a little 
+    // bit more in the disassembler
+    switch(memory_object->type) {
+    case MemoryObject::TYPE_CODE:
+    {
+        ADDRESSING_MODE opmode = disassembler->GetAddressingMode(memory_object->code.opcode);
+
+        // Some special case exceptions:
+        // 1. when the opcode is absolute but fits zero page
+        // 2. when the opcode is abs,x or abs,y but fits zp,x or zp,y
+        // 3. when the opcode is relative
+        if(opmode == AM_ABSOLUTE   && expression_mode == AM_ZEROPAGE)   expression_mode = opmode; // upgrade
+        if(opmode == AM_ABSOLUTE_X && expression_mode == AM_ZEROPAGE_X) expression_mode = opmode;
+        if(opmode == AM_ABSOLUTE_Y && expression_mode == AM_ZEROPAGE_Y) expression_mode = opmode;
+        if(opmode == AM_RELATIVE   && expression_mode == AM_ABSOLUTE)   expression_mode = opmode;
+
+        if(opmode != expression_mode) { // if the mod still doesn't match
+            stringstream ss;
+            ss << "Expression addressing mode (" << magic_enum::enum_name(expression_mode) 
+               << ") does not match opcode addressing mode (" << magic_enum::enum_name(opmode) << ")";
+            errmsg = ss.str();
+            return false;
+        }
+
+        // Convert relative operand_value 
+        if(expression_mode == AM_RELATIVE) {
+            operand_value = operand_value - (where.address + 2);
+            operand_value = (u64)operand_value & 0xFF;
+        }
+
+        // Now we need to validate that operand_value matches the actual data
+        u16 operand = (u16)memory_object->code.operands[0];
+        if(memory_object->GetSize() == 3) {
+            operand |= ((u16)memory_object->code.operands[1] << 8);
+            operand_value = (u64)operand_value & 0xFFFF;
+        }
+
+        if(operand != operand_value) {
+            stringstream ss;
+            ss << hex << setfill('0') << uppercase;
+            ss << "Expression value ($" << setw(4) << (int)operand_value 
+               << ") does not evaluate to instruction operand value ($" << setw(4) << operand << ")";
+            errmsg = ss.str();
+            return false;
+        }
+
+        // all these fuckin checks mean the expression is finally acceptable
+        break;
+    }
+
+    case MemoryObject::TYPE_BYTE:
+        // Only allow AM_ZEROPAGE
+    case MemoryObject::TYPE_WORD:
+        // Only allow AM_ABSOLUTE
+        break;
+
+    default:
+        assert(false);
+        break;
+    }
+
+    // One major problem with DetermineAddressingMode is that it can't determine the difference between AM_ABSOLUTE and AM_RELATIVE
+    // So we 
+    memory_region->SetOperandExpression(where, expr);
+    return true;
+}
+
+// Determine the addressing mode from an expression. Returns the operand value for further checks
+// Returns true if the operand value is determinable and the operand value fits the addressing mode
+bool System::DetermineAddressingMode(shared_ptr<Expression>& expr, ADDRESSING_MODE* addressing_mode, s64* operand_value, string& errmsg)
+{
+    assert(operand_value != nullptr);
+
+    auto root = expr->GetRoot();
+    if(auto acc = dynamic_pointer_cast<ExpressionNodes::Accum>(root)) { // check if the root is an Accum
+        // Accum has no child nodes, so we can easily succeed here
+        *addressing_mode = AM_ACCUM;
+        *operand_value   = 0;
+        return true;
+    } else if(auto imm = dynamic_pointer_cast<ExpressionNodes::Immediate>(root)) { // check if the root is an Immediate
+        *addressing_mode = AM_IMMEDIATE;
+
+        // For Immediate to be valid, the expression must be evaluatable and be <= 255
+		auto value = imm->GetValue();
+        if(!value->Evaluate(operand_value, errmsg)) return false;
+
+        if(*operand_value < 0 || *operand_value > 255) {
+            stringstream ss;
+            ss << "Immediate operand is out of range (0-255, got " << *operand_value << ")";
+            errmsg = ss.str();
+            return false;
+        }
+
+        return true;
+    } else if(auto ix = dynamic_pointer_cast<ExpressionNodes::IndexedX>(root)) { // check if root is indexed x
+        // We have ZP,X or ABS,X, and neither can be indirect. ZP/ABS is determined based on the evaluation of the expression
+        auto base = ix->GetBase();
+        if(auto parens = dynamic_pointer_cast<BaseExpressionNodes::Parens>(base)) {
+            errmsg = "No Indirect-post-indexed X mode available";
+            return false;
+        }
+
+        // Determine size of operand
+        if(!base->Evaluate(operand_value, errmsg)) return false;
+
+        if(*operand_value < 0 || *operand_value > 255) {
+            *addressing_mode = AM_ABSOLUTE_X;
+        } else {
+            *addressing_mode = AM_ZEROPAGE_X;
+        }
+
+        return true;
+    } else if(auto iy = dynamic_pointer_cast<ExpressionNodes::IndexedY>(root)) { // check if root is indexed y
+        // We have ZP,Y or ABS,Y or (ZP),Y
+        auto base = iy->GetBase();
+
+        // post-indexed if base is convertable to parentheses
+        bool post_indexed = (bool)dynamic_pointer_cast<BaseExpressionNodes::Parens>(base);
+
+        // Determine size of operand
+        if(!base->Evaluate(operand_value, errmsg)) return false;
+
+        if(*operand_value < 0 || *operand_value > 255) {
+            // There is no (ABS),Y
+            if(post_indexed) {
+                errmsg = "No Indirect-post-indexed Y for absolute base address available";
+                return false;
+            }
+            *addressing_mode = AM_ABSOLUTE_Y;
+        } else {
+            if(post_indexed) {
+                *addressing_mode = AM_INDIRECT_Y;
+            } else {
+                *addressing_mode = AM_ZEROPAGE_X;
+            }
+        }
+
+        return true;
+    } else if(auto parens = dynamic_pointer_cast<BaseExpressionNodes::Parens>(root)) { // check if root is indirect
+        auto value = parens->GetValue();
+        if(auto ix = dynamic_pointer_cast<ExpressionNodes::IndexedX>(root)) { // check if value is indexed x
+            // We may have (ZP,X), make sure operand fits in zp
+            auto base = ix->GetBase();
+
+            if(!base->Evaluate(operand_value, errmsg)) return false;
+
+            if(*operand_value < 0 || *operand_value > 255) {
+                errmsg = "No indirect-pre-indexed X for absolute base address available";
+                return false;
+            }
+
+            *addressing_mode = AM_INDIRECT_X;
+        } else {
+            // We have only (ABS)
+            if(!value->Evaluate(operand_value, errmsg)) return false;
+            *addressing_mode = AM_INDIRECT;
+        }
+
+        return true;
+    } else {
+        // Now we either have ZP or ABS direct and the expression has to be evaluatable. 
+        if(!root->Evaluate(operand_value, errmsg)) return false;
+
+        if(*operand_value < 0 || *operand_value > 255) {
+            *addressing_mode = AM_ABSOLUTE;
+        } else {
+            *addressing_mode = AM_ZEROPAGE;
+        }
+
+        return true;
     }
 }
 
@@ -385,17 +676,23 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
 
         // only for valid destination addresses do we create an expression. others get the default
         // disasembler output and the user will have to create the expression manually
-        auto target_object = GetMemoryObject(target_location);
-        if(target_object && target_object->labels.size() == 0) { // create a label at that address if there isn't one yet
-            stringstream ss;
-            if(isrel) ss << ".";
-            else      ss << "L_";
-            ss << hex << setfill('0') << uppercase;
-            if(CanBank(target_location)) ss << setw(2) << target_location.prg_rom_bank;
-            ss << setw(4) << target_location.address;
+        int target_offset = 0;
+        auto target_object = GetMemoryObject(target_location, &target_offset);
+        shared_ptr<Label> label;
+        if(target_object) {
+            if(target_object->labels.size() == 0) { // create a label at that address if there isn't one yet
+                stringstream ss;
+                if(isrel) ss << ".";
+                else      ss << "L_";
+                ss << hex << setfill('0') << uppercase;
+                if(CanBank(target_location)) ss << setw(2) << target_location.prg_rom_bank;
+                ss << setw(4) << target_location.address;
 
-            // no problem if this fails if the label already exists
-            CreateLabel(target_location, ss.str());
+                // no problem if this fails if the label already exists
+                label = CreateLabel(target_location, ss.str());
+            } else {
+                label = target_object->labels[0];
+            }
         }
 
         // now create an expression for the operands
@@ -410,10 +707,19 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
             snprintf(buf, sizeof(buf), "$%02X", target_location.address);
         }
 
-        // if the destination is not valid memory, we can't really create an OperandAddressOrLabel node
-        auto root = is_valid ? nc->CreateOperandAddressOrLabel(target_location, 0, string(buf))
-                             : (is16 ? nc->CreateConstant(target_location.address, buf)
-                                     : nc->CreateConstant(target_location.address, buf));
+        // if the destination is not valid memory, we can't really create a Label node
+        auto root = label ? nc->CreateLabel(label, buf)
+                          : (is16 ? nc->CreateConstant(target_location.address, buf)
+                                  : nc->CreateConstant(target_location.address, buf));
+
+        // append "+offset" as an expression to the label
+        if(is_valid && target_offset != 0) {
+            stringstream ss;
+            ss << target_offset;
+            auto constant_node = nc->CreateConstant(target_offset, ss.str());
+
+            root = nc->CreateAddOp(root, "+", constant_node);
+        }
 
         // wrap the address/label with whatever is necessary to format this instruction
         if(am == AM_ABSOLUTE_X || am == AM_ZEROPAGE_X) {

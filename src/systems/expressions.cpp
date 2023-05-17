@@ -30,7 +30,7 @@ void Tenderizer::Gobble() // gobble, gobble
     // record the food
     meat_text << c;
 
-    // NAME :: cannot start with a digit
+    // NAME :: first letter must be alpha or _.
     if(isalpha(c) || c == '_' || c == '.') {
         // Eat! Look, bite, look, bite!
         c = Look();
@@ -99,15 +99,6 @@ void Tenderizer::Gobble() // gobble, gobble
 
 std::vector<std::shared_ptr<BaseExpressionNodeCreator::BaseExpressionNodeInfo>> BaseExpressionNodeCreator::expression_nodes;
 
-BaseExpressionHelper::BaseExpressionHelper()
-{
-}
-
-BaseExpressionHelper::~BaseExpressionHelper()
-{
-}
-
-
 BaseExpressionNode::BaseExpressionNode()
 {
 }
@@ -116,7 +107,7 @@ BaseExpressionNode::~BaseExpressionNode()
 {
 }
 
-std::ostream& operator<<(std::ostream& stream, BaseExpressionNode const& node)
+std::ostream& operator<<(std::ostream& stream, BaseExpressionNode& node)
 {
     std::ios_base::fmtflags saveflags(stream.flags());
 
@@ -203,6 +194,7 @@ bool BaseExpression::Set(std::string const& s, std::string& errmsg, int& errloc,
 {
     errmsg = "";
     errloc = 0;
+    parens_depth = 0;
 
     istringstream iss{s};
     shared_ptr<Tenderizer> tenderizer = make_shared<Tenderizer>(iss);
@@ -240,13 +232,30 @@ bool BaseExpression::Set(std::string const& s, std::string& errmsg, int& errloc,
 
     return (bool)root;
 }
- 
+
+bool BaseExpression::Explore(explore_callback_t explore_callback, void* userdata)
+{
+    if(root) {
+        // explore down the tree first
+        if(!root->Explore(explore_callback, 1, userdata)) return false;
+        // and finally call the explore callback on the root node
+        shared_ptr<BaseExpressionNode> nullnode;
+        if(!explore_callback(root, nullnode, 0, userdata)) return false;
+        return true;
+    }
+
+    return false;
+}
+
 // I have to thank Chris French for his excellent guide on writing a simple LL(1) parser. 
 // As you can tell, my code largely follows the format of his, with some changes.
 //
 // Reference: https://unclechromedome.org/c++-tutorials/expression-parser/index.html
 //
-// Below starts my expression parser (the lexer is above in the class Tenderizer).
+// Also for reference was the C++ precedence order:
+// https://en.cppreference.com/w/cpp/language/operator_precedence
+//
+// Below starts my expression parser (the lexer is in the Tenderizer class).
 //
 // Expression list allows for instructions or functions with multiple arguments
 // 
@@ -589,7 +598,7 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseUnaryExpression(shared_ptr<T
 // primary: NAME
 //        | NAME LPAREN expression_list RPAREN
 //        | CONSTANT
-//        | LPAREN expression RPAREN
+//        | LPAREN paren_expression RPAREN
 //        ;
 //
 shared_ptr<BaseExpressionNode> BaseExpression::ParsePrimaryExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
@@ -652,7 +661,10 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParsePrimaryExpression(shared_ptr
     case Tenderizer::Meat::LPAREN:
     {
         tenderizer->Gobble();
-        auto value = ParseExpression(tenderizer, node_creator, errmsg, errloc);
+        parens_depth += 1;
+        auto value = ParseParenExpression(tenderizer, node_creator, errmsg, errloc);
+        if(!value) return nullptr;
+        parens_depth -= 1;
 
         if(tenderizer->GetCurrentMeat() == Tenderizer::Meat::RPAREN) {
             string rp_display = tenderizer->GetDisplayText();
@@ -673,6 +685,16 @@ invalid_token:
     errmsg = ss.str();
     errloc = tenderizer->GetLocation();
     return nullptr;
+}
+
+// this is split into its own function so that sub systems can handle things like indirect addressing modes
+// N.B. this is NOT the same parens that are used to designate a function call
+//
+// paren_expression: expression
+//                 ;
+shared_ptr<BaseExpressionNode> BaseExpression::ParseParenExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
+{
+    return ParseExpression(tenderizer, node_creator, errmsg, errloc);
 }
 
 std::ostream& operator<<(std::ostream& stream, BaseExpression const& e)
@@ -805,7 +827,7 @@ template <s64 (*T)(s64)>
 bool UnaryOp<T>::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
 {
     WriteString(os, display);
-    if(!creator->Save(right, os, errmsg)) return false;
+    if(!creator->Save(value, os, errmsg)) return false;
     return true;
 }
 

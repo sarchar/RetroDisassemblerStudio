@@ -34,7 +34,7 @@ public:
     Meat GetCurrentMeat() const { return current_meat; }
     std::string GetDisplayText() const { return display_text.str(); }
     std::string GetMeatText() const { return meat_text.str(); }
-    int GetLocation() const { return location; }
+    int GetLocation() const { return location - 1; }
 
     bool Errored() const { return current_meat == Meat::YUCKY; }
     bool Finished() const { return Errored() || current_meat == Meat::END; }
@@ -90,8 +90,10 @@ namespace BaseExpressionNodes {
     class Name;
 }
 
-class BaseExpressionHelper;
 class BaseExpressionNodeCreator;
+
+class BaseExpressionNode;
+typedef std::function<bool(std::shared_ptr<BaseExpressionNode>&, std::shared_ptr<BaseExpressionNode> const&, int, void*)> explore_callback_t;
 
 class BaseExpressionNode : public std::enable_shared_from_this<BaseExpressionNode> {
 public:
@@ -99,21 +101,14 @@ public:
     virtual ~BaseExpressionNode();
 
     virtual int  GetExpressionNodeType() const = 0;
-    virtual void Print(std::ostream&) const = 0;
+    virtual void Print(std::ostream&) = 0;
 
-    virtual bool Evaluate(std::shared_ptr<BaseExpressionHelper> const&, s64*) const = 0;
+    virtual bool Evaluate(s64*, std::string&) const = 0;
+    virtual bool Explore(explore_callback_t, int, void*) = 0;
 
     virtual bool Save(std::ostream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>) = 0;
 
-    friend std::ostream& operator<<(std::ostream&, BaseExpressionNode const&);
-};
-
-class BaseExpressionHelper : public std::enable_shared_from_this<BaseExpressionHelper> {
-public:
-    BaseExpressionHelper();
-    virtual ~BaseExpressionHelper();
-
-    virtual std::shared_ptr<BaseExpressionNode> ResolveName(std::string const&) = 0;
+    friend std::ostream& operator<<(std::ostream&, BaseExpressionNode&);
 };
 
 namespace BaseExpressionNodes {
@@ -129,11 +124,21 @@ namespace BaseExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return Parens::base_expression_node_id; }
 
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
-            return value->Evaluate(helper, result);
+        std::shared_ptr<BaseExpressionNode> GetValue() { return value; }
+
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            return value->Evaluate(result, errmsg);
         }
 
-        void Print(std::ostream& ostream) const override {
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            // depth first into the expression tree
+            if(!value->Explore(explore_callback, depth + 1, userdata)) return false; 
+            // and then evaluate the actual node
+            if(!explore_callback(value, shared_from_this(), depth, userdata)) return false;
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
             ostream << left << *value << right;
         }
 
@@ -158,12 +163,18 @@ namespace BaseExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return Constant<T>::base_expression_node_id; }
 
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const&, s64* result) const override {
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            // Constants are straightforward
             *result = (s64)value;
             return true;
         }
 
-        void Print(std::ostream& ostream) const override {
+        // Constant<T> has no subnodes to explore
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
             ostream << display;
         }
 
@@ -187,13 +198,22 @@ namespace BaseExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return Name::base_expression_node_id; }
 
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
-            auto name_expression = helper->ResolveName(name);
-            if(name_expression) return name_expression->Evaluate(helper, result);
+        std::string const& GetString() const { return name; }
+
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            // Names are not evaluatable
+            std::stringstream ss;
+            ss << "Unable to evaluate name `" << name << "`";
+            errmsg = ss.str();
             return false;
         }
 
-        void Print(std::ostream& ostream) const override {
+        // Name has no subnodes to explore
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
             ostream << name;
         }
 
@@ -219,16 +239,28 @@ namespace BaseExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return BinaryOp<T>::base_expression_node_id; }
 
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
+        bool Evaluate(s64* result, std::string& errmsg) const override {
             s64 left_value;
-            if(!left->Evaluate(helper, &left_value)) return false;
+            if(!left->Evaluate(&left_value, errmsg)) return false;
             s64 right_value;
-            if(!right->Evaluate(helper, &right_value)) return false;
-            *result = T(left_value, right_value);
+            if(!right->Evaluate(&right_value, errmsg)) return false;
+            *result = T(left_value, right_value); // can't fail
             return true;
         }
 
-        void Print(std::ostream& ostream) const override {
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            // depth first into the left expression tree
+            if(!left->Explore(explore_callback, depth + 1, userdata)) return false; 
+            // and then evaluate the node
+            if(!explore_callback(left, shared_from_this(), depth, userdata)) return false;
+            // and depth first into the right expression tree
+            if(!right->Explore(explore_callback, depth + 1, userdata)) return false; 
+            // and then evaluate the node
+            if(!explore_callback(right, shared_from_this(), depth, userdata)) return false;
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
             ostream << *left << display << *right;
         }
 
@@ -274,10 +306,10 @@ namespace BaseExpressionNodes {
     template<s64 (*T)(s64)>
     class UnaryOp : public BaseExpressionNode {
     public:
-        UnaryOp(std::string const& _display, std::shared_ptr<BaseExpressionNode>& _right)
-            : display(_display), right(_right)
+        UnaryOp(std::string const& _display, std::shared_ptr<BaseExpressionNode>& _value)
+            : display(_display), value(_value)
         {
-            assert(right);
+            assert(value);
         }
 
         virtual ~UnaryOp() {}
@@ -285,23 +317,30 @@ namespace BaseExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return UnaryOp<T>::base_expression_node_id; }
 
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
-            s64 right_value;
-            if(!right->Evaluate(helper, &right_value)) return false;
-            *result = T(right_value);
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            s64 evaluated;
+            if(!value->Evaluate(&evaluated, errmsg)) return false;
+            *result = T(evaluated);
             return true;
         }
 
-        void Print(std::ostream& ostream) const override {
-            ostream << display << *right;
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            // depth first into the expression tree
+            if(!value->Explore(explore_callback, depth + 1, userdata)) return false; 
+            // and then evaluate the node
+            if(!explore_callback(value, shared_from_this(), depth, userdata)) return false;
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
+            ostream << display << *value;
         }
 
         bool Save(std::ostream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>) override;
         static std::shared_ptr<UnaryOp<T>> Load(std::istream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>&);
 
     private:
-        std::shared_ptr<BaseExpressionNode> left;
-        std::shared_ptr<BaseExpressionNode> right;
+        std::shared_ptr<BaseExpressionNode> value;
         std::string display;
     };
 
@@ -335,12 +374,22 @@ namespace BaseExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return FunctionCall::base_expression_node_id; }
 
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
-            assert(false); // TODO: *result = helper->CallFunction(name, args);
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            std::stringstream ss;
+            ss << "Function calls are not implemented, trying to call `" << name << "`";
+            errmsg = ss.str();
             return false;
         }
 
-        void Print(std::ostream& ostream) const override {
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            // depth first into the arguments
+            if(!args->Explore(explore_callback, depth + 1, userdata)) return false; 
+            // and then evaluate the node
+            if(!explore_callback(args, shared_from_this(), depth, userdata)) return false;
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
             ostream << display_name << lp_display << *args << rp_display;
         }
 
@@ -380,11 +429,22 @@ namespace BaseExpressionNodes {
             return list[i].node;
         }
 
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
-            return false; // Expression lists aren't evaluatable
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            errmsg = "Expression lists aren't evaluatable";
+            return false;
         }
 
-        void Print(std::ostream& ostream) const override {
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            for(auto& e : list) {
+                // depth first into each arguments
+                if(!e.node->Explore(explore_callback, depth + 1, userdata)) return false; 
+                // and then evaluate the node
+                if(!explore_callback(e.node, shared_from_this(), depth, userdata)) return false;
+            }
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
             for(auto& le : list) {
                 ostream << le.display << *le.node;
             }
@@ -523,9 +583,15 @@ public:
 
     std::shared_ptr<BaseExpressionNode> GetRoot() { return root; }
 
-    bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) { 
-        return root->Evaluate(helper, result); 
+    bool Evaluate(s64* result, std::string& errmsg) { 
+        if(!root) {
+            errmsg = "No root expression";
+            return false;
+        }
+        return root->Evaluate(result, errmsg); 
     }
+
+    bool Explore(explore_callback_t, void*);
 
     virtual std::shared_ptr<BaseExpressionNodeCreator> GetNodeCreator() = 0;
 
@@ -556,6 +622,7 @@ public:
 
 protected:
     std::shared_ptr<BaseExpressionNode> root;
+    int parens_depth;
 
 protected:
     virtual std::shared_ptr<BaseExpressionNode> ParseExpressionList   (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
@@ -569,6 +636,8 @@ protected:
     virtual std::shared_ptr<BaseExpressionNode> ParsePowerExpression  (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
     virtual std::shared_ptr<BaseExpressionNode> ParseUnaryExpression  (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
     virtual std::shared_ptr<BaseExpressionNode> ParsePrimaryExpression(std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseParenExpression (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -582,7 +651,6 @@ public:
     virtual ~ExpressionNodeCreator()
     {
     }
-
 };
 
 class Expression : public BaseExpression {
@@ -600,4 +668,3 @@ public:
         return std::make_shared<ExpressionNodeCreator>();
     }
 };
-

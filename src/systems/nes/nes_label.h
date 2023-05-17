@@ -14,12 +14,15 @@ public:
 
     void SetString(std::string const& s) { label = s; }
 
+    void                 SetIndex(int _index)             { index = _index; }
+    int                  const& GetIndex()          const { return index; }
     GlobalMemoryLocation const& GetMemoryLocation() const { return memory_location; }
     std::string          const& GetString()         const { return label; }
 
     bool Save(std::ostream&, std::string&);
     static std::shared_ptr<Label> Load(std::istream&, std::string&);
 private:
+    int                  index;  // not serialized in save, calculated in at runtime
     GlobalMemoryLocation memory_location;
     std::string          label;
 };

@@ -7,51 +7,39 @@
 
 namespace NES {
 
-class ExpressionHelper : public BaseExpressionHelper {
-};
+class Label;
 
 class ExpressionNode : public BaseExpressionNode {
 };
 
 namespace ExpressionNodes {
-    class OperandAddressOrLabel : public ExpressionNode {
+    class Label : public ExpressionNode {
     public:
-        OperandAddressOrLabel(GlobalMemoryLocation const& _where, int _nth, std::string const& _display)
-            : where(_where), nth(_nth), display(_display)
-        { }
-        virtual ~OperandAddressOrLabel() { }
+        Label(std::shared_ptr<NES::Label> const& _label, std::string const& _display);
+        Label(GlobalMemoryLocation const&, int, std::string const& _display);
+        virtual ~Label() { }
 
         static int base_expression_node_id;
-        int GetExpressionNodeType() const override { return OperandAddressOrLabel::base_expression_node_id; }
+        int GetExpressionNodeType() const override { return Label::base_expression_node_id; }
 
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const&, s64* result) const override {
+        // Labels evaluate to their address, whether they be zero page or not
+        bool Evaluate(s64* result, std::string& errmsg) const override {
             *result = where.address;
             return true;
         }
 
-        void Print(std::ostream& ostream) const override;
-
-        bool Save(std::ostream& os, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>) override {
-            if(!where.Save(os, errmsg)) return false;
-            WriteVarInt(os, nth);
-            WriteString(os, display);
+        // Label has no child ExpressionNode
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
             return true;
         }
 
-        static std::shared_ptr<OperandAddressOrLabel> Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>&) {
-            GlobalMemoryLocation where;
-            if(!where.Load(is, errmsg)) return nullptr;
-            int nth = ReadVarInt<int>(is);
-            std::string display;
-            ReadString(is, display);
-            if(!is.good()) {
-                errmsg = "Error loading OperandAddressOrLabel";
-                return nullptr;
-            }
-            return std::make_shared<OperandAddressOrLabel>(where, nth, display);
-        }
+        void Print(std::ostream& ostream) override;
+
+        bool Save(std::ostream& os, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>) override;
+        static std::shared_ptr<Label> Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>&);
 
     private:
+        std::weak_ptr<NES::Label>   label;
         GlobalMemoryLocation        where;
         int nth;
         std::string                 display;
@@ -67,11 +55,17 @@ namespace ExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return Accum::base_expression_node_id; }
 
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            errmsg = "Accum cannot be evaluated";
             return false;
         }
 
-        void Print(std::ostream& ostream) const override {
+        // Accum has no child ExpressionNode
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
             ostream << display;
         }
 
@@ -103,11 +97,22 @@ namespace ExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return Immediate::base_expression_node_id; }
 
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
-            return value->Evaluate(helper, result);
+        std::shared_ptr<BaseExpressionNode> GetValue() { return value; }
+
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            errmsg = "Immediate nodes are not evaluateable";
+            return false;
         }
 
-        void Print(std::ostream& ostream) const override {
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            // depth first into the expression tree
+            if(!value->Explore(explore_callback, depth + 1, userdata)) return false; 
+            // and then evaluate the actual node
+            if(!explore_callback(value, shared_from_this(), depth, userdata)) return false;
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
             ostream << display << *value;
         }
 
@@ -143,11 +148,22 @@ namespace ExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return IndexedX::base_expression_node_id; }
 
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
+        std::shared_ptr<BaseExpressionNode> GetBase() { return base; }
+
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            errmsg = "IndexedX nodes are not evaluateable";
             return false;
         }
 
-        void Print(std::ostream& ostream) const override {
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            // depth first into the expression tree
+            if(!base->Explore(explore_callback, depth + 1, userdata)) return false; 
+            // and then evaluate the actual node
+            if(!explore_callback(base, shared_from_this(), depth, userdata)) return false;
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
             ostream << *base << display;
         }
 
@@ -185,11 +201,22 @@ namespace ExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return IndexedY::base_expression_node_id; }
 
-        bool Evaluate(std::shared_ptr<BaseExpressionHelper> const& helper, s64* result) const override {
+        std::shared_ptr<BaseExpressionNode> GetBase() { return base; }
+
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            errmsg = "IndexedY nodes are not evaluateable";
             return false;
         }
 
-        void Print(std::ostream& ostream) const override {
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            // depth first into the expression tree
+            if(!base->Explore(explore_callback, depth + 1, userdata)) return false; 
+            // and then evaluate the actual node
+            if(!explore_callback(base, shared_from_this(), depth, userdata)) return false;
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
             ostream << *base << display;
         }
 
@@ -240,8 +267,8 @@ public:
         return std::make_shared<ExpressionNodes::IndexedY>(base, display);
     }
 
-    BN CreateOperandAddressOrLabel(GlobalMemoryLocation const& where, int nth, std::string const& display) {
-        return std::make_shared<ExpressionNodes::OperandAddressOrLabel>(where, nth, display);
+    BN CreateLabel(std::shared_ptr<Label> const& label, std::string const& display) {
+        return std::make_shared<ExpressionNodes::Label>(label, display);
     }
 };
 
@@ -252,7 +279,8 @@ public:
     }
 
 protected:
-    std::shared_ptr<BaseExpressionNode> ParseExpression(std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&) override;
+    std::shared_ptr<BaseExpressionNode> ParseExpression     (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&) override;
+    std::shared_ptr<BaseExpressionNode> ParseParenExpression(std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&) override;
 };
 
 };

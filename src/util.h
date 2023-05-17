@@ -20,13 +20,6 @@ inline bool StringEndsWith(std::string const& value, std::string const& ending)
     return std::equal(ending.rbegin(), ending.rend(), value.rbegin());
 }
 
-inline std::string StringLower(std::string const& s)
-{
-    std::string ret = s;
-    std::transform(ret.begin(), ret.end(), ret.begin(), [](unsigned char c){ return std::tolower(c); });
-    return ret;
-}
-
 template <class T>
 inline void WriteVarInt(std::ostream& os, T const& v)
 {
@@ -95,5 +88,12 @@ inline void strreplace(std::string& str, const std::string& from, const std::str
         str.replace(start_pos, from.length(), to);
         start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
     }
+}
+
+inline std::string strlower(std::string const& s)
+{
+    std::string ret = s;
+    std::transform(ret.begin(), ret.end(), ret.begin(), [](unsigned char c){ return std::tolower(c); });
+    return ret;
 }
 

@@ -345,13 +345,14 @@ shared_ptr<MemoryObject> MemoryRegion::GetMemoryObject(GlobalMemoryLocation cons
     auto ret = object_refs[region_offset];
 
     if(offset != NULL) {
+        *offset = 0;
+
         auto cur = object_refs[region_offset];
         while(cur == ret && region_offset > 0) {
             region_offset -= 1;
             cur = object_refs[region_offset];
+            if(ret == cur) (*offset) += 1;
         };
-
-        *offset = (ConvertToRegionOffset(where.address) - region_offset) - 1;
     }
 
     return ret;
@@ -609,6 +610,7 @@ void MemoryRegion::ApplyLabel(shared_ptr<Label>& label)
     auto memory_object = object_refs[region_offset];
 
     // add the label
+    label->SetIndex(memory_object->labels.size());
     memory_object->labels.push_back(label);
 
     // update the object
@@ -938,6 +940,7 @@ bool MemoryObject::Load(std::istream& is, std::string& errmsg)
     for(int i = 0; i < nlabels; i++) {
         auto label = Label::Load(is, errmsg);
         if(!label) return false;
+        label->SetIndex(i);
         labels.push_back(label);
     }
 

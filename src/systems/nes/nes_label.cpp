@@ -27,7 +27,6 @@ shared_ptr<Label> Label::Load(std::istream& is, std::string& errmsg)
     string label_str;
     ReadString(is, label_str);
     if(!is.good()) return nullptr;
-    cout << "Label: " << label_str << " at " << m << endl;
     return make_shared<Label>(m, label_str);
 }
 

@@ -6,17 +6,19 @@
 
 #include "systems/system.h"
 
+
 #include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_defs.h"
 #include "systems/nes/nes_memory.h"
 
-class NESSystem; // TODO move into NES namespace
+class BaseExpressionNode;
 
 namespace NES {
 
 class Cartridge;
 class Disassembler;
 class Expression;
+class ExpressionNodeCreator;
 class Label;
 class ProgramRomBank;
 
@@ -47,7 +49,7 @@ public:
 
     void MarkMemoryAsUndefined(GlobalMemoryLocation const&);
     void MarkMemoryAsWords(GlobalMemoryLocation const&, u32 byte_count);
-    void SetOperandExpression(GlobalMemoryLocation const&, std::shared_ptr<Expression> const&);
+    bool SetOperandExpression(GlobalMemoryLocation const&, std::shared_ptr<Expression>&, std::string& errmsg);
 
     int GetSortableMemoryLocation(GlobalMemoryLocation const& s) {
         int ret = s.address;
@@ -126,12 +128,23 @@ private:
 
     // label database
     std::unordered_map<std::string, std::shared_ptr<Label>> label_database = {};
-    //!std::unordered_map<GlobalMemoryLocation, std::shared_ptr<LabelList>, GlobalMemoryLocation::HashFunction> label_database = {};
+
+    // defines database
+    //!std::unordered_map<std::string, std::shared_ptr<Define>> define_database = {};
 
     bool disassembling;
     GlobalMemoryLocation disassembly_address;
 
     std::shared_ptr<Disassembler> disassembler;
+
+    struct ExploreExpressionNodeData {
+        GlobalMemoryLocation where;
+        std::string&         errmsg;
+    };
+
+    std::shared_ptr<ExpressionNodeCreator> GetNodeCreator();
+    bool ExploreExpressionNodeCallback(std::shared_ptr<BaseExpressionNode>&, std::shared_ptr<BaseExpressionNode> const&, int, void*);
+	bool DetermineAddressingMode(std::shared_ptr<Expression>&, ADDRESSING_MODE*, s64*, std::string&);
 };
 
 }

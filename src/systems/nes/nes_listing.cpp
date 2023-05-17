@@ -319,12 +319,6 @@ void ListingItemCode::EditOperandExpression(shared_ptr<System>& system, GlobalMe
     }
 }
 
-// TODO
-// parsing the expression should determine if Names can be converted to Labels or Defines at parse time
-// any Name that can't be converted can be left as a Name operand
-// and then that doesn't determine if a parsed expression is a legal NES expression
-// we should have a validate instruction that makes sure that the opcode matches the operand expression
-// and that all names are valid. Evaluate() should always be possible after accounting for addressing modes
 bool ListingItemCode::ParseOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
 {
     if(!wait_dialog) {
@@ -332,14 +326,22 @@ bool ListingItemCode::ParseOperandExpression(shared_ptr<System>& system, GlobalM
 
         auto expr = make_shared<Expression>();
         if(expr->Set(edit_buffer, parse_errmsg, errloc)) {
-            // successfully parsed the expression, so set it
-            system->SetOperandExpression(where, expr);
-            parse_operand_expression = false;
-            return true;
+            // successfully parsed the expression, try to set it on the operand (where it will do semantic checking
+            // and validate the expression is legal)
+            if(!system->SetOperandExpression(where, expr, parse_errmsg)) {
+                wait_dialog = true;
+                stringstream ss;
+                ss << "The operand expression is invalid: " << parse_errmsg;
+                parse_errmsg = ss.str();
+            } else {
+                // the operand expression was set successfully
+                parse_operand_expression = false;
+                return true;
+            }
         } else {
             wait_dialog = true;
             stringstream ss;
-            ss << "The input expression isn't valid: " << parse_errmsg << " at position " << (errloc + 1);
+            ss << "The operand expression can't be parsed: " << parse_errmsg << " at position " << (errloc + 1);
             parse_errmsg = ss.str();
         }
     }
@@ -348,6 +350,7 @@ bool ListingItemCode::ParseOperandExpression(shared_ptr<System>& system, GlobalM
         if(MyApp::Instance()->OKPopup("Operand parse error", parse_errmsg)) {
             wait_dialog = false;
             parse_operand_expression = false;
+            started_editing = true; // re-edit the expression
         }
     }
 

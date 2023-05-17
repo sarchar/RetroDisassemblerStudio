@@ -12,25 +12,68 @@ using namespace std;
 namespace NES {
 
 namespace ExpressionNodes {
-int OperandAddressOrLabel::base_expression_node_id = 0;
+int Label::base_expression_node_id = 0;
 int Immediate::base_expression_node_id = 0;
 int IndexedX::base_expression_node_id = 0;
 int IndexedY::base_expression_node_id = 0;
 int Accum::base_expression_node_id = 0;
 
-void OperandAddressOrLabel::Print(std::ostream& ostream) const {
+Label::Label(shared_ptr<NES::Label> const& _label, string const& _display)
+    : label(_label), nth(0), display(_display)
+{ 
+    where = _label->GetMemoryLocation();
+}
+
+Label::Label(GlobalMemoryLocation const& _where, int _nth, string const& _display)
+    : where(_where), nth(_nth), display(_display)
+{ }
+
+void Label::Print(std::ostream& ostream) {
+    // Use the label if it exists
+    if(auto t = label.lock()) {
+        ostream << t->GetString();
+        return;
+    }
+
+    // No label, so try looking it up
     if(auto system = MyApp::Instance()->GetProject()->GetSystem<System>()) {
-        int offset = 0;
-        if(auto memory_object = system->GetMemoryObject(where, &offset)) {
-            if(nth < memory_object->labels.size()) {
-                ostream << memory_object->labels[nth]->GetString();
-                if(offset > 0) ostream << "+" << offset;
-                return;
-            }
+        auto labels = system->GetLabelsAt(where);
+        if(labels.size()) {
+            nth = min(nth, labels.size() - 1);
+            label = labels[nth];
+            ostream << labels[nth]->GetString();
+            return;
         }
     }
 
+    // Still no label, display memory address instead
     ostream << display;
+}
+
+bool Label::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator>) 
+{
+    if(!where.Save(os, errmsg)) return false;
+    if(auto t = label.lock()) {
+        WriteVarInt(os, t->GetIndex());
+    } else {
+        WriteVarInt(os, 0);
+    }
+    WriteString(os, display);
+    return true;
+}
+
+shared_ptr<Label> Label::Load(istream& is, string& errmsg, shared_ptr<BaseExpressionNodeCreator>&) 
+{
+    GlobalMemoryLocation where;
+    if(!where.Load(is, errmsg)) return nullptr;
+    int nth = ReadVarInt<int>(is);
+    string display;
+    ReadString(is, display);
+    if(!is.good()) {
+        errmsg = "Error loading Label";
+        return nullptr;
+    }
+    return make_shared<Label>(where, nth, display);
 }
 
 }
@@ -41,13 +84,13 @@ void ExpressionNodeCreator::RegisterExpressionNodes()
     RegisterBaseExpressionNode<ExpressionNodes::Immediate>();
     RegisterBaseExpressionNode<ExpressionNodes::IndexedX>();
     RegisterBaseExpressionNode<ExpressionNodes::IndexedY>();
-    RegisterBaseExpressionNode<ExpressionNodes::OperandAddressOrLabel>();
+    RegisterBaseExpressionNode<ExpressionNodes::Label>();
 }
 
 // we're going to interject immediate operands into the expression by letting
 // and expression start with a '#'. this also means that elements in function list may contain
-// immediates, but that won't be a problem for a long time. when it does, I feel sorry for whoever
-// has to figure out what to do there (most likely me!)
+// immediates, but that won't be a problem due to Explore() semantic checking, making sure that
+// only the top level (root) node can be an Immediate
 //
 // immediate_expr: HASH expression
 //               | expression
@@ -66,5 +109,59 @@ shared_ptr<BaseExpressionNode> Expression::ParseExpression(shared_ptr<Tenderizer
         return BaseExpression::ParseExpression(tenderizer, _node_creator, errmsg, errloc);
     }
 }
+
+// We're going to take over the parenthese expressions so that we will allow a list when nested at depth 0
+// We will also forbid list greater than lengths 1 and if the 2nd item is not "X" or "Y", at which point we
+// can create an indexed node instead
+//
+// paren_expression: (if depth = 1) expression_list_of_length_1
+//                 | expression
+//                 ;
+//
+shared_ptr<BaseExpressionNode> Expression::ParseParenExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& _node_creator, string& errmsg, int& errloc)
+{
+    auto node_creator = dynamic_pointer_cast<ExpressionNodeCreator>(_node_creator);
+
+    if(parens_depth != 1) {
+        return BaseExpression::ParseParenExpression(tenderizer, _node_creator, errmsg, errloc);
+    }
+
+    // save location to start of the list
+    auto loc = tenderizer->GetLocation();
+
+    auto node = BaseExpression::ParseExpressionList(tenderizer, _node_creator, errmsg, errloc);
+    if(!node) return nullptr;
+
+    if(auto list = dynamic_pointer_cast<BaseExpressionNodes::ExpressionList>(node)) { // check if we got a list
+        // validate length
+        if(list->GetSize() != 2) {
+            errmsg = "Invalid list of expressions";
+            errloc = loc;
+            return nullptr;
+        }
+
+        // get 2nd node, and make sure it's either X, or Y
+        string display;
+        auto name = dynamic_pointer_cast<BaseExpressionNodes::Name>(list->GetNode(1, &display));
+        string str = name ? strlower(name->GetString()) : "";
+        if(str != "x" && str != "y") {
+            errmsg = "Invalid index (must be X or Y)";
+            errloc = loc;
+            return nullptr;
+        }
+
+        // let's convert this node into IndexedX or IndexedY
+        display = display + name->GetString();
+        auto value = list->GetNode(0);
+        if(str == "x") {
+            return node_creator->CreateIndexedX(value, display);
+        } else {
+            return node_creator->CreateIndexedY(value, display);
+        }
+    }
+
+    return node;
+}
+
 
 }

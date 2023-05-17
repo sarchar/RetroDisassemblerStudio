@@ -333,20 +333,23 @@ void Listing::CheckInput()
             cout << "Creating memory reference to " << label_address << endl;
             {
                 auto target_object = system->GetMemoryObject(label_address);
+                std::shared_ptr<Label> label;
                 if(target_object && target_object->labels.size() == 0) { // create a label at that address if there isn't one yet
                     stringstream ss;
                     ss << "L_" << hex << setfill('0') << uppercase;
                     if(system->CanBank(label_address)) ss << setw(2) << label_address.prg_rom_bank;
                     ss << setw(4) << label_address.address;
 
-                    system->CreateLabel(label_address, ss.str());
+                    label = system->CreateLabel(label_address, ss.str());
+                } else {
+                    label = target_object->labels[0];
                 }
 
                 // now apply a OperandAddressOrLabel to the data on this memory object
                 auto default_operand_format = memory_object->FormatOperandField();
                 auto expr = make_shared<Expression>();
                 auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
-                auto name = nc->CreateOperandAddressOrLabel(label_address, 0, default_operand_format);
+                auto name = nc->CreateLabel(label, default_operand_format);
                 expr->Set(name);
 
                 // set the expression for memory object at current_selection. it'll show up immediately
@@ -372,6 +375,7 @@ void Listing::RenderContent()
     if(!system) return;
 
     // reset the editing flag
+    bool was_editing = editing_listing_item;
     editing_listing_item = false;
 
     {
@@ -431,7 +435,7 @@ void Listing::RenderContent()
 
                 // selected and hovered let the listing item know how to behave wrt to inputs
                 bool selected = (listing_item_index == row);
-                bool hovered  = (hovered_listing_item_index == row);
+                bool hovered  = (hovered_listing_item_index == row) && !was_editing; // Don't show hovered items when editing something
 
                 // Begin a new row and next column
                 ImGui::TableNextRow();

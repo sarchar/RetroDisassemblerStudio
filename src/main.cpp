@@ -513,20 +513,7 @@ void MyApp::RenderMainMenuBar()
             }
 
             if(ImGui::MenuItem("Expressions test", "")) {
-                class ExpressionHelper : public BaseExpressionHelper {
-                public:
-                    ExpressionHelper(shared_ptr<BaseExpressionNodeCreator>& nc) 
-                        : node_creator(nc) {}
-
-                    shared_ptr<BaseExpressionNode> ResolveName(string const& name) override {
-                        return nullptr;
-                    }
-
-                    shared_ptr<BaseExpressionNodeCreator> node_creator;
-                };
-
 				auto node_creator =	Expression().GetNodeCreator();
-                shared_ptr<ExpressionHelper> helper = make_shared<ExpressionHelper>(node_creator);
 
                 string errmsg;
                 int errloc;
@@ -543,10 +530,11 @@ void MyApp::RenderMainMenuBar()
                 if(auto list = dynamic_pointer_cast<BaseExpressionNodes::ExpressionList>(expr->GetRoot())) {
                     auto node = list->GetNode(0);
 					s64 result;
-                    if(node->Evaluate(helper, &result)) {
+                    string errmsg;
+                    if(node->Evaluate(&result, errmsg)) {
                         cout << "evaluation: " << result << " hex: " << hex << result << endl;
                     } else {
-                        cout << "evaluation failed" << endl;
+                        cout << "evaluation failed: " << errmsg << endl;
                     }
                 }
 
@@ -704,7 +692,7 @@ bool MyApp::OKPopup(std::string const& title, std::string const& content, bool r
 
     ImGui::Text("%s", content.c_str());
 
-    return EndPopup(ret);
+    return EndPopup(ret, true, false);
 }
 
 int MyApp::InputNamePopup(std::string const& title, std::string const& label, std::string* buffer, bool enter_returns_true, bool resizeable)
