@@ -68,6 +68,11 @@ void Cartridge::CreateMemoryRegions()
             break;
         }
         
+        case 2: { // MMC2
+            load_address = (i == (header.num_prg_rom_banks - 1)) ? PROGRAM_ROM_BANK_LOAD_HIGH_16K : PROGRAM_ROM_BANK_LOAD_LOW_16K;
+            break;
+        }
+
         default:
             assert(false); // Unhandled mapper
         }
@@ -102,6 +107,12 @@ void Cartridge::CreateMemoryRegions()
             bank_size    = CHARACTER_ROM_BANK_SIZE_8K;
             break;
         }
+
+        case 2: { // MMC2 does not have bankable CHR-ROM
+            load_address = CHARACTER_ROM_BANK_LOAD_LOW;
+            bank_size    = CHARACTER_ROM_BANK_SIZE_8K;
+            break;
+        }
         
         default:
             assert(false); // Unhandled mapper
@@ -123,6 +134,9 @@ u16 Cartridge::GetResetVectorBank()
     case 1:
         // lower 256KiB starts selected, so limit to the 16th bank
         return min((u16)16, (u16)header.num_prg_rom_banks) - 1;
+
+    case 2:
+        return (u16)header.num_prg_rom_banks - 1;
     }
 
     return 0;
@@ -140,6 +154,9 @@ bool Cartridge::CanBank(GlobalMemoryLocation const& where)
         case 1: // MMC1 depends on the location 
             if(header.num_prg_rom_banks <= 16 && where.address >= 0xC000) return false;
             return true;
+
+        case 2: // Only 0x8000-0xBFFF is bankable
+            return where.address < 0xC000;
 
         default:
             assert(false);
@@ -181,6 +198,10 @@ std::shared_ptr<MemoryRegion> Cartridge::GetMemoryRegion(GlobalMemoryLocation co
                     assert(where.prg_rom_bank < header.num_prg_rom_banks);
                     return program_rom_banks[where.prg_rom_bank];
                 }
+
+            case 2:
+                if(where.address < 0xC000) return program_rom_banks[where.prg_rom_bank];
+                else return program_rom_banks[header.num_prg_rom_banks - 1];
 
             default:
                 assert(false);
