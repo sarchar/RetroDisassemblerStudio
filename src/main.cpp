@@ -860,6 +860,7 @@ void MyApp::LoadProjectPopup()
 
             // TODO this should go away once the workspace is saved in the project file
             if(!popups.load_project.errored) {
+                AddWindow(current_project);
                 current_project->CreateDefaultWorkspace();
             }
 

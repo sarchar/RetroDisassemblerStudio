@@ -770,6 +770,21 @@ MemoryObjectTreeNode::iterator& MemoryObjectTreeNode::iterator::operator++()
     return *this;
 }
 
+void MemoryObject::SetReferences(GlobalMemoryLocation const& where)
+{
+    if(!operand_expression || !operand_expression->GetRoot()) return; // implied instructions don't have a root expressionnode set
+
+    // Explore operand_expression and mark each referenced Define() that we're referring to it
+    auto cb = [&where](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+        if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
+            define_node->GetDefine()->NoteReference(where);
+        }
+        return true;
+    };
+
+    if(!operand_expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
+}
+
 u32 MemoryObject::GetSize(shared_ptr<Disassembler> disassembler)
 {
     switch(type) {
@@ -1003,8 +1018,10 @@ bool MemoryRegion::Save(std::ostream& os, std::string& errmsg)
     return true;
 }
 
-bool MemoryRegion::Load(std::istream& is, std::string& errmsg)
+bool MemoryRegion::Load(GlobalMemoryLocation const& base, std::istream& is, std::string& errmsg)
 {
+    GlobalMemoryLocation where(base);
+
     // save name
     ReadString(is, name);
     if(!is.good()) return false;
@@ -1024,15 +1041,20 @@ bool MemoryRegion::Load(std::istream& is, std::string& errmsg)
 
     // load all the memory objects
     for(u32 offset = 0; offset < region_size;) {
+        where.address = base_address + offset;
+
         auto obj = make_shared<MemoryObject>();
         if(!obj->Load(is, errmsg)) return false;
         
-        //TODO put labels in the systems's label database
+        // put labels in the systems's label database
         if(auto system = parent_system.lock()) {
             for(auto& label : obj->labels) {
                 system->InsertLabel(label);
             }
         }
+
+        // update label/define references
+        obj->SetReferences(where);
 
         // set all memory locations offset..offset+size-1 to the object
         for(u32 i = 0; i < obj->GetSize(); i++) object_refs[offset + i] = obj;
@@ -1110,7 +1132,12 @@ shared_ptr<ProgramRomBank> ProgramRomBank::Load(std::istream& is, std::string& e
     PROGRAM_ROM_BANK_SIZE bank_size = (PROGRAM_ROM_BANK_SIZE)ReadVarInt<int>(is);
     if(!is.good()) return nullptr;
     auto prg_bank = make_shared<ProgramRomBank>(system, prg_rom_bank, "", bank_load, bank_size);
-    if(!prg_bank->MemoryRegion::Load(is, errmsg)) return nullptr;
+    GlobalMemoryLocation base {
+        .address = (u16)prg_bank->GetBaseAddress(),
+        .is_chr = false,
+        .prg_rom_bank = (u16)prg_rom_bank,
+    };
+    if(!prg_bank->MemoryRegion::Load(base, is, errmsg)) return nullptr;
     return prg_bank;
 }
 
@@ -1174,7 +1201,12 @@ shared_ptr<CharacterRomBank> CharacterRomBank::Load(std::istream& is, std::strin
     CHARACTER_ROM_BANK_SIZE bank_size = (CHARACTER_ROM_BANK_SIZE)ReadVarInt<int>(is);
     if(!is.good()) return nullptr;
     auto chr_bank = make_shared<CharacterRomBank>(system, chr_rom_bank, "", bank_load, bank_size);
-    if(!chr_bank->MemoryRegion::Load(is, errmsg)) return nullptr;
+    GlobalMemoryLocation base {
+        .address = (u16)chr_bank->GetBaseAddress(),
+        .is_chr = true,
+        .chr_rom_bank = (u16)chr_rom_bank,
+    };
+    if(!chr_bank->MemoryRegion::Load(base, is, errmsg)) return nullptr;
     return chr_bank;
 }
 
@@ -1189,6 +1221,16 @@ RAMRegion::RAMRegion(shared_ptr<System>& system)
     region_size  = 0x0800;
 }
 
+bool RAMRegion::Load(istream& is, string& errmsg)
+{
+    GlobalMemoryLocation base {
+        .address = (u16)base_address,
+        .is_chr  = false,
+    };
+
+    return MemoryRegion::Load(base, is, errmsg);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // PPU registers $2000-$2008 (mirroed every 8 bytes until 0x3FFF)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1199,6 +1241,16 @@ PPURegistersRegion::PPURegistersRegion(shared_ptr<System>& system)
     region_size  = 0x2000;
 }
 
+bool PPURegistersRegion::Load(istream& is, string& errmsg)
+{
+    GlobalMemoryLocation base {
+        .address = (u16)base_address,
+        .is_chr  = false,
+    };
+
+    return MemoryRegion::Load(base, is, errmsg);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // APU and I/O registers $4000-$401F (doesn't have mirrored data)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1207,6 +1259,16 @@ IORegistersRegion::IORegistersRegion(shared_ptr<System>& system)
 {
     base_address = 0x4000;
     region_size  = 0x20;
+}
+
+bool IORegistersRegion::Load(istream& is, string& errmsg)
+{
+    GlobalMemoryLocation base {
+        .address = (u16)base_address,
+        .is_chr  = false,
+    };
+
+    return MemoryRegion::Load(base, is, errmsg);
 }
 
 }

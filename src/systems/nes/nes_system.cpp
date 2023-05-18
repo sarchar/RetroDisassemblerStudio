@@ -586,6 +586,7 @@ shared_ptr<Define> System::AddDefine(string const& name, string const& expressio
     cout << "adding define name(" << *nameexpr << ") = [" << *expr << "]" << " => " << result << endl;
 
     auto define = make_shared<Define>(define_name, expr);
+    define->SetReferences();
     defines.push_back(define);
     define_by_name[define_name] = define;
 
@@ -975,7 +976,7 @@ bool System::Load(std::istream& is, std::string& errmsg)
         auto define = Define::Load(is, errmsg);
         if(!define) return false;
 
-        // TODO update reverse references
+        define->SetReferences();
         defines.push_back(define);
         define_by_name[define->GetString()] = define;
     }

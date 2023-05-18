@@ -173,6 +173,8 @@ struct MemoryObject {
     MemoryObject() {}
     ~MemoryObject() {}
 
+    void SetReferences(GlobalMemoryLocation const&);
+
     u32 GetSize(std::shared_ptr<Disassembler> disassembler = nullptr);
     void Read(u8*, int);
 
@@ -285,7 +287,7 @@ public:
 
     // Load and save
     virtual bool Save(std::ostream&, std::string&);
-    virtual bool Load(std::istream&, std::string&);
+    virtual bool Load(GlobalMemoryLocation const&, std::istream&, std::string&);
 
 protected:
     u32 base_address;
@@ -360,18 +362,24 @@ class RAMRegion : public MemoryRegion {
 public:
     RAMRegion(std::shared_ptr<System>&);
     virtual ~RAMRegion() {}
+
+    bool Load(std::istream&, std::string&);
 };
 
 class PPURegistersRegion : public MemoryRegion {
 public:
     PPURegistersRegion(std::shared_ptr<System>&);
     virtual ~PPURegistersRegion() {}
+
+    bool Load(std::istream&, std::string&);
 };
 
 class IORegistersRegion : public MemoryRegion {
 public:
     IORegistersRegion(std::shared_ptr<System>&);
     virtual ~IORegistersRegion() {}
+
+    bool Load(std::istream&, std::string&);
 };
 
 

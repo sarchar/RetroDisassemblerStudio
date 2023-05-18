@@ -63,7 +63,7 @@ private:
         std::string buffer1;
         std::string buffer2;
 
-        std::string current_title;
+        std::string current_title = "";
     } popups;
 };
 

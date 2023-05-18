@@ -16,6 +16,19 @@ Define::~Define()
 {
 }
 
+void Define::SetReferences()
+{
+    // Explore expression and mark each referenced Define() that we're referring to it
+    auto cb = [this](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+        if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
+            define_node->GetDefine()->NoteReference(shared_from_this());
+        }
+        return true;
+    };
+
+    if(!expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
+}
+
 s64 Define::Evaluate()
 {
     if(cached) return cached_value;

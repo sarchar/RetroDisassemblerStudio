@@ -23,6 +23,8 @@ namespace ExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return Define::base_expression_node_id; }
 
+        std::shared_ptr<NES::Define> GetDefine() { return define; }
+
         // Define evaluate to their value, simple
         bool Evaluate(s64* result, std::string& errmsg) const override {
             *result = define->Evaluate();

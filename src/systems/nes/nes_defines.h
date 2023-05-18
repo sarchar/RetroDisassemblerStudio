@@ -15,11 +15,18 @@ public:
     Define(std::string const&, std::shared_ptr<Expression>&);
     ~Define();
 
+    void SetReferences();
+
     void SetString(std::string const& s) { name = s; }
 
     std::string                 const& GetString()        const { return name; }
     std::shared_ptr<Expression> const& GetExpression()    const { return expression; }
-    int                                GetNumReverseReferences() const { return reverse_references.size(); }
+
+    template<class T>
+    void    NoteReference(T const& t) {
+        reverse_references.push_back(t);
+    }
+    int     GetNumReverseReferences() const { return reverse_references.size(); }
 
     s64 Evaluate();
     std::string const& GetExpressionString();
