@@ -393,87 +393,90 @@ void Listing::RenderContent()
         ImGui::Separator();
     }
 
-    // Need the program rom bank that is currently in the listing
-    auto memory_region = system->GetMemoryRegion(current_selection);
+    // Let's not render content while disassembling
+    if(!system->IsDisassembling()) {
+        // Need the program rom bank that is currently in the listing
+        auto memory_region = system->GetMemoryRegion(current_selection);
 
-    ImGuiTableFlags outer_table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoBordersInBody;
+        ImGuiTableFlags outer_table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoBordersInBody;
 
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
 
-    // We use nested tables so that each row can have its own layout. This will be useful when we can render
-    // things like plate comments, labels, etc
-    if(ImGui::BeginTable("listing_table", 1, outer_table_flags)) {
-        ImGui::TableSetupColumn("RowContent", ImGuiTableColumnFlags_WidthStretch);
+        // We use nested tables so that each row can have its own layout. This will be useful when we can render
+        // things like plate comments, labels, etc
+        if(ImGui::BeginTable("listing_table", 1, outer_table_flags)) {
+            ImGui::TableSetupColumn("RowContent", ImGuiTableColumnFlags_WidthStretch);
 
-        ImGuiListClipper clipper;
-        u32 total_listing_items = memory_region->GetTotalListingItems();
-        //cout << "total_listing_items = 0x" << hex << total_listing_items << endl;
-        clipper.Begin(total_listing_items);
-        
-        // Force the clipper to include a range that also includes the row we want to jump to
-        // we have a buffer of 100 lines so ImGui can calculate row heights
-        u32 listing_item_index = memory_region->GetListingIndexByAddress(current_selection) + current_selection_listing_item;
-        if(jump_to_selection > 0) {
-            clipper.ForceDisplayRangeByIndices(listing_item_index - 25, listing_item_index + 25);
-        }
+            ImGuiListClipper clipper;
+            u32 total_listing_items = memory_region->GetTotalListingItems();
+            //cout << "total_listing_items = 0x" << hex << total_listing_items << endl;
+            clipper.Begin(total_listing_items);
+            
+            // Force the clipper to include a range that also includes the row we want to jump to
+            // we have a buffer of 100 lines so ImGui can calculate row heights
+            u32 listing_item_index = memory_region->GetListingIndexByAddress(current_selection) + current_selection_listing_item;
+            if(jump_to_selection > 0) {
+                clipper.ForceDisplayRangeByIndices(listing_item_index - 25, listing_item_index + 25);
+            }
 
-        while(clipper.Step()) {
-            auto listing_item_iterator = memory_region->GetListingItemIterator(clipper.DisplayStart);
-            bool did_scroll = false;
+            while(clipper.Step()) {
+                auto listing_item_iterator = memory_region->GetListingItemIterator(clipper.DisplayStart);
+                bool did_scroll = false;
 
-            //cout << "DisplayStart = " << hex << clipper.DisplayStart << " - " << clipper.DisplayEnd << endl;
-            for(int row = clipper.DisplayStart; row < clipper.DisplayEnd && listing_item_iterator; ++row, ++*listing_item_iterator) {
-                // get the listing item
-                auto& listing_item = listing_item_iterator->GetListingItem();
+                //cout << "DisplayStart = " << hex << clipper.DisplayStart << " - " << clipper.DisplayEnd << endl;
+                for(int row = clipper.DisplayStart; row < clipper.DisplayEnd && listing_item_iterator; ++row, ++*listing_item_iterator) {
+                    // get the listing item
+                    auto& listing_item = listing_item_iterator->GetListingItem();
 
-                // Get the address this listing_item belongs to so we can highlight it when selected
-                GlobalMemoryLocation current_address(current_selection); // start with a copy since we're in the same memory region
-                current_address.address = listing_item_iterator->GetCurrentAddress();
+                    // Get the address this listing_item belongs to so we can highlight it when selected
+                    GlobalMemoryLocation current_address(current_selection); // start with a copy since we're in the same memory region
+                    current_address.address = listing_item_iterator->GetCurrentAddress();
 
-                //cout << "row = 0x" << row << " current_address.address = 0x" << hex << current_address.address << endl;
+                    //cout << "row = 0x" << row << " current_address.address = 0x" << hex << current_address.address << endl;
 
-                // selected and hovered let the listing item know how to behave wrt to inputs
-                bool selected = (listing_item_index == row);
-                bool hovered  = (hovered_listing_item_index == row) && !was_editing; // Don't show hovered items when editing something
+                    // selected and hovered let the listing item know how to behave wrt to inputs
+                    bool selected = (listing_item_index == row);
+                    bool hovered  = (hovered_listing_item_index == row) && !was_editing; // Don't show hovered items when editing something
 
-                // Begin a new row and next column
-                ImGui::TableNextRow();
+                    // Begin a new row and next column
+                    ImGui::TableNextRow();
 
-                // set the background color
-                ImU32 const row_color = ImGui::GetColorU32(hovered ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
-                if(selected || hovered) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, row_color);
+                    // set the background color
+                    ImU32 const row_color = ImGui::GetColorU32(hovered ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
+                    if(selected || hovered) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, row_color);
 
-                ImGui::TableNextColumn(); // start the content of the listing item
-                listing_item->RenderContent(system, current_address, adjust_columns, selected, hovered); // render the content
+                    ImGui::TableNextColumn(); // start the content of the listing item
+                    listing_item->RenderContent(system, current_address, adjust_columns, selected, hovered); // render the content
 
-                // if the item has determined to be editing something, take note
-                if(listing_item->IsEditing()) editing_listing_item = true;
+                    // if the item has determined to be editing something, take note
+                    if(listing_item->IsEditing()) editing_listing_item = true;
 
-                // update the currently hovered and selected row
-                if(ImGui::IsItemHovered()) {
-                    hovered_listing_item_index = row;
+                    // update the currently hovered and selected row
+                    if(ImGui::IsItemHovered()) {
+                        hovered_listing_item_index = row;
 
-                    // if the mouse was clicked on this row, change the selection as well
-                    if(ImGui::IsMouseClicked(0)) {
-                        current_selection = current_address;
-                        current_selection_listing_item = listing_item_iterator->GetListingItemIndex();
+                        // if the mouse was clicked on this row, change the selection as well
+                        if(ImGui::IsMouseClicked(0)) {
+                            current_selection = current_address;
+                            current_selection_listing_item = listing_item_iterator->GetListingItemIndex();
+                        }
+                    }
+
+                    // Only after the row has been rendered and it was the last element in the table,
+                    // we can use ScrollToItem() to get the item focused in the middle of the view.
+                    if(jump_to_selection > 0 && current_address.address == current_selection.address && !did_scroll) {
+                        ImGui::ScrollToItem(ImGuiScrollFlags_AlwaysCenterY);
+                        jump_to_selection -= 1;
+                        did_scroll = true;
                     }
                 }
-
-                // Only after the row has been rendered and it was the last element in the table,
-                // we can use ScrollToItem() to get the item focused in the middle of the view.
-                if(jump_to_selection > 0 && current_address.address == current_selection.address && !did_scroll) {
-                    ImGui::ScrollToItem(ImGuiScrollFlags_AlwaysCenterY);
-                    jump_to_selection -= 1;
-                    did_scroll = true;
-                }
             }
+            ImGui::EndTable();
         }
-        ImGui::EndTable();
-    }
 
-    ImGui::PopStyleVar(2);
+        ImGui::PopStyleVar(2);
+    }
 
     RenderPopups();
 }

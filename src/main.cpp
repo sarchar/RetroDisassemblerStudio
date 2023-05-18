@@ -26,6 +26,7 @@
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 #include "windows/rom_loader.h"
+#include "windows/nes/defines.h"
 #include "windows/nes/labels.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/regions.h"
@@ -490,6 +491,11 @@ void MyApp::RenderMainMenuBar()
             //!    auto wnd = SNESMemory::CreateWindow();
             //!    AddWindow(wnd);
             //!}
+            if(ImGui::MenuItem("Defines")) {
+                auto wnd = NES::Windows::Defines::CreateWindow();
+                AddWindow(wnd);
+            }
+
             if(ImGui::MenuItem("Labels")) {
                 auto wnd = NES::Windows::Labels::CreateWindow();
                 AddWindow(wnd);

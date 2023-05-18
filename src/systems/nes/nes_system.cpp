@@ -9,6 +9,7 @@
 #include "magic_enum.hpp"
 
 #include "systems/nes/nes_cartridge.h"
+#include "systems/nes/nes_defines.h"
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
@@ -54,6 +55,19 @@ void System::CreateMemoryRegions()
     cartridge     = make_shared<Cartridge>(selfptr);          // 0x6000-0xFFFF
 }
 
+void System::CreateDefaultDefines()
+{
+    string errmsg;
+    if(!AddDefine("PPUCTRL_SPR16", "1 << 5", errmsg)) {
+        cout << "could not add define: " << errmsg << endl;
+    }
+
+    if(!AddDefine("PPUCTRL_OTHER", "PPUCTRL_SPR16 + 1", errmsg)) {
+        cout << "could not add define: " << errmsg << endl;
+    }
+}
+
+
 void System::CreateDefaultLabels()
 {
     GlobalMemoryLocation p;
@@ -80,7 +94,28 @@ void System::CreateDefaultLabels()
     p.address = 0x2006; CreateLabel(p, "PPUADDR");
     p.address = 0x2007; CreateLabel(p, "PPUDATA");
 
+    p.address = 0x4000; CreateLabel(p, "SQ1_VOL");
+    p.address = 0x4001; CreateLabel(p, "SQ1_SWEEP");
+    p.address = 0x4002; CreateLabel(p, "SQ1_LO");
+    p.address = 0x4003; CreateLabel(p, "SQ1_HI");
+    p.address = 0x4004; CreateLabel(p, "SQ2_VOL");
+    p.address = 0x4005; CreateLabel(p, "SQ2_SWEEP");
+    p.address = 0x4006; CreateLabel(p, "SQ2_LO");
+    p.address = 0x4007; CreateLabel(p, "SQ2_HI");
+    p.address = 0x4008; CreateLabel(p, "TRI_LINEAR");
+    p.address = 0x400A; CreateLabel(p, "TRI_LO");
+    p.address = 0x400B; CreateLabel(p, "TRI_HI");
+    p.address = 0x400C; CreateLabel(p, "NOISE_VOL");
+    p.address = 0x400E; CreateLabel(p, "NOISE_HI");
+    p.address = 0x400F; CreateLabel(p, "NOISE_LO");
+    p.address = 0x4010; CreateLabel(p, "DMC_FREQ");
+    p.address = 0x4011; CreateLabel(p, "DMC_RAW");
+    p.address = 0x4012; CreateLabel(p, "DMC_START");
+    p.address = 0x4013; CreateLabel(p, "DMC_LEN");
     p.address = 0x4014; CreateLabel(p, "OAMDMA");
+    p.address = 0x4015; CreateLabel(p, "SND_CHN");
+    p.address = 0x4016; CreateLabel(p, "JOY1");
+    p.address = 0x4017; CreateLabel(p, "JOY2");
 }
 
 // Memory
@@ -193,15 +228,19 @@ bool System::ExploreExpressionNodeCallback(shared_ptr<BaseExpressionNode>& node,
 
     // check names, and convert them into appropriate expression nodes
     if(auto name = dynamic_pointer_cast<BaseExpressionNodes::Name>(node)) {
-        cout << depth << ": visited " << name->GetString() << endl;
         auto str = name->GetString();
         auto strl = strlower(str);
 
         // convert to Accum mode only at depth 0
         if(depth == 0) {
             if(strl == "a") { // convert accumulator
-                node = GetNodeCreator()->CreateAccum(str);
-                cout << "Made Accum node" << endl;
+                if(explore_data->allow_modes) {
+                    node = GetNodeCreator()->CreateAccum(str);
+                    cout << "Made Accum node" << endl;
+                } else {
+                    explore_data->errmsg = "Register name not allowed here";
+                    return false;
+                }
             }
         }
 
@@ -211,26 +250,47 @@ bool System::ExploreExpressionNodeCallback(shared_ptr<BaseExpressionNode>& node,
             // we check length of list and position within the list later
             assert(parent);
             auto parent_list = dynamic_pointer_cast<BaseExpressionNodes::ExpressionList>(parent);
-            if(!parent_list || depth > 1) {
+            if(!explore_data->allow_modes || !parent_list || depth > 1) {
                 stringstream ss;
-                ss << "Invalid use of name '" << str << "'";
+                ss << "Invalid use of register name '" << str << "'";
                 explore_data->errmsg = ss.str();
                 return false;
             }
         }
 
         // try to look up the label
-        if(auto label = FindLabel(str)) {
-            // label exists, create a default display for it
-            stringstream ss;
-            ss << hex << setfill('0') << uppercase << "$";
-            auto loc = label->GetMemoryLocation();
-            if(loc.address < 0x100) ss << setw(2);
-            else ss << setw(4);
-            ss << loc.address;
+        bool was_a_thing = false;
+        if(explore_data->allow_labels) {
+            if(auto label = FindLabel(str)) {
+                // label exists, create a default display for it
+                stringstream ss;
+                ss << hex << setfill('0') << uppercase << "$";
+                auto loc = label->GetMemoryLocation();
+                if(loc.address < 0x100) ss << setw(2);
+                else ss << setw(4);
+                ss << loc.address;
 
-            // replace the current node with a OperandAddressOrLabel
-            node = GetNodeCreator()->CreateLabel(label, ss.str());
+                // replace the current node with a Label expression node
+                node = GetNodeCreator()->CreateLabel(label, ss.str());
+
+                explore_data->labels.push_back(label);
+                was_a_thing = true;
+            }
+        }
+
+        // look up define and create Define expression node
+        if(!was_a_thing && explore_data->allow_defines) {
+            if(auto define = FindDefine(str)) {
+                // define exists, replace the current node with a Define expression node
+                node = GetNodeCreator()->CreateDefine(define);
+
+                explore_data->defines.push_back(define);
+                was_a_thing = true;
+            }
+        }
+
+        if(!was_a_thing) {
+            explore_data->undefined_names.push_back(str);
         }
     }
 
@@ -245,6 +305,11 @@ bool System::ExploreExpressionNodeCallback(shared_ptr<BaseExpressionNode>& node,
     // Convert indexed addressing modes at the root. Expressions nested one layer deep have already
     // been created in the Expression::ParseParenExpression function
     if(auto list = dynamic_pointer_cast<BaseExpressionNodes::ExpressionList>(node)) {
+        if(!explore_data->allow_modes) {
+            explore_data->errmsg = "Invalid use of indexing mode";
+            return false;
+        }
+
         if(list->GetSize() != 2) {
             explore_data->errmsg = "Invalid expression list (can only be length 2)";
             return false;
@@ -287,8 +352,10 @@ bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<
     }
 
     ExploreExpressionNodeData explore_data {
-        .where  = where,
-        .errmsg = errmsg
+        .errmsg        = errmsg,
+        .allow_modes   = true,
+        .allow_labels  = true,
+        .allow_defines = true
     };
 
     // Loop over every node (and change them to system nodes if necessary), validating some things along the way
@@ -385,7 +452,7 @@ bool System::DetermineAddressingMode(shared_ptr<Expression>& expr, ADDRESSING_MO
     } else if(auto imm = dynamic_pointer_cast<ExpressionNodes::Immediate>(root)) { // check if the root is an Immediate
         *addressing_mode = AM_IMMEDIATE;
 
-        // For Immediate to be valid, the expression must be evaluatable and be <= 255
+        // For Immediate to be valid, the expression must be evaluable and be <= 255
 		auto value = imm->GetValue();
         if(!value->Evaluate(operand_value, errmsg)) return false;
 
@@ -463,7 +530,7 @@ bool System::DetermineAddressingMode(shared_ptr<Expression>& expr, ADDRESSING_MO
 
         return true;
     } else {
-        // Now we either have ZP or ABS direct and the expression has to be evaluatable. 
+        // Now we either have ZP or ABS direct and the expression has to be evaluable. 
         if(!root->Evaluate(operand_value, errmsg)) return false;
 
         if(*operand_value < 0 || *operand_value > 255) {
@@ -474,6 +541,53 @@ bool System::DetermineAddressingMode(shared_ptr<Expression>& expr, ADDRESSING_MO
 
         return true;
     }
+}
+
+shared_ptr<Define> System::AddDefine(string const& name, string const& expression_string, string& errmsg)
+{
+    int errloc;
+
+    // evaluate 'name' and make sure we get a name node
+    auto nameexpr = make_shared<Expression>();
+    if(!nameexpr->Set(name, errmsg, errloc) || !(bool)dynamic_pointer_cast<BaseExpressionNodes::Name>(nameexpr->GetRoot())) {
+        errmsg = "Invalid name for Define";
+        return nullptr;
+    }
+
+    string define_name = (dynamic_pointer_cast<BaseExpressionNodes::Name>(nameexpr->GetRoot()))->GetString();
+
+    // does define exist?
+    if(auto other = define_database[define_name]) {
+        errmsg = "Define name exists already";
+        return nullptr;
+    }
+
+    // try parsing the expression, creating base Name nodes where necessary
+    auto expr = make_shared<Expression>();
+    if(!expr->Set(expression_string, errmsg, errloc)) return nullptr;
+
+    // explore the expression and allow only defines
+    ExploreExpressionNodeData explore_data {
+        .errmsg        = errmsg,
+        .allow_modes   = false,
+        .allow_labels  = false,
+        .allow_defines = true
+    };
+
+    auto cb = std::bind(&System::ExploreExpressionNodeCallback, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
+    if(!expr->Explore(cb, &explore_data)) return nullptr;
+
+    // and now the define must be evaluable!
+    s64 result;
+    if(!expr->Evaluate(&result, errmsg)) return nullptr;
+
+    // define looks good, add to database
+    cout << "adding define name(" << *nameexpr << ") = [" << *expr << "]" << " => " << result << endl;
+
+    auto define = make_shared<Define>(define_name, expr);
+    define_database[define_name] = define;
+
+    return define;
 }
 
 std::vector<std::shared_ptr<Label>> const& System::GetLabelsAt(GlobalMemoryLocation const& where)

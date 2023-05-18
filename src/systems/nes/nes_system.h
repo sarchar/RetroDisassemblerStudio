@@ -16,6 +16,7 @@ class BaseExpressionNode;
 namespace NES {
 
 class Cartridge;
+class Define;
 class Disassembler;
 class Expression;
 class ExpressionNodeCreator;
@@ -66,6 +67,22 @@ public:
 
     // Listings
     void GetListingItems(GlobalMemoryLocation const&, std::vector<std::shared_ptr<NES::ListingItem>>& out);
+
+    // Defines
+    void CreateDefaultDefines(); // for new projects
+    std::shared_ptr<Define> AddDefine(std::string const& name, std::string const&, std::string& errmsg);
+    std::shared_ptr<Define> FindDefine(std::string const& name) {
+        if(define_database.contains(name)) return define_database[name];
+        return nullptr;
+    }
+
+    template <typename F>
+    void IterateDefines(F const* cb) {
+        for(auto iter : define_database) {
+            std::shared_ptr<Define> define = iter.second;
+            (*cb)(define);
+        }
+    }
 
     // Labels
     void CreateDefaultLabels(); // for new projects
@@ -130,16 +147,26 @@ private:
     std::unordered_map<std::string, std::shared_ptr<Label>> label_database = {};
 
     // defines database
-    //!std::unordered_map<std::string, std::shared_ptr<Define>> define_database = {};
+    std::unordered_map<std::string, std::shared_ptr<Define>> define_database = {};
 
     bool disassembling;
     GlobalMemoryLocation disassembly_address;
 
     std::shared_ptr<Disassembler> disassembler;
 
+    // Userdata passed to ExploreExpressionNodeCallback
     struct ExploreExpressionNodeData {
-        GlobalMemoryLocation where;
-        std::string&         errmsg;
+        std::string& errmsg; // any error generated sets an error message
+
+        bool allow_modes;    // true if the explore can change syntax into CPU addressing modes
+
+        bool allow_labels;   // allow looking up Labels
+        std::vector<std::shared_ptr<Label>> labels;
+
+        bool allow_defines;   // allow looking up Defines
+        std::vector<std::shared_ptr<Define>> defines;
+
+        std::vector<std::string> undefined_names; // All other Names that were not labels or defines
     };
 
     std::shared_ptr<ExpressionNodeCreator> GetNodeCreator();

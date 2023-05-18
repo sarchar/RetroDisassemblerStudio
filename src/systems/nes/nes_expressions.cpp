@@ -12,11 +12,28 @@ using namespace std;
 namespace NES {
 
 namespace ExpressionNodes {
+int Define::base_expression_node_id = 0;
 int Label::base_expression_node_id = 0;
 int Immediate::base_expression_node_id = 0;
 int IndexedX::base_expression_node_id = 0;
 int IndexedY::base_expression_node_id = 0;
 int Accum::base_expression_node_id = 0;
+
+void Define::Print(std::ostream& ostream) {
+    ostream << define->GetString();
+}
+
+bool Define::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator>) 
+{
+    assert(false); //TODO
+    return false;
+}
+
+shared_ptr<Define> Define::Load(istream& is, string& errmsg, shared_ptr<BaseExpressionNodeCreator>&) 
+{
+    assert(false); //TODO
+    return nullptr;
+}
 
 Label::Label(shared_ptr<NES::Label> const& _label, string const& _display)
     : label(_label), nth(0), display(_display)

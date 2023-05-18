@@ -1,4 +1,3 @@
-
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -8,8 +7,8 @@
 
 #include "main.h"
 #include "windows/nes/listing.h"
-#include "windows/nes/labels.h"
-#include "systems/nes/nes_label.h"
+#include "windows/nes/defines.h"
+#include "systems/nes/nes_defines.h"
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
 
@@ -19,15 +18,15 @@ namespace NES {
 
 namespace Windows {
 
-shared_ptr<Labels> Labels::CreateWindow()
+shared_ptr<Defines> Defines::CreateWindow()
 {
-    return make_shared<Labels>();
+    return make_shared<Defines>();
 }
 
-Labels::Labels()
-    : BaseWindow("NES::Labels"), selected_row(-1), force_resort(true), force_reiterate(true), case_sensitive_sort(false), show_locals(false)
+Defines::Defines()
+    : BaseWindow("NES::Defines"), selected_row(-1), force_resort(true), force_reiterate(true), case_sensitive_sort(false)
 {
-    SetTitle("Labels");
+    SetTitle("Defines");
     
     // create internal signals
 
@@ -35,68 +34,63 @@ Labels::Labels()
         // grab a weak_ptr so we don't have to continually use dynamic_pointer_cast
         current_system = system;
 
-        // watch for new labels
-        label_created_connection = 
-            system->label_created->connect(std::bind(&Labels::LabelCreated, this, placeholders::_1, placeholders::_2));
+        // watch for new defines
+        //!label_created_connection = 
+        //!    system->label_created->connect(std::bind(&Defines::LabelCreated, this, placeholders::_1, placeholders::_2));
     }
 }
 
-Labels::~Labels()
+Defines::~Defines()
 {
 }
 
-void Labels::UpdateContent(double deltaTime) 
+void Defines::UpdateContent(double deltaTime) 
 {
 }
 
-void Labels::RenderContent() 
+void Defines::RenderContent() 
 {
     // All access goes through the system
     auto system = current_system.lock();
     if(!system) return;
 
     {
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 0));
+
         bool need_pop = false;
         if(case_sensitive_sort) {
             ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor(255, 0, 0));
             need_pop = true;
         }
 
-        if(ImGui::SmallButton("I")) {
+        if(ImGui::Button("I")) {
             case_sensitive_sort = !case_sensitive_sort;
             force_resort = true;
         }
         if(ImGui::IsItemHovered()) ImGui::SetTooltip("Case Sensitive Sort");
         if(need_pop) ImGui::PopStyleColor(1);
 
-        need_pop = false;
-        if(show_locals) {
-            ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor(255, 0, 0));
-            need_pop = true;
+        ImGui::SameLine();
+        // TODO htf do you right align buttons?
+        //ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
+        if(ImGui::Button("+", ImVec2(/* ImGui::GetFontSize() * -2 */ 0, 0))) {
+            cout << "create" << endl;
         }
 
-        ImGui::SameLine();
-        if(ImGui::SmallButton("L")) {
-            show_locals = !show_locals;
-            force_reiterate = true;
-        }
-        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Show Local Labels");
-        if(need_pop) ImGui::PopStyleColor(1);
+        ImGui::PopStyleVar(1);
 
         ImGui::Separator();
     }
 
-    // rebuild the labels list
+    // rebuild the defines list
     if(force_reiterate) {
-        labels.clear();
-        auto cb = [this](shared_ptr<Label>& label)->void {
-            if(!show_locals && label->GetString()[0] == '.') return;
-            labels.push_back(label);
+        defines.clear();
+        auto cb = [this](shared_ptr<Define>& define)->void {
+            defines.push_back(define);
         };
-        system->IterateLabels(&cb);
+        system->IterateDefines(&cb);
         force_reiterate = false;
     }
-
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
@@ -109,30 +103,35 @@ void Labels::RenderContent()
     ImVec2 outer_size = ImGui::GetWindowSize();
     outer_size.x -= 12;
 
-    if(ImGui::BeginTable("LabelsTable", 2, flags, outer_size)) {
-        ImGui::TableSetupColumn("Name"    , ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_DefaultSort, 0.0f, 0);
-        ImGui::TableSetupColumn("Location", ImGuiTableColumnFlags_WidthStretch                                    , 0.0f, 1);
+    if(ImGui::BeginTable("DefinesTable", 3, flags, outer_size)) {
+        ImGui::TableSetupColumn("Name"      , ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_DefaultSort, 0.0f, 0);
+        ImGui::TableSetupColumn("Expression", ImGuiTableColumnFlags_WidthStretch                                    , 0.0f, 1);
+        ImGui::TableSetupColumn("Value"     , ImGuiTableColumnFlags_WidthStretch                                    , 0.0f, 2);
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
 
         // Sort our data if sort specs have been changed!
         if(ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs()) {
             if(force_resort || sort_specs->SpecsDirty) {
-                sort(labels.begin(), labels.end(), [&](weak_ptr<Label>& a, weak_ptr<Label>& b)->bool {
+                sort(defines.begin(), defines.end(), [&](weak_ptr<Define>& a, weak_ptr<Define>& b)->bool {
                     const ImGuiTableColumnSortSpecs* spec = &sort_specs->Specs[0];
                     bool diff;
                     if(auto bp = b.lock()) {
                         string bstr = bp->GetString();
                         if(!case_sensitive_sort) bstr = strlower(bstr);
-                        int bloc = system->GetSortableMemoryLocation(bp->GetMemoryLocation());
+                        auto bexpr = bp->GetExpressionString();
+                        auto bval = bp->Evaluate();
                         if(auto ap = a.lock()) {
                             string astr = ap->GetString();
                             if(!case_sensitive_sort) astr = strlower(astr);
-                            int aloc = system->GetSortableMemoryLocation(ap->GetMemoryLocation());
+                            auto aexpr = bp->GetExpressionString();
+                            auto aval = ap->Evaluate();
                             if(spec->ColumnUserID == 0) {
-                                diff = std::tie(astr, aloc) <= std::tie(bstr, bloc); 
+                                diff = std::tie(astr, aexpr, aval) <= std::tie(bstr, bexpr, bval); 
+                            } else if(spec->ColumnUserID == 1) {
+                                diff = std::tie(aexpr, aval, astr) <= std::tie(bexpr, bval, bstr); 
                             } else {
-                                diff = std::tie(aloc, astr) <= std::tie(bloc, bstr); 
+                                diff = std::tie(aval, astr, aexpr) <= std::tie(bval, bstr, bexpr); 
                             } 
                         } else {
                             diff = false;
@@ -149,20 +148,20 @@ void Labels::RenderContent()
         }
 
         ImGuiListClipper clipper;
-        u32 total_labels = labels.size(); //memory_region->GetTotalListingItems();
-        //cout << "total_labels = 0x" << hex << total_labels << endl;
-        clipper.Begin(total_labels);
+        u32 total_defines = defines.size(); //memory_region->GetTotalListingItems();
+        //cout << "total_defines = 0x" << hex << total_defines << endl;
+        clipper.Begin(total_defines);
 
         while(clipper.Step()) {
-            auto it = labels.begin() + clipper.DisplayStart;
+            auto it = defines.begin() + clipper.DisplayStart;
             for(int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row, ++it) {
-                auto label = (*it).lock();
-                while(!label && it != labels.end()) {
-                    labels.erase(it);
-                    label = (*it).lock();
+                auto define = (*it).lock();
+                while(!define && it != defines.end()) {
+                    defines.erase(it);
+                    define = (*it).lock();
                 }
 
-                if(it == labels.end()) break;
+                if(it == defines.end()) break;
 
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
@@ -177,32 +176,25 @@ void Labels::RenderContent()
                     }
 
                     if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                        if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Listing>()) {
-                            // build an address from the bank info
-                            wnd->GoToAddress(label->GetMemoryLocation());
-                        }
+                        // TODO do something when define is double clicked (edit?)
+                        //!if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Listing>()) {
+                        //!    // build an address from the bank info
+                        //!    wnd->GoToAddress(label->GetMemoryLocation());
+                        //!}
                     }
                     ImGui::SameLine();
                 }
 
-                ImGui::Text("%s", label->GetString().c_str());
+                // And the define name in the same column
+                ImGui::Text("%s", define->GetString().c_str());
 
+                // Expression
                 ImGui::TableNextColumn();
-                stringstream ss;
-                ss << "$" << hex << uppercase << setfill('0');
+                ImGui::Text("%s", define->GetExpressionString().c_str());
 
-                GlobalMemoryLocation const& loc = label->GetMemoryLocation();
-                if(system->CanBank(loc)) {
-                    ss << setw(2);
-                    if(loc.is_chr) {
-                        ss << setw(2) << loc.chr_rom_bank;
-                    } else {
-                        ss << setw(2) << loc.prg_rom_bank;
-                    }
-                    ss << ":";
-                }
-                ss << setw(4) << loc.address;
-                ImGui::Text("%s", ss.str().c_str());
+                // Value
+                ImGui::TableNextColumn();
+                ImGui::Text("$%X", define->Evaluate());
             }
         }
 
@@ -212,12 +204,10 @@ void Labels::RenderContent()
     ImGui::PopStyleVar(2);
 }
 
-void Labels::LabelCreated(shared_ptr<Label> const& label, bool was_user_created)
+void Defines::DefineCreated(shared_ptr<Define> const& define, bool was_user_created)
 {
-    if(show_locals || label->GetString()[0] != '.') {
-        labels.push_back(label);
-        force_resort = true;
-    }
+    //!defines.push_back(label);
+    //!force_resort = true;
 }
 
 

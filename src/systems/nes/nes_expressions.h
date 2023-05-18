@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "systems/expressions.h"
+#include "systems/nes/nes_defines.h"
 #include "systems/nes/nes_memory.h"
 
 namespace NES {
@@ -13,6 +14,35 @@ class ExpressionNode : public BaseExpressionNode {
 };
 
 namespace ExpressionNodes {
+    class Define : public ExpressionNode {
+    public:
+        Define(std::shared_ptr<NES::Define> const& _define)
+            : define(_define) {}
+        virtual ~Define() { }
+
+        static int base_expression_node_id;
+        int GetExpressionNodeType() const override { return Define::base_expression_node_id; }
+
+        // Define evaluate to their value, simple
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            *result = define->Evaluate();
+            return true;
+        }
+
+        // Define has no child ExpressionNode
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override;
+
+        bool Save(std::ostream& os, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>) override;
+        static std::shared_ptr<Define> Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>&);
+
+    private:
+        std::shared_ptr<NES::Define> define;
+    };
+
     class Label : public ExpressionNode {
     public:
         Label(std::shared_ptr<NES::Label> const& _label, std::string const& _display);
@@ -265,6 +295,10 @@ public:
 
     BN CreateIndexedY(BN& base, std::string const& display) {
         return std::make_shared<ExpressionNodes::IndexedY>(base, display);
+    }
+
+    BN CreateDefine(std::shared_ptr<Define> const& define) {
+        return std::make_shared<ExpressionNodes::Define>(define);
     }
 
     BN CreateLabel(std::shared_ptr<Label> const& label, std::string const& display) {

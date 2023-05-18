@@ -217,6 +217,13 @@ bool BaseExpression::Set(std::string const& s, std::string& errmsg, int& errloc,
     root = start_list ? ParseExpressionList(tenderizer, node_creator, errmsg, errloc) 
                       : ParseExpression(tenderizer, node_creator, errmsg, errloc);
 
+    // If there's leftover data, the expression is invalid
+    if(root && (tenderizer->GetCurrentMeat() != Tenderizer::Meat::END)) {
+        errmsg = "Leftover data in the expression";
+        errloc = tenderizer->GetLocation();
+        root = nullptr;
+    }
+
     if(!root) {
         cout << "[BaseExpression::Set] could not parse expression, pos " << dec << (errloc + 1) << ": " << errmsg << endl;
         cout << "expression -> \"" << s << "\"" << endl;

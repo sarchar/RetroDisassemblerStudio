@@ -9,6 +9,7 @@
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 #include "util.h"
+#include "windows/nes/defines.h"
 #include "windows/nes/labels.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/regions.h"
@@ -140,6 +141,7 @@ bool Project::CreateNewProjectFromFile(string const& file_path_name)
     }
 
     // create labels for reset and the registers, etc
+    system->CreateDefaultDefines();
     system->CreateDefaultLabels();
 
     create_new_project_progress->emit(shared_from_this(), false, num_steps, ++current_step, "Done");
@@ -154,6 +156,10 @@ void Project::CreateDefaultWorkspace()
     auto app = MyApp::Instance();
 
     shared_ptr<BaseWindow> wnd = Windows::Labels::CreateWindow();
+    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+    app->AddWindow(wnd);
+
+    wnd = Windows::Defines::CreateWindow();
     wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
     app->AddWindow(wnd);
 
