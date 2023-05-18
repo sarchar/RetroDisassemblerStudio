@@ -7,7 +7,7 @@
 #include "imgui_internal.h"
 
 #include "main.h"
-#include "windows/base_window.h"
+#include "windows/basewindow.h"
 
 using namespace std;
 
@@ -42,6 +42,7 @@ BaseWindow::BaseWindow(string const& tag)
     : windowless(false), open(true), focused(false), docked(false), enable_nav(true), window_tag(tag), initial_dock_position(DOCK_NONE)
 {
     // create the signals
+    command_signal = make_shared<command_signal_t>();
     window_closed = make_shared<window_closed_t>();
 }
 

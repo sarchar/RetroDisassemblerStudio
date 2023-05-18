@@ -10,6 +10,7 @@
 #include "windows/nes/defines.h"
 #include "systems/nes/nes_defines.h"
 #include "systems/nes/nes_memory.h"
+#include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 
 using namespace std;
@@ -35,8 +36,8 @@ Defines::Defines()
         current_system = system;
 
         // watch for new defines
-        //!label_created_connection = 
-        //!    system->label_created->connect(std::bind(&Defines::LabelCreated, this, placeholders::_1, placeholders::_2));
+        define_created_connection = 
+            system->define_created->connect(std::bind(&Defines::DefineCreated, this, placeholders::_1));
     }
 }
 
@@ -74,7 +75,7 @@ void Defines::RenderContent()
         // TODO htf do you right align buttons?
         //ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
         if(ImGui::Button("+", ImVec2(/* ImGui::GetFontSize() * -2 */ 0, 0))) {
-            cout << "create" << endl;
+            command_signal->emit(shared_from_this(), "CreateNewDefine", nullptr);
         }
 
         ImGui::PopStyleVar(1);
@@ -204,12 +205,11 @@ void Defines::RenderContent()
     ImGui::PopStyleVar(2);
 }
 
-void Defines::DefineCreated(shared_ptr<Define> const& define, bool was_user_created)
+void Defines::DefineCreated(shared_ptr<Define> const& define)
 {
-    //!defines.push_back(label);
-    //!force_resort = true;
+    defines.push_back(define);
+    force_resort = true;
 }
-
 
 } //namespace Windows
 } //namespace NES

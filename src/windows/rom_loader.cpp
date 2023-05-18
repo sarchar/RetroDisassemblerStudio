@@ -9,9 +9,9 @@
 #include "imgui_internal.h"
 
 #include "main.h"
-#include "project.h"
 #include "signals.h"
 #include "systems/system.h"
+#include "windows/baseproject.h"
 #include "windows/rom_loader.h"
 
 using namespace std;

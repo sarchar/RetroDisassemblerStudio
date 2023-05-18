@@ -7,7 +7,7 @@
 
 #include "signals.h"
 #include "systems/nes/nes_system.h"
-#include "windows/base_window.h"
+#include "windows/basewindow.h"
 
 namespace NES {
 
@@ -23,14 +23,12 @@ public:
     virtual char const * const GetWindowClass() { return Defines::GetWindowClassStatic(); }
     static char const * const GetWindowClassStatic() { return "NES::Defines"; }
 
-    // signals
-
 protected:
     void UpdateContent(double deltaTime) override;
     void RenderContent() override;
 
 private:
-    void DefineCreated(std::shared_ptr<Define> const&, bool);
+    void DefineCreated(std::shared_ptr<Define> const&);
 
     std::weak_ptr<System>            current_system;
     int selected_row;
@@ -41,7 +39,7 @@ private:
 
     bool case_sensitive_sort;
 
-    //System::define_created_t::signal_connection_t define_created_connection;
+    System::define_created_t::signal_connection_t define_created_connection;
 
 public:
     static std::shared_ptr<Defines> CreateWindow();

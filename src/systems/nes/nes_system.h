@@ -29,6 +29,9 @@ public:
     virtual ~System();
 
     // Signals
+    typedef signal<std::function<void(std::shared_ptr<Define> const&)>> define_created_t;
+    std::shared_ptr<define_created_t> define_created;
+
     typedef signal<std::function<void(std::shared_ptr<Label> const&, bool)>> label_created_t;
     std::shared_ptr<label_created_t> label_created;
 

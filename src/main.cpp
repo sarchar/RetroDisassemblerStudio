@@ -25,6 +25,7 @@
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
+#include "windows/baseproject.h"
 #include "windows/rom_loader.h"
 #include "windows/nes/defines.h"
 #include "windows/nes/labels.h"
@@ -46,8 +47,9 @@ MyApp::MyApp(int, char*[])
     BaseExpressionNodeCreator::RegisterBaseExpressionNodes();
     NES::ExpressionNodeCreator::RegisterExpressionNodes();
 
-    //
-//!    current_system_changed = make_shared<current_system_changed_t>();
+    // signals
+    window_added = make_shared<window_added_t>();
+    window_removed = make_shared<window_removed_t>();
 
     // register all the windows
 #   define REGISTER_WINDOW_TYPE(className) \
@@ -227,6 +229,8 @@ void MyApp::AddWindow(shared_ptr<BaseWindow> window)
 
     managed_windows.push_back(window);
     cout << "[MyApp] Added window \"" << window->GetTitle() << "\" (managed window count = " << managed_windows.size() << ")" << endl;
+
+    window_added->emit(window);
 }
 
 void MyApp::ManagedWindowClosedHandler(std::shared_ptr<BaseWindow> window)
@@ -240,6 +244,7 @@ void MyApp::ProcessQueuedWindowsForDelete()
     for(auto& window : queued_windows_for_delete) {
         auto it = find(managed_windows.begin(), managed_windows.end(), window);
         if(it != managed_windows.end()) managed_windows.erase(it);
+        window_removed->emit(window);
     }
 
     queued_windows_for_delete.resize(0);
@@ -649,7 +654,7 @@ bool MyApp::StartPopup(std::string const& title, bool resizeable)
     }
 
     // center the popup
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
     // configure flags
@@ -698,6 +703,8 @@ bool MyApp::OKPopup(std::string const& title, std::string const& content, bool r
 
     ImGui::Text("%s", content.c_str());
 
+    // Give the first button focus
+    if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
     return EndPopup(ret, true, false);
 }
 
@@ -814,11 +821,11 @@ void MyApp::ProjectCreatedHandler(std::shared_ptr<BaseWindow> project_creator_wi
 {
     project_creator_window->CloseWindow();
 
-    // TODO: create the default workspace and focus a source editor to the projects entry point
-
     current_project = project;
     cout << "[MyApp] new " << project->GetInformation()->full_name << " loaded." << endl;
     //!current_system_changed->emit();
+
+    AddWindow(project);
 
     // create the default workspace for the new system
     current_project->CreateDefaultWorkspace();

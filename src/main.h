@@ -8,10 +8,9 @@
 #include <vector>
 
 #include "application.h"
-#include "project.h"
 #include "signals.h"
 #include "systems/nes/nes_memory.h"
-#include "windows/base_window.h"
+#include "windows/basewindow.h"
 
 class BaseProject;
 
@@ -69,8 +68,11 @@ public:
     std::shared_ptr<BaseProject> GetProject() { return current_project; }
 
     // Signals
-//!    typedef signal<std::function<void()>> current_system_changed_t;
-//!    std::shared_ptr<current_system_changed_t> current_system_changed;
+    typedef signal<std::function<void(std::shared_ptr<BaseWindow>&)>> window_added_t;
+    std::shared_ptr<window_added_t> window_added;
+
+    typedef signal<std::function<void(std::shared_ptr<BaseWindow>&)>> window_removed_t;
+    std::shared_ptr<window_removed_t> window_removed;
 
 protected:
     MyApp(int argc, char* argv[]);

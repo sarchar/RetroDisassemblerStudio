@@ -15,6 +15,7 @@
 #include "systems/nes/nes_cartridge.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
+#include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 
 #define JUMP_TO_SELECTION_START_VALUE 3

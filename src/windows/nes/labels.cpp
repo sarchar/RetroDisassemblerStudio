@@ -11,6 +11,7 @@
 #include "windows/nes/labels.h"
 #include "systems/nes/nes_label.h"
 #include "systems/nes/nes_memory.h"
+#include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 
 using namespace std;

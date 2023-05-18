@@ -1,7 +1,7 @@
 #include <iostream>
 #include <memory>
 
-#include "project.h"
+#include "windows/baseproject.h"
 
 using namespace std;
 
@@ -30,9 +30,21 @@ BaseProject::Information const* BaseProject::GetProjectInformation(std::string c
     return NULL;
 }
 
-BaseProject::BaseProject()
+BaseProject::BaseProject(std::string const& title)
+    : BaseWindow(title)
 {
+    SetWindowless(true);
+
+    // local signals
     create_new_project_progress = make_shared<create_new_project_progress_t>();
+
+    // connect signals
+    auto app = MyApp::Instance();
+    window_added_connection = 
+        app->window_added->connect(std::bind(&BaseProject::_WindowAdded, this, placeholders::_1));
+
+    window_removed_connection = 
+        app->window_removed->connect(std::bind(&BaseProject::_WindowRemoved, this, placeholders::_1));
 }
 
 BaseProject::~BaseProject()

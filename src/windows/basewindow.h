@@ -49,6 +49,10 @@ public:
 
     virtual char const * const GetWindowClass() = 0;
 
+    // signals available in all windows
+    typedef signal<std::function<void(std::shared_ptr<BaseWindow>&, std::string const&, void*)>> command_signal_t;
+    std::shared_ptr<command_signal_t> command_signal;
+
 protected:
     // Implemented by derived class
     virtual void UpdateContent(double deltaTime) {};

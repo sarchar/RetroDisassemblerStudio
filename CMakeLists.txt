@@ -26,7 +26,6 @@ add_executable(${PROJECT_NAME}
                src/application.cpp
                src/systems/expressions.cpp
                src/main.cpp
-               src/project.cpp
                src/system_clock.cpp
 
                src/systems/system.cpp
@@ -40,7 +39,8 @@ add_executable(${PROJECT_NAME}
                src/systems/nes/nes_project.cpp
                src/systems/nes/nes_system.cpp
 
-               src/windows/base_window.cpp
+               src/windows/baseproject.cpp
+               src/windows/basewindow.cpp
                src/windows/rom_loader.cpp
 
                src/windows/nes/defines.cpp

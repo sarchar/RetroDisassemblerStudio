@@ -5,12 +5,15 @@
 #include <memory>
 #include <string>
 
+#include "main.h"
 #include "signals.h"
 #include "util.h"
 
+#include "windows/basewindow.h"
+
 class BaseSystem;
 
-class BaseProject : public std::enable_shared_from_this<BaseProject> {
+class BaseProject : public BaseWindow {
 public:
     struct Information {
         std::string abbreviation;
@@ -20,7 +23,7 @@ public:
     };
     virtual Information const* GetInformation() = 0;
 
-    BaseProject();
+    BaseProject(std::string const&);
     virtual ~BaseProject();
 
     std::string                 GetRomFileName() const { return rom_file_name; }
@@ -54,5 +57,13 @@ public:
     static Information const* GetProjectInformation(int);
     static Information const* GetProjectInformation(std::string const& abbreviation);
     static std::vector<Information const*> project_informations;
+
+private:
+    virtual void WindowAdded(std::shared_ptr<BaseWindow>&) {}
+    virtual void WindowRemoved(std::shared_ptr<BaseWindow>&) {}
+    void _WindowAdded(std::shared_ptr<BaseWindow>& window) { WindowAdded(window); }
+    void _WindowRemoved(std::shared_ptr<BaseWindow>& window) { WindowRemoved(window); }
+    MyApp::window_added_t::signal_connection_t window_added_connection;
+    MyApp::window_removed_t::signal_connection_t window_removed_connection;
 };
 

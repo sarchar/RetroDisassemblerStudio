@@ -5,7 +5,7 @@
 
 #include "signals.h"
 #include "systems/nes/nes_system.h"
-#include "windows/base_window.h"
+#include "windows/basewindow.h"
 
 namespace NES {
 

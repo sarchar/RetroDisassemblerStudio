@@ -28,6 +28,7 @@ System::System()
 {
     disassembler = make_shared<Disassembler>();
 
+    define_created = make_shared<define_created_t>();
     label_created = make_shared<label_created_t>();
     disassembly_stopped = make_shared<disassembly_stopped_t>();
 }
@@ -586,6 +587,9 @@ shared_ptr<Define> System::AddDefine(string const& name, string const& expressio
 
     auto define = make_shared<Define>(define_name, expr);
     define_database[define_name] = define;
+
+    // notify the system of new defines
+    define_created->emit(define);
 
     return define;
 }
