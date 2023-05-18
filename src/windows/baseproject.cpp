@@ -79,7 +79,7 @@ bool BaseProject::Load(std::istream& is, std::string& errmsg)
     return is.good();
 }
 
-shared_ptr<BaseProject> BaseProject::LoadProject(std::istream& is, std::string& errmsg)
+shared_ptr<BaseProject> BaseProject::StartLoadProject(std::istream& is, std::string& errmsg)
 {
     string abbr;
     ReadString(is, abbr);
@@ -92,8 +92,6 @@ shared_ptr<BaseProject> BaseProject::LoadProject(std::istream& is, std::string& 
 
     cout << "Loading " << info->full_name << " project..." << endl;
 
-    auto project = info->create_project();
-    if(project->Load(is, errmsg)) return project;
-    return nullptr;
+    return info->create_project();
 }
 

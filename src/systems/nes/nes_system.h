@@ -75,13 +75,13 @@ public:
     void CreateDefaultDefines(); // for new projects
     std::shared_ptr<Define> AddDefine(std::string const& name, std::string const&, std::string& errmsg);
     std::shared_ptr<Define> FindDefine(std::string const& name) {
-        if(define_database.contains(name)) return define_database[name];
+        if(define_by_name.contains(name)) return define_by_name[name];
         return nullptr;
     }
 
     template <typename F>
     void IterateDefines(F const* cb) {
-        for(auto iter : define_database) {
+        for(auto iter : define_by_name) {
             std::shared_ptr<Define> define = iter.second;
             (*cb)(define);
         }
@@ -150,7 +150,8 @@ private:
     std::unordered_map<std::string, std::shared_ptr<Label>> label_database = {};
 
     // defines database
-    std::unordered_map<std::string, std::shared_ptr<Define>> define_database = {};
+    std::vector<std::shared_ptr<Define>> defines = {};
+    std::unordered_map<std::string, std::shared_ptr<Define>> define_by_name = {};
 
     bool disassembling;
     GlobalMemoryLocation disassembly_address;

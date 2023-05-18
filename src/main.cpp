@@ -990,8 +990,10 @@ void MyApp::LoadProjectThread()
         }
 
         if(!popups.load_project.errored) {
-            current_project = BaseProject::LoadProject(is, popups.load_project.errmsg);
-            // error condition when the returned object is null
+            current_project = BaseProject::StartLoadProject(is, popups.load_project.errmsg);
+            if(current_project && !current_project->Load(is, popups.load_project.errmsg)) {
+                current_project = nullptr;
+            }
             popups.load_project.errored = !current_project;
         }
     } else {

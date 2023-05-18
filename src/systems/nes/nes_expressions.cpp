@@ -26,14 +26,28 @@ void Define::Print(std::ostream& ostream) {
 
 bool Define::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator>) 
 {
-    assert(false); //TODO
-    return false;
+    WriteString(os, define->GetString());
+    if(!os.good()) {
+        errmsg = "Error saving Define expression";
+        return false;
+    }
+    return true;
 }
 
 shared_ptr<Define> Define::Load(istream& is, string& errmsg, shared_ptr<BaseExpressionNodeCreator>&) 
 {
-    assert(false); //TODO
-    return nullptr;
+    string name;
+    ReadString(is, name);
+    if(!is.good()) {
+        errmsg = "Error reading Define expression";
+        return nullptr;
+    }
+
+    auto system = MyApp::Instance()->GetProject()->GetSystem<System>();
+    assert(system);
+    auto define = system->FindDefine(name);
+    assert(define);
+    return make_shared<Define>(define);
 }
 
 Label::Label(shared_ptr<NES::Label> const& _label, string const& _display)
@@ -102,6 +116,8 @@ void ExpressionNodeCreator::RegisterExpressionNodes()
     RegisterBaseExpressionNode<ExpressionNodes::Immediate>();
     RegisterBaseExpressionNode<ExpressionNodes::IndexedX>();
     RegisterBaseExpressionNode<ExpressionNodes::IndexedY>();
+
+    RegisterBaseExpressionNode<ExpressionNodes::Define>();
     RegisterBaseExpressionNode<ExpressionNodes::Label>();
 }
 

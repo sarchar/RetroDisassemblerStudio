@@ -41,7 +41,7 @@ public:
 
     virtual bool Save(std::ostream&, std::string&);
     virtual bool Load(std::istream&, std::string&);
-    static std::shared_ptr<BaseProject> LoadProject(std::istream&, std::string&);
+    static std::shared_ptr<BaseProject> StartLoadProject(std::istream&, std::string&);
 
     // signals
     typedef signal<std::function<void(std::shared_ptr<BaseProject>, bool error, 

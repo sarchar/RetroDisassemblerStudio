@@ -558,7 +558,7 @@ shared_ptr<Define> System::AddDefine(string const& name, string const& expressio
     string define_name = (dynamic_pointer_cast<BaseExpressionNodes::Name>(nameexpr->GetRoot()))->GetString();
 
     // does define exist?
-    if(auto other = define_database[define_name]) {
+    if(auto other = define_by_name.contains(define_name)) {
         errmsg = "Define name exists already";
         return nullptr;
     }
@@ -586,7 +586,8 @@ shared_ptr<Define> System::AddDefine(string const& name, string const& expressio
     cout << "adding define name(" << *nameexpr << ") = [" << *expr << "]" << " => " << result << endl;
 
     auto define = make_shared<Define>(define_name, expr);
-    define_database[define_name] = define;
+    defines.push_back(define);
+    define_by_name[define_name] = define;
 
     // notify the system of new defines
     define_created->emit(define);
@@ -938,6 +939,14 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
 
 bool System::Save(std::ostream& os, std::string& errmsg)
 {
+    // save the defines
+    WriteVarInt(os, defines.size());
+    if(!os.good()) {
+        errmsg = "Error saving defines";
+        return false;
+    }
+    for(auto& define : defines) if(!define->Save(os, errmsg)) return false;
+
     // save the non-cartridge memory regions
     if(!cpu_ram->Save(os, errmsg)) return false;
     if(!ppu_registers->Save(os, errmsg)) return false;
@@ -954,6 +963,22 @@ bool System::Load(std::istream& is, std::string& errmsg)
     shared_ptr<BaseSystem> base_system = shared_from_this();
     auto selfptr = dynamic_pointer_cast<System>(base_system);
     assert(selfptr);
+
+    // load defines
+    int num_defines = ReadVarInt<int>(is);
+    if(!is.good()) {
+        errmsg = "Error loading defines";
+        return false;
+    }
+
+    for(int i = 0; i < num_defines; i++) {
+        auto define = Define::Load(is, errmsg);
+        if(!define) return false;
+
+        // TODO update reverse references
+        defines.push_back(define);
+        define_by_name[define->GetString()] = define;
+    }
 
     // load registers
     cpu_ram = make_shared<RAMRegion>(selfptr);
