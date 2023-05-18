@@ -697,24 +697,28 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
             }
         }
 
-        // only for valid destination addresses do we create an expression. others get the default
-        // disasembler output and the user will have to create the expression manually
-        int target_offset = 0;
-        auto target_object = GetMemoryObject(target_location, &target_offset);
+        // only for valid destination addresses do we create a label
         shared_ptr<Label> label;
-        if(target_object) {
-            if(target_object->labels.size() == 0) { // create a label at that address if there isn't one yet
-                stringstream ss;
-                if(isrel) ss << ".";
-                else      ss << "dp_";
-                ss << hex << setfill('0') << uppercase;
-                if(CanBank(target_location)) ss << setw(2) << target_location.prg_rom_bank;
-                ss << (is16 ? setw(4) : setw(2)) << target_location.address;
+        int target_offset = 0;
+        if(is_valid) {
+            auto target_object = GetMemoryObject(target_location, &target_offset);
+            if(target_object) {
+                if(target_object->labels.size() == 0) { // create a label at that address if there isn't one yet
+                    stringstream ss;
+                    ss << hex << setfill('0') << uppercase;
 
-                // no problem if this fails if the label already exists
-                label = CreateLabel(target_location, ss.str());
-            } else {
-                label = target_object->labels[0];
+                    if(isrel)     ss << ".";
+                    else if(is16) ss << "L_";
+                    else          ss << "zp_";
+
+                    if(CanBank(target_location)) ss << setw(2) << target_location.prg_rom_bank;
+
+                    ss << (is16 ? setw(4) : setw(2)) << target_location.address;
+
+                    label = CreateLabel(target_location, ss.str());
+                } else {
+                    label = target_object->labels[0];
+                }
             }
         }
 
@@ -732,8 +736,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
 
         // if the destination is not valid memory, we can't really create a Label node
         auto root = label ? nc->CreateLabel(label, buf)
-                          : (is16 ? nc->CreateConstant(target_location.address, buf)
-                                  : nc->CreateConstant(target_location.address, buf));
+                          : nc->CreateConstant(target_location.address, buf);
 
         // append "+offset" as an expression to the label
         if(is_valid && target_offset != 0) {
