@@ -51,13 +51,13 @@ shared_ptr<Define> Define::Load(istream& is, string& errmsg, shared_ptr<BaseExpr
 }
 
 Label::Label(shared_ptr<NES::Label> const& _label, string const& _display)
-    : label(_label), nth(0), display(_display)
+    : label(_label), display(_display)
 { 
     where = _label->GetMemoryLocation();
 }
 
-Label::Label(GlobalMemoryLocation const& _where, int _nth, string const& _display)
-    : where(_where), nth(_nth), display(_display)
+Label::Label(GlobalMemoryLocation const& _where, string const& _display)
+    : where(_where), display(_display)
 { }
 
 void Label::Print(std::ostream& ostream) {
@@ -67,13 +67,15 @@ void Label::Print(std::ostream& ostream) {
         return;
     }
 
-    // No label, so try looking it up
+    // No label, so try looking it up. We can't assume anything about the nth label at the address
+    // now that our old label is gone
     if(auto system = MyApp::Instance()->GetProject()->GetSystem<System>()) {
         auto labels = system->GetLabelsAt(where);
         if(labels.size()) {
-            nth = min(nth, labels.size() - 1);
-            label = labels[nth];
-            ostream << labels[nth]->GetString();
+            // found a label, so cache that
+            label = labels[0];
+            // and print it
+            Print(ostream);
             return;
         }
     }
@@ -84,28 +86,49 @@ void Label::Print(std::ostream& ostream) {
 
 bool Label::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator>) 
 {
-    if(!where.Save(os, errmsg)) return false;
+    WriteString(os, display);
     if(auto t = label.lock()) {
-        WriteVarInt(os, t->GetIndex());
+        WriteVarInt(os, 1);
+        WriteString(os, t->GetString());
     } else {
         WriteVarInt(os, 0);
+        if(!where.Save(os, errmsg)) return false;
     }
-    WriteString(os, display);
     return true;
 }
 
 shared_ptr<Label> Label::Load(istream& is, string& errmsg, shared_ptr<BaseExpressionNodeCreator>&) 
 {
-    GlobalMemoryLocation where;
-    if(!where.Load(is, errmsg)) return nullptr;
-    int nth = ReadVarInt<int>(is);
     string display;
     ReadString(is, display);
+
+    bool valid = (ReadVarInt<int>(is) == 1);
     if(!is.good()) {
         errmsg = "Error loading Label";
         return nullptr;
     }
-    return make_shared<Label>(where, nth, display);
+
+    if(valid) {
+        string name;
+        ReadString(is, name);
+        if(!is.good()) {
+            errmsg = "Error loading label name";
+            return nullptr;
+        }
+
+        // look up the label. since it was valid at save, it better be valid now
+        auto system = MyApp::Instance()->GetProject()->GetSystem<System>();
+        assert(system);
+        auto label = system->FindLabel(name);
+        assert(label);
+        return make_shared<Label>(label, display);
+    }
+
+    // label was not valid, so use the memory location instead
+    GlobalMemoryLocation where;
+    if(!where.Load(is, errmsg)) return nullptr;
+
+    return make_shared<Label>(where, display);
 }
 
 }

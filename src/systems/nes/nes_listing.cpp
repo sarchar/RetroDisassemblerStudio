@@ -372,10 +372,20 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
         table_flags |= ImGuiTableFlags_BordersInnerV;
     }
     
-    if(selected && ImGui::IsKeyPressed(ImGuiKey_Enter)) {
-        editing = true;
-        started_editing = true;
+    if(selected) {
+        if(ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+            editing = true;
+            started_editing = true;
+        } 
+
+        if(ImGui::IsKeyPressed(ImGuiKey_R) && ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
+            cout << "Label " << label->GetString() << " has " << label->GetNumReverseReferences() << " reverse references:" << endl;
+            label->IterateReverseReferences([](GlobalMemoryLocation const& where) {
+                cout << "\t" << where << endl;
+            });
+        }
     }
+
 
     if(editing) {
         if(!selected || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // must stop editing, discard

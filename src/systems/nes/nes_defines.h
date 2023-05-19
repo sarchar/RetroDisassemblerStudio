@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <variant>
 
 #include "systems/nes/nes_memory.h"
@@ -12,7 +13,7 @@ class Expression;
 
 class Define : public std::enable_shared_from_this<Define> {
 public:
-    typedef std::variant<GlobalMemoryLocation, std::weak_ptr<Define>> reverse_reference_type;
+    typedef std::variant<GlobalMemoryLocation, std::shared_ptr<Define>> reverse_reference_type;
 
     Define(std::string const&, std::shared_ptr<Expression>&);
     ~Define();
@@ -24,13 +25,23 @@ public:
     std::string                 const& GetString()        const { return name; }
     std::shared_ptr<Expression> const& GetExpression()    const { return expression; }
 
+    int     GetNumReverseReferences() const { return reverse_references.size(); }
+
     template<class T>
     void    NoteReference(T const& t) {
-        reverse_references.push_back(t);
+        reverse_references.insert(t);
     }
-    int     GetNumReverseReferences() const { return reverse_references.size(); }
-    reverse_reference_type& GetReverseReference(int i) {
-        return reverse_references[i];
+
+    template<class T>
+    int RemoveReference(T const& t) {
+        return reverse_references.erase(t);
+    }
+
+    template<typename F>
+    void IterateReverseReferences(F func) {
+        for(auto& v : reverse_references) {
+            func(v);
+        }
     }
 
     s64 Evaluate();
@@ -51,7 +62,7 @@ private:
     // anything that refers to this define:
     // * memory location/code
     // * another define
-    std::vector<reverse_reference_type>       reverse_references;
+    std::unordered_set<reverse_reference_type>       reverse_references;
 };
 
 }

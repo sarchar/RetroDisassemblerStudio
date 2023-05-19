@@ -331,10 +331,8 @@ void Project::RenderDefineReferencesPopup()
         // or possibly switch to a tabbed window with Memory in one and Defines in the other
         // TODO this might be better off as its own reference window that stays open and is dockable, so that 
         // browsing around a given define for a while is easy
-        int num_rrefs = popups.define_references.define->GetNumReverseReferences();
-        for(int i = 0; i < num_rrefs; i++) {
-            auto rref = popups.define_references.define->GetReverseReference(i);
-
+        int i = 0;
+        popups.define_references.define->IterateReverseReferences([this, &system, &i](Define::reverse_reference_type const& rref) {
             stringstream ss;
             std::function<void()> go;
             if(auto where = get_if<GlobalMemoryLocation>(&rref)) {
@@ -356,22 +354,18 @@ void Project::RenderDefineReferencesPopup()
                         wnd->GoToAddress(*where);
                     }
                 };
-            } else if(auto refdefw = get_if<weak_ptr<Define>>(&rref)) {
-                if(auto refdef = refdefw->lock()) {
-                    ss << "Define: " << refdef->GetString();
+            } else if(auto refdef = get_if<shared_ptr<Define>>(&rref)) {
+                ss << "Define: " << (*refdef)->GetString();
 
-                    go = [&refdef]() {
-                        if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Windows::Defines>()) {
-                            wnd->Highlight(refdef);
-                        }
-                    };
-                } else {
-                    // not a valid weakptr
-                    continue;
-                }
+                go = [&refdef]() {
+                    if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Windows::Defines>()) {
+                        auto ref = *refdef;
+                        wnd->Highlight(ref);
+                    }
+                };
             } else {
                 // unknown type
-                continue;
+                return;
             }
 
             string display = ss.str();
@@ -383,7 +377,9 @@ void Project::RenderDefineReferencesPopup()
                 // move to address without changing Listing history
                 go();
             }
-        }
+
+            i++;
+        }); // call to IterateReverseReferences
         ImGui::EndListBox();
     }
 

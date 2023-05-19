@@ -110,9 +110,10 @@ void Labels::RenderContent()
     ImVec2 outer_size = ImGui::GetWindowSize();
     outer_size.x -= 12;
 
-    if(ImGui::BeginTable("LabelsTable", 2, flags, outer_size)) {
+    if(ImGui::BeginTable("LabelsTable", 3, flags, outer_size)) {
         ImGui::TableSetupColumn("Name"    , ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_DefaultSort, 0.0f, 0);
         ImGui::TableSetupColumn("Location", ImGuiTableColumnFlags_WidthStretch                                    , 0.0f, 1);
+        ImGui::TableSetupColumn("RRefs"   , ImGuiTableColumnFlags_WidthFixed   | ImGuiTableColumnFlags_NoSort     , 0.0f, 2);
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
 
@@ -177,7 +178,7 @@ void Labels::RenderContent()
                         selected_row = row;
                     }
 
-                    if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                    if(ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
                         if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Listing>()) {
                             // build an address from the bank info
                             wnd->GoToAddress(label->GetMemoryLocation());
@@ -204,6 +205,10 @@ void Labels::RenderContent()
                 }
                 ss << setw(4) << loc.address;
                 ImGui::Text("%s", ss.str().c_str());
+
+                // RRefs
+                ImGui::TableNextColumn();
+                ImGui::Text("%d", label->GetNumReverseReferences());
             }
         }
 

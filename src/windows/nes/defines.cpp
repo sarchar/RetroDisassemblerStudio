@@ -117,8 +117,8 @@ void Defines::RenderContent()
     if(ImGui::BeginTable("DefinesTable", 4, flags, outer_size)) {
         ImGui::TableSetupColumn("Name"      , ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_DefaultSort, 0.0f, 0);
         ImGui::TableSetupColumn("Expression", ImGuiTableColumnFlags_WidthStretch                                    , 0.0f, 1);
-        ImGui::TableSetupColumn("Value"     , ImGuiTableColumnFlags_WidthStretch                                    , 0.0f, 2);
-        ImGui::TableSetupColumn("RRefs"     , ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_NoSort     , 0.0f, 3);
+        ImGui::TableSetupColumn("Value"     , ImGuiTableColumnFlags_WidthFixed                                      , 0.0f, 2);
+        ImGui::TableSetupColumn("RRefs"     , ImGuiTableColumnFlags_WidthFixed   | ImGuiTableColumnFlags_NoSort     , 0.0f, 3);
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
 

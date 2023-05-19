@@ -769,6 +769,9 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
     auto code_region = GetMemoryRegion(where);
     auto code_object = GetMemoryObject(where);
 
+    // TODO generate operand expressions for data?
+    if(code_object->type != MemoryObject::TYPE_CODE) return;
+
     switch(auto am = disassembler->GetAddressingMode(code_object->code.opcode)) {
     case AM_ABSOLUTE:
     case AM_ABSOLUTE_X:
@@ -876,7 +879,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
         expr->Set(root);
 
         // set the expression for memory object at current_selection. it'll show up immediately
-        code_object->operand_expression = expr;
+        code_region->SetOperandExpression(where, expr);
         break;
     }
 
@@ -896,7 +899,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
         expr->Set(root);
 
         // set the expression for memory object at current_selection. it'll show up immediately
-        code_object->operand_expression = expr;
+        code_region->SetOperandExpression(where, expr);
 
         break;
     }
@@ -910,7 +913,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
         expr->Set(root);
 
         // set the expression for memory object at current_selection. it'll show up immediately
-        code_object->operand_expression = expr;
+        code_region->SetOperandExpression(where, expr);
         break;
     }
 
@@ -920,7 +923,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
         auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
 
         // set the expression for memory object at current_selection. it'll show up immediately
-        code_object->operand_expression = expr;
+        code_region->SetOperandExpression(where, expr);
         break;
     }
 
@@ -938,6 +941,15 @@ bool System::Save(std::ostream& os, std::string& errmsg)
         return false;
     }
     for(auto& define : defines) if(!define->Save(os, errmsg)) return false;
+
+    // save the labels globally, as parsing expressions in memory objects that use labels
+    // will need to be able to look them up at load.
+    WriteVarInt(os, label_database.size());
+    if(!os.good()) {
+        errmsg = "Error saving labels";
+        return false;
+    }
+    for(auto& label : label_database) if(!label.second->Save(os, errmsg)) return false;
 
     // save the non-cartridge memory regions
     if(!cpu_ram->Save(os, errmsg)) return false;
@@ -971,6 +983,24 @@ bool System::Load(std::istream& is, std::string& errmsg)
         defines.push_back(define);
         define_by_name[define->GetString()] = define;
     }
+
+    cout << "[System::Load] loaded " << num_defines << " defines." << endl;
+
+    // load labels
+    int num_labels = ReadVarInt<int>(is);
+    if(!is.good()) {
+        errmsg = "Error loading labels";
+        return false;
+    }
+
+    for(int i = 0; i < num_labels; i++) {
+        auto label = Label::Load(is, errmsg);
+        if(!label) return false;
+
+        label_database[label->GetString()] = label;
+    }
+
+    cout << "[System::Load] loaded " << num_labels << " labels." << endl;
 
     // load registers
     cpu_ram = make_shared<RAMRegion>(selfptr);

@@ -174,6 +174,7 @@ struct MemoryObject {
     ~MemoryObject() {}
 
     void SetReferences(GlobalMemoryLocation const&);
+    void ClearReferences(GlobalMemoryLocation const&);
 
     u32 GetSize(std::shared_ptr<Disassembler> disassembler = nullptr);
     void Read(u8*, int);
@@ -384,3 +385,15 @@ public:
 
 
 }
+
+// Utility to make it easier to use c++ std types
+template <>
+struct std::hash<NES::GlobalMemoryLocation> : public NES::GlobalMemoryLocation::HashFunction {};
+
+template <>
+struct std::equal_to<NES::GlobalMemoryLocation> {
+    bool operator()(NES::GlobalMemoryLocation const& a, NES::GlobalMemoryLocation const& b) const {
+        return a == b;
+    }
+};
+

@@ -7,10 +7,13 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
+#include "main.h"
+
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
 #include "systems/nes/nes_listing.h"
+#include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 
 #include "util.h"
@@ -365,6 +368,8 @@ bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where)
     assert(memory_object);
 
     int size = memory_object->GetSize();
+
+    // store the memory's actual raw data
     u8* tmp = (u8*)_alloca(size);
     memory_object->Read(tmp, size);
 
@@ -373,6 +378,9 @@ bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where)
 
     // save this objects labels
     auto& labels = memory_object->labels;
+
+    // clear any references this object is making
+    memory_object->ClearReferences(where);
 
     // remove memory_object from the tree first, this will correct listing item counts
     RemoveMemoryObjectFromTree(memory_object, true);
@@ -509,7 +517,9 @@ bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_
 void MemoryRegion::SetOperandExpression(GlobalMemoryLocation const& where, std::shared_ptr<Expression> const& expr)
 {
     if(auto memory_object = GetMemoryObject(where)) {
+        memory_object->ClearReferences(where); // clear any references the previous operand expression referred to
         memory_object->operand_expression = expr;
+        memory_object->SetReferences(where);   // mark the new ones
     }
 }
 
@@ -772,16 +782,62 @@ MemoryObjectTreeNode::iterator& MemoryObjectTreeNode::iterator::operator++()
 
 void MemoryObject::SetReferences(GlobalMemoryLocation const& where)
 {
-    if(!operand_expression || !operand_expression->GetRoot()) return; // implied instructions don't have a root expressionnode set
+    // if there's no operand expresion, there are no references
+    if(!operand_expression || !operand_expression->GetRoot()) return;
 
     // Explore operand_expression and mark each referenced Define() that we're referring to it
     auto cb = [&where](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
         if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
             define_node->GetDefine()->NoteReference(where);
+        } else if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
+            if(auto label = label_node->GetLabel()) {
+                // label exists, we can tell it that we're refering to it
+                label->NoteReference(where);
+            } else {
+                // label doesn't exist, so we need to watch for labels created at our target
+                GlobalMemoryLocation const& target = label_node->GetTarget();
+                // TODO label_watches.push_back(
+                //          system->LabelCreatedAt(target)->connect(std::bind(&MemoryObject::LabelCreated, this, ...);
+                //
+                // this would create a new label created at signal specific to the address (so every memory object doesn't
+                // get called for every label)
+                //
+                // shared_ptr<label_created> LabelCreatedAt(GlobalMemoryLocation const& where) {
+                //  return label_created_at[where];
+                // }
+                //
+                // where label_created_at is an unordered_map of GlobalMemoryLocation to signals
+                cout << "[MemoryObject::SetReferences] TODO Label referenced at " << where << " to " << target << " doesn't exist yet" << endl;
+            }
         }
         return true;
     };
 
+    // TODO clear all label_created signal handlers before recreating them
+    if(!operand_expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
+}
+
+void MemoryObject::ClearReferences(GlobalMemoryLocation const& where)
+{
+    // if there's no operand expresion, there are no references
+    if(!operand_expression || !operand_expression->GetRoot()) return;
+
+    // Explore operand_expression and tell each referenced object we no longer care about them
+    auto cb = [&where](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+        if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
+            define_node->GetDefine()->RemoveReference(where);
+        } else if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
+            if(auto label = label_node->GetLabel()) {
+                // label exists, we can tell it that we're refering to it
+                label->RemoveReference(where);
+            } else {
+                // easy case here, if the label doesn't exist then we can't possibly be referring to it
+            }
+        }
+        return true;
+    };
+
+    // TODO clear all label_created signal handlers
     if(!operand_expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
 }
 
@@ -904,11 +960,11 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
         return false;
     }
 
-    // save labels
+    // save only the label strings so we can find them from the system database later
     int nlabels = labels.size();
     WriteVarInt(os, nlabels);
     for(int i = 0; i < nlabels; i++) {
-        if(!labels[i]->Save(os, errmsg)) return false;
+        WriteString(os, labels[i]->GetString());
     }
 
     // create a fields flag for comments and other bits
@@ -937,6 +993,8 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
 
 bool MemoryObject::Load(std::istream& is, std::string& errmsg)
 {
+    auto system = MyApp::Instance()->GetProject()->GetSystem<System>();
+
     int inttype = ReadVarInt<int>(is);
     type = (MemoryObject::TYPE)inttype;
     is.read((char*)&backed, sizeof(backed));
@@ -953,8 +1011,17 @@ bool MemoryObject::Load(std::istream& is, std::string& errmsg)
     int nlabels = ReadVarInt<int>(is);
     //cout << "MemoryObject::nlabels = " << nlabels << endl;
     for(int i = 0; i < nlabels; i++) {
-        auto label = Label::Load(is, errmsg);
+        string label_name;
+        ReadString(is, label_name);
+        if(!is.good()) {
+            errmsg = "Error loading label name";
+            return false;
+        }
+
+        auto label = system->FindLabel(label_name);
+        assert(label);
         if(!label) return false;
+
         label->SetIndex(i);
         labels.push_back(label);
     }
@@ -1032,8 +1099,8 @@ bool MemoryRegion::Load(GlobalMemoryLocation const& base, std::istream& is, std:
         errmsg = "Error reading region address";
         return false;
     }
-    cout << "MemoryRegion::base_address = " << hex << base_address << endl;
-    cout << "MemoryRegion::region_size = " << hex << region_size << endl;
+    //cout << "MemoryRegion::base_address = " << hex << base_address << endl;
+    //cout << "MemoryRegion::region_size = " << hex << region_size << endl;
 
     // initialize memory object storage
     Erase();

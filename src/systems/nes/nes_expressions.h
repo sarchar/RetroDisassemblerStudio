@@ -48,11 +48,14 @@ namespace ExpressionNodes {
     class Label : public ExpressionNode {
     public:
         Label(std::shared_ptr<NES::Label> const& _label, std::string const& _display);
-        Label(GlobalMemoryLocation const&, int, std::string const& _display);
+        Label(GlobalMemoryLocation const&, std::string const& _display);
         virtual ~Label() { }
 
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return Label::base_expression_node_id; }
+
+        std::shared_ptr<NES::Label> GetLabel() { return label.lock(); }
+        GlobalMemoryLocation const& GetTarget() const { return where; }
 
         // Labels evaluate to their address, whether they be zero page or not
         bool Evaluate(s64* result, std::string& errmsg) const override {
@@ -73,7 +76,6 @@ namespace ExpressionNodes {
     private:
         std::weak_ptr<NES::Label>   label;
         GlobalMemoryLocation        where;
-        int nth;
         std::string                 display;
     };
 
