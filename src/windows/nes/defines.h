@@ -23,6 +23,8 @@ public:
     virtual char const * const GetWindowClass() { return Defines::GetWindowClassStatic(); }
     static char const * const GetWindowClassStatic() { return "NES::Defines"; }
 
+    void Highlight(std::shared_ptr<Define>&);
+
 protected:
     void UpdateContent(double deltaTime) override;
     void RenderContent() override;
@@ -38,6 +40,8 @@ private:
     bool force_resort;
 
     bool case_sensitive_sort;
+
+    std::shared_ptr<Define> highlight;
 
     System::define_created_t::signal_connection_t define_created_connection;
 

@@ -12,6 +12,8 @@ class Expression;
 
 class Define : public std::enable_shared_from_this<Define> {
 public:
+    typedef std::variant<GlobalMemoryLocation, std::weak_ptr<Define>> reverse_reference_type;
+
     Define(std::string const&, std::shared_ptr<Expression>&);
     ~Define();
 
@@ -27,6 +29,9 @@ public:
         reverse_references.push_back(t);
     }
     int     GetNumReverseReferences() const { return reverse_references.size(); }
+    reverse_reference_type& GetReverseReference(int i) {
+        return reverse_references[i];
+    }
 
     s64 Evaluate();
     std::string const& GetExpressionString();
@@ -46,7 +51,6 @@ private:
     // anything that refers to this define:
     // * memory location/code
     // * another define
-    typedef std::variant<GlobalMemoryLocation, std::weak_ptr<Define>> reverse_reference_type;
     std::vector<reverse_reference_type>       reverse_references;
 };
 

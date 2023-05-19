@@ -45,6 +45,16 @@ Defines::~Defines()
 {
 }
 
+void Defines::Highlight(std::shared_ptr<Define>& target)
+{
+    highlight = target;
+
+    // TODO we have to loop over all defines, and find the index of the one that matches target
+    // and then set up the clipper to scroll to that target.
+    cout << "[Defines::Highlight] TODO select " << target->GetString() << endl;
+    highlight = nullptr;
+}
+
 void Defines::UpdateContent(double deltaTime) 
 {
 }
@@ -178,11 +188,11 @@ void Defines::RenderContent()
                     }
 
                     if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                        // TODO do something when define is double clicked (edit?)
-                        //!if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Listing>()) {
-                        //!    // build an address from the bank info
-                        //!    wnd->GoToAddress(label->GetMemoryLocation());
-                        //!}
+                        // double click - show where the define is used
+                        ShowDefineReferencesData data {
+                            .define_name = define->GetString()
+                        };
+                        command_signal->emit(shared_from_this(), "ShowDefineReferences", &data);
                     }
                     ImGui::SameLine();
                 }

@@ -54,7 +54,7 @@ MyApp::MyApp(int, char*[])
     // register all the windows
 #   define REGISTER_WINDOW_TYPE(className) \
         create_window_functions[className::GetWindowClassStatic()] = std::bind(&className::CreateWindow);
-    REGISTER_WINDOW_TYPE(NES::Listing);
+    REGISTER_WINDOW_TYPE(NES::Windows::Listing);
     REGISTER_WINDOW_TYPE(NES::Windows::MemoryRegions);
 #   undef REGISTER_WINDOW_TYPE
 }
@@ -507,7 +507,7 @@ void MyApp::RenderMainMenuBar()
             }
 
             if(ImGui::MenuItem("Listing")) {
-                auto wnd = NES::Listing::CreateWindow();
+                auto wnd = NES::Windows::Listing::CreateWindow();
                 AddWindow(wnd);
             }
 
@@ -847,7 +847,7 @@ void MyApp::LoadProjectPopup()
         popups.load_project.show = false;
 
         // center the window
-        ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
+        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
         ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     }
 
@@ -901,7 +901,7 @@ void MyApp::SaveProjectPopup()
         popups.save_project.show = false;
 
         // center the window
-        ImVec2 center = ImGui::GetMainViewport()->GetCenter(); // TODO center on the current Listing window?
+        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
         ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     }
 

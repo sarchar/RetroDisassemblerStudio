@@ -24,6 +24,8 @@ using namespace std;
 
 namespace NES {
 
+namespace Windows {
+
 shared_ptr<Listing> Listing::CreateWindow()
 {
     return make_shared<Listing>();
@@ -84,10 +86,17 @@ void Listing::Follow()
     }
 }
 
-void Listing::GoToAddress(GlobalMemoryLocation const& address)
+void Listing::Refocus()
 {
-    selection_history_back.push(current_selection); // save the current location to the history
-    ClearForwardHistory();                          // and clear the forward history
+    jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+}
+
+void Listing::GoToAddress(GlobalMemoryLocation const& address, bool save)
+{
+    if(save) {
+        selection_history_back.push(current_selection); // save the current location to the history
+        ClearForwardHistory();                          // and clear the forward history
+    }
     current_selection = address;
 
     if(auto system = current_system.lock()) {
@@ -214,7 +223,7 @@ void Listing::CheckInput()
     if(ImGui::IsKeyPressed(ImGuiKey_DownArrow)) MoveSelectionDown();
 
     if(ImGui::IsKeyDown(ImGuiKey_Tab) && !(io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper)) {
-        jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
+        Refocus();
     }
  
     for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
@@ -553,4 +562,5 @@ void Listing::DisassemblyStopped(GlobalMemoryLocation const& start_location)
     jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
 }
 
-}
+} // namespace Windows
+} // namespace NES

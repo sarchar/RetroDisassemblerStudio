@@ -9,6 +9,8 @@
 
 #include "main.h"
 #include "systems/nes/nes_cartridge.h"
+#include "systems/nes/nes_defines.h"
+#include "systems/nes/nes_label.h"
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 #include "util.h"
@@ -172,7 +174,7 @@ void Project::CreateDefaultWorkspace()
     wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
     app->AddWindow(wnd);
 
-    wnd = Listing::CreateWindow();
+    wnd = Windows::Listing::CreateWindow();
     wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
     app->AddWindow(wnd);
 
@@ -264,6 +266,7 @@ int Project::EndPopup(int ret, bool show_ok, bool show_cancel, bool allow_escape
 void Project::RenderPopups()
 {
     if(popups.create_new_define.show) RenderCreateNewDefinePopup();
+    else if(popups.define_references.show) RenderDefineReferencesPopup();
 }
 
 void Project::RenderCreateNewDefinePopup()
@@ -315,6 +318,81 @@ void Project::RenderCreateNewDefinePopup()
     }
 }
 
+void Project::RenderDefineReferencesPopup()
+{
+    int ret = 0;
+
+    // no further rendering if the dialog isn't visible
+    if(!StartPopup(popups.define_references.title, true)) return;
+
+    auto system = GetSystem<System>();
+    if(ImGui::BeginListBox("##DefineReferences", ImVec2(-FLT_MIN, 5 * ImGui::GetTextLineHeightWithSpacing()))) {
+        // TODO sort these items to have all the code objects at the top
+        // or possibly switch to a tabbed window with Memory in one and Defines in the other
+        // TODO this might be better off as its own reference window that stays open and is dockable, so that 
+        // browsing around a given define for a while is easy
+        int num_rrefs = popups.define_references.define->GetNumReverseReferences();
+        for(int i = 0; i < num_rrefs; i++) {
+            auto rref = popups.define_references.define->GetReverseReference(i);
+
+            stringstream ss;
+            std::function<void()> go;
+            if(auto where = get_if<GlobalMemoryLocation>(&rref)) {
+                ss << hex << setfill('0') << uppercase << '$';
+                if(system->CanBank(*where)) ss << setw(2) << (where->is_chr ? where->chr_rom_bank : where->prg_rom_bank);
+                ss << (where->address < 0x100 ? setw(2) : setw(4)) << where->address;
+
+                // TODO feature search backwards N objects to see if anything has a label and then specify label+offset?
+                // TODO could be useful to have the ability to FindLabelBefore(address) someday. I can see a tree structure
+                // where a label is where the tree would be split left/right.  left goes before the label, right has the label
+                // plus a region length. Easy to search the tree with an offset
+                auto labels = system->GetLabelsAt(*where);
+                if(labels.size()) {
+                    ss << " (" << labels[0]->GetString() << ")";
+                }
+
+                go = [&where]() {
+                    if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Windows::Listing>()) {
+                        wnd->GoToAddress(*where);
+                    }
+                };
+            } else if(auto refdefw = get_if<weak_ptr<Define>>(&rref)) {
+                if(auto refdef = refdefw->lock()) {
+                    ss << "Define: " << refdef->GetString();
+
+                    go = [&refdef]() {
+                        if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Windows::Defines>()) {
+                            wnd->Highlight(refdef);
+                        }
+                    };
+                } else {
+                    // not a valid weakptr
+                    continue;
+                }
+            } else {
+                // unknown type
+                continue;
+            }
+
+            string display = ss.str();
+
+            bool is_selected = (i == popups.selected_index);
+            if(ImGui::Selectable(display.c_str(), is_selected)) {
+                popups.selected_index = i;
+
+                // move to address without changing Listing history
+                go();
+            }
+        }
+        ImGui::EndListBox();
+    }
+
+    if((ret = EndPopup(ret, true, false)) != 0) {
+        popups.define_references.show = false;
+    }
+}
+
+
 void Project::WindowAdded(std::shared_ptr<BaseWindow>& window)
 {
     if(auto wnd = dynamic_pointer_cast<Windows::Defines>(window)) {
@@ -324,12 +402,21 @@ void Project::WindowAdded(std::shared_ptr<BaseWindow>& window)
 
 void Project::CommonCommandHandler(shared_ptr<BaseWindow>& wnd, string const& command, void* userdata)
 {
+    auto system = GetSystem<System>();
+
     if(command == "CreateNewDefine") {
         CreateNewDefineData* data = (CreateNewDefineData*)userdata;
         popups.create_new_define.focus = true;
         popups.create_new_define.show = true;
         popups.buffer1 = "";
         popups.buffer2 = "";
+    } else if(command == "ShowDefineReferences") {
+        ShowDefineReferencesData* data = (ShowDefineReferencesData*)userdata;
+        if(auto define = system->FindDefine(data->define_name)) {
+            popups.define_references.show = true;
+            popups.define_references.define = define;
+            popups.selected_index = -1;
+        }
     }
 }
 

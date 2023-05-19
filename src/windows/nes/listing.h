@@ -12,6 +12,8 @@ namespace NES {
 class GlobalMemoryLocation;
 class Label;
 
+namespace Windows {
+
 class Listing : public BaseWindow {
 public:
     Listing();
@@ -20,8 +22,9 @@ public:
     virtual char const * const GetWindowClass() { return Listing::GetWindowClassStatic(); }
     static char const * const GetWindowClassStatic() { return "NES::Listing"; }
 
-    void GoToAddress(GlobalMemoryLocation const&);
+    void GoToAddress(GlobalMemoryLocation const&, bool save = true);
     void GoToAddress(u32);
+    void Refocus(); // re focus on the current selection
     void Follow();
 
     // signals
@@ -94,4 +97,6 @@ public:
     static std::shared_ptr<Listing> CreateWindow();
 };
 
-}
+} // namespace Windows
+
+} // namespace NES

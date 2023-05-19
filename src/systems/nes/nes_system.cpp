@@ -58,16 +58,7 @@ void System::CreateMemoryRegions()
 
 void System::CreateDefaultDefines()
 {
-    string errmsg;
-    if(!AddDefine("PPUCTRL_SPR16", "1 << 5", errmsg)) {
-        cout << "could not add define: " << errmsg << endl;
-    }
-
-    if(!AddDefine("PPUCTRL_OTHER", "PPUCTRL_SPR16 + 1", errmsg)) {
-        cout << "could not add define: " << errmsg << endl;
-    }
 }
-
 
 void System::CreateDefaultLabels()
 {
