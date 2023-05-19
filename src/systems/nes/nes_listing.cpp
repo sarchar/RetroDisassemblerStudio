@@ -73,7 +73,7 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         ImGui::TableSetupColumn("Raw", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthStretch); // stretch comment field to end of table
         ImGui::TableNextRow();
     
         ImGui::TableNextColumn();
@@ -224,7 +224,7 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         ImGui::TableSetupColumn("Raw", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthStretch); // stretch comment to EOL
 
         ImGui::TableNextRow();
     
@@ -256,6 +256,7 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
                 ImGui::SetKeyboardFocusHere();
                 started_editing = false;
             }
+            ImGui::PushItemWidth(-FLT_MIN);
             if(ImGui::InputText("", &edit_buffer, ImGuiInputTextFlags_EnterReturnsTrue)) {
                 parse_operand_expression = true;
             }
@@ -279,6 +280,7 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
                 ImGui::SetKeyboardFocusHere();
                 started_editing = false;
             }
+            ImGui::PushItemWidth(-FLT_MIN);
             if(ImGui::InputText("", &edit_buffer, ImGuiInputTextFlags_EnterReturnsTrue)) {
                 system->SetComment(where, MemoryObject::COMMENT_TYPE_EOL, edit_buffer);
                 edit_mode = EDIT_NONE;
