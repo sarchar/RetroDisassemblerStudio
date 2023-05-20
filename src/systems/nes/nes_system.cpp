@@ -272,7 +272,7 @@ bool System::ExploreExpressionNodeCallback(shared_ptr<BaseExpressionNode>& node,
                 ss << loc.address;
 
                 // replace the current node with a Label expression node
-                node = GetNodeCreator()->CreateLabel(label, ss.str());
+                node = GetNodeCreator()->CreateLabel(label, label->GetIndex(), ss.str());
 
                 explore_data->labels.push_back(label);
                 was_a_thing = true;
@@ -867,7 +867,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
         }
 
         // if the destination is not valid memory, we can't really create a Label node
-        auto root = label ? nc->CreateLabel(label, buf)
+        auto root = label ? nc->CreateLabel(label, 0, buf)
                           : nc->CreateConstant(target_location.address, buf);
 
         // append "+offset" as an expression to the label

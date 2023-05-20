@@ -71,6 +71,8 @@ public:
 
     void EditOperandExpression(std::shared_ptr<System>&, GlobalMemoryLocation const&);
     bool ParseOperandExpression(std::shared_ptr<System>&, GlobalMemoryLocation const&);
+    void ClearOperandExpressionLabels(std::shared_ptr<System>&, GlobalMemoryLocation const&);
+    void NextLabelReference(std::shared_ptr<System>&, GlobalMemoryLocation const&);
     bool IsEditing() const override;
 
 private:

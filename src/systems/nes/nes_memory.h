@@ -220,8 +220,6 @@ struct MemoryObject {
         }
     }
 
-    void LabelCreated(std::shared_ptr<Label> const&, bool);
-
     struct LabelCreatedData;
     std::vector<std::shared_ptr<LabelCreatedData>> label_connections; // usually empty, rarely contains more than 1
 
@@ -229,6 +227,9 @@ struct MemoryObject {
     bool Load(std::istream&, std::string&);
 
 private:
+    void ClearReferencesToLabels(GlobalMemoryLocation const& where);
+    void NextLabelReference(GlobalMemoryLocation const& where);
+
     void SetComment(COMMENT_TYPE type, std::string const& comment) {
         switch(type) {
         case COMMENT_TYPE_EOL:
@@ -290,6 +291,8 @@ public:
 
     // Labels
     void ApplyLabel(std::shared_ptr<Label>&);
+    void ClearReferencesToLabels(GlobalMemoryLocation const& where);
+    void NextLabelReference(GlobalMemoryLocation const& where);
 
     // Data
     bool MarkMemoryAsUndefined(GlobalMemoryLocation const& where);

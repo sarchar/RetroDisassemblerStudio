@@ -653,6 +653,24 @@ void MemoryRegion::ApplyLabel(shared_ptr<Label>& label)
     UpdateMemoryObject(where);
 }
 
+void MemoryRegion::ClearReferencesToLabels(GlobalMemoryLocation const& where)
+{
+    if(auto memory_object = GetMemoryObject(where)) {
+        memory_object->ClearReferences(where); // clear all references first
+        memory_object->ClearReferencesToLabels(where);
+        memory_object->SetReferences(where);   // re-set all references (i.e., define)
+    }
+}
+
+void MemoryRegion::NextLabelReference(GlobalMemoryLocation const& where)
+{
+    if(auto memory_object = GetMemoryObject(where)) {
+        memory_object->ClearReferences(where); // clear all references first
+        memory_object->NextLabelReference(where);
+        memory_object->SetReferences(where);   // re-set all references (i.e., define)
+    }
+}
+
 // Returns the listing item index in the whole tree given the memory object
 // Trivally, go up the whole tree adding left nodes
 u32 MemoryRegion::GetListingItemIndexForMemoryObject(shared_ptr<MemoryObject> const& memory_object)
@@ -871,14 +889,52 @@ void MemoryObject::ClearReferences(GlobalMemoryLocation const& where)
         return true;
     };
 
-    // TODO clear all label_created signal handlers
     if(!operand_expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
 }
 
-void MemoryObject::LabelCreated(shared_ptr<Label> const& label, bool was_user_created)
+void MemoryObject::ClearReferencesToLabels(GlobalMemoryLocation const& where)
 {
+    // if there's no operand expresion, there are no references
+    if(!operand_expression || !operand_expression->GetRoot()) return;
 
+    auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(operand_expression->GetNodeCreator());
+
+    // Explore the expression, changing labels to constants
+    auto cb = [&where, &nc](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+        if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
+            // evaluate the label to its address
+            s64 address;
+            string errmsg;
+            bool result = label_node->Evaluate(&address, errmsg);
+            assert(result);
+
+            // convert the label_node to a constant node
+            node = nc->CreateConstant(address, label_node->GetDisplay());
+        }
+        return true;
+    };
+
+    if(!operand_expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
 }
+
+// Change to the next label at a given address
+void MemoryObject::NextLabelReference(GlobalMemoryLocation const& where)
+{
+    // if there's no operand expresion, there are no labels
+    if(!operand_expression || !operand_expression->GetRoot()) return;
+
+    // Explore the expression, calling Increment on the first and then bailing
+    auto cb = [&where](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+        if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
+            // convert the label_node to a constant node
+            label_node->NextLabel();
+        }
+        return true;
+    };
+
+    if(!operand_expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
+}
+
 
 u32 MemoryObject::GetSize(shared_ptr<Disassembler> disassembler)
 {

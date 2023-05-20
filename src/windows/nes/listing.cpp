@@ -333,7 +333,7 @@ void Listing::CheckInput()
                     auto default_operand_format = memory_object->FormatOperandField(); // will format the data $xxxx
                     auto expr = make_shared<Expression>();
                     auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
-                    auto root = nc->CreateLabel(label, default_operand_format);
+                    auto root = nc->CreateLabel(label, label->GetIndex(), default_operand_format);
 
                     // if offset is nonzero, create an add offset expression
                     if(offset != 0) {

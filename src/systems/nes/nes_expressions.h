@@ -47,8 +47,8 @@ namespace ExpressionNodes {
 
     class Label : public ExpressionNode {
     public:
-        Label(std::shared_ptr<NES::Label> const& _label, std::string const& _display);
-        Label(GlobalMemoryLocation const&, std::string const& _display);
+        Label(std::shared_ptr<NES::Label> const& _label, int _nth, std::string const& _display);
+        Label(GlobalMemoryLocation const&, int _nth, std::string const& _display);
         virtual ~Label() { }
 
         static int base_expression_node_id;
@@ -57,8 +57,12 @@ namespace ExpressionNodes {
         bool NoteReference(GlobalMemoryLocation const&);
         void RemoveReference(GlobalMemoryLocation const&);
 
+        // You're expected to call RemoveReference before and NoteReference() after
+        void NextLabel();
+
         std::shared_ptr<NES::Label> GetLabel() { return label.lock(); }
         GlobalMemoryLocation const& GetTarget() const { return where; }
+        std::string const&          GetDisplay() const { return display; }
 
         // Labels evaluate to their address, whether they be zero page or not
         bool Evaluate(s64* result, std::string& errmsg) const override {
@@ -79,6 +83,7 @@ namespace ExpressionNodes {
     private:
         std::weak_ptr<NES::Label>   label;
         GlobalMemoryLocation        where;
+        int                         nth;
         std::string                 display;
     };
 
@@ -308,12 +313,12 @@ public:
         return std::make_shared<ExpressionNodes::Define>(define);
     }
 
-    BN CreateLabel(std::shared_ptr<Label> const& label, std::string const& display) {
-        return std::make_shared<ExpressionNodes::Label>(label, display);
+    BN CreateLabel(std::shared_ptr<Label> const& label, int nth, std::string const& display) {
+        return std::make_shared<ExpressionNodes::Label>(label, nth, display);
     }
 
-    BN CreateLabel(GlobalMemoryLocation const& label_address, std::string const& display) {
-        return std::make_shared<ExpressionNodes::Label>(label_address, display);
+    BN CreateLabel(GlobalMemoryLocation const& label_address, int nth, std::string const& display) {
+        return std::make_shared<ExpressionNodes::Label>(label_address, nth, display);
     }
 };
 

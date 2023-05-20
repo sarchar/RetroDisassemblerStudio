@@ -50,14 +50,14 @@ shared_ptr<Define> Define::Load(istream& is, string& errmsg, shared_ptr<BaseExpr
     return make_shared<Define>(define);
 }
 
-Label::Label(shared_ptr<NES::Label> const& _label, string const& _display)
-    : label(_label), display(_display)
+Label::Label(shared_ptr<NES::Label> const& _label, int _nth, string const& _display)
+    : label(_label), nth(_nth), display(_display)
 { 
     where = _label->GetMemoryLocation();
 }
 
-Label::Label(GlobalMemoryLocation const& _where, string const& _display)
-    : where(_where), display(_display)
+Label::Label(GlobalMemoryLocation const& _where, int _nth, string const& _display)
+    : where(_where), nth(_nth), display(_display)
 { }
 
 bool Label::NoteReference(GlobalMemoryLocation const& source) {
@@ -73,7 +73,8 @@ bool Label::NoteReference(GlobalMemoryLocation const& source) {
         auto labels = system->GetLabelsAt(where);
         if(labels.size()) {
             // found a label, so cache that
-            label = labels[0];
+            nth = nth % labels.size();
+            label = labels[nth];
             return NoteReference(source);
         }
     }
@@ -85,6 +86,12 @@ void Label::RemoveReference(GlobalMemoryLocation const& where) {
     if(auto t = label.lock()) {
         t->RemoveReference(where);
     }
+}
+
+void Label::NextLabel()
+{
+    nth += 1;
+    label.reset();
 }
 
 void Label::Print(std::ostream& ostream) {
@@ -100,6 +107,7 @@ void Label::Print(std::ostream& ostream) {
 
 bool Label::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator>) 
 {
+    WriteVarInt(os, nth);
     WriteString(os, display);
     if(auto t = label.lock()) {
         WriteVarInt(os, 1);
@@ -113,6 +121,8 @@ bool Label::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreat
 
 shared_ptr<Label> Label::Load(istream& is, string& errmsg, shared_ptr<BaseExpressionNodeCreator>&) 
 {
+    int nth = ReadVarInt<int>(is);
+
     string display;
     ReadString(is, display);
 
@@ -135,14 +145,14 @@ shared_ptr<Label> Label::Load(istream& is, string& errmsg, shared_ptr<BaseExpres
         assert(system);
         auto label = system->FindLabel(name);
         assert(label);
-        return make_shared<Label>(label, display);
+        return make_shared<Label>(label, nth, display);
     }
 
     // label was not valid, so use the memory location instead
     GlobalMemoryLocation where;
     if(!where.Load(is, errmsg)) return nullptr;
 
-    return make_shared<Label>(where, display);
+    return make_shared<Label>(where, nth, display);
 }
 
 }
