@@ -126,6 +126,7 @@ struct MemoryObject {
         TYPE_BYTE,
         TYPE_WORD,
         TYPE_CODE,
+        TYPE_STRING,
 
         // Even though LIST and ARRAY function interally very similarly,
         // a LIST type is internal to the editor (it's a list of memory objects), whereas
@@ -162,16 +163,23 @@ struct MemoryObject {
         u16 hval;
 
         struct {
+            u8* data;
+            int len;
+        } str;
+
+        struct {
             u8 opcode;
             u8 operands[2]; // max 2 per opcode
         } code;
 
-        // TODO block of data?
-        std::vector<std::shared_ptr<MemoryObject>> list = {};
+        // TODO array
+        std::vector<std::shared_ptr<MemoryObject>> array = {};
     };
 
     MemoryObject() {}
-    ~MemoryObject() {}
+    ~MemoryObject() {
+        if(type == TYPE_STRING) delete [] str.data;
+    }
 
     void SetReferences(GlobalMemoryLocation const&);
     void ClearReferences(GlobalMemoryLocation const&);
@@ -267,6 +275,7 @@ public:
     // Data
     bool MarkMemoryAsUndefined(GlobalMemoryLocation const& where);
     bool MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count);
+    bool MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byte_count);
 
     // Code
     bool MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_count);

@@ -90,7 +90,11 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
                 stringstream ss;
                 ss << hex << setfill('0') << uppercase;
                 for(int i = 0; i < objsize; i++) {
-                    ss << setw(2) << (int)((u8*)&memory_object->bval)[i];
+                    int bval = (int)((u8*)&memory_object->bval)[i];
+                    if(memory_object->type == MemoryObject::TYPE_STRING) {
+                        bval = memory_object->str.data[i];
+                    }
+                    ss << setw(2) << bval;
                     if(i != (objsize - 1)) ss << " ";
                 }
 

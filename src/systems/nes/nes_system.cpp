@@ -75,6 +75,14 @@ void System::CreateDefaultLabels()
     p.address += 4;
     CreateLabel(p, "_irqbrk");
 
+    // TODO TEMP string for DW
+    p.address = 0xFFE0;
+    if(auto memory_object = GetMemoryObject(p)) {
+        if(memory_object->bval == 0x44) {
+            GetMemoryRegion(p)->MarkMemoryAsString(p, 16);
+        }
+    }
+
     // And the labels for the registers
     p = GlobalMemoryLocation();
     p.address = 0x2000; CreateLabel(p, "PPUCONT");
@@ -108,6 +116,7 @@ void System::CreateDefaultLabels()
     p.address = 0x4015; CreateLabel(p, "SND_CHN");
     p.address = 0x4016; CreateLabel(p, "JOY1");
     p.address = 0x4017; CreateLabel(p, "JOY2");
+
 }
 
 // Memory

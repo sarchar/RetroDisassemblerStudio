@@ -8,6 +8,7 @@
 #include "imgui_internal.h"
 
 #include "main.h"
+#include "magic_enum.hpp"
 
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_expressions.h"
@@ -144,6 +145,7 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
     case MemoryObject::TYPE_UNDEFINED:
     case MemoryObject::TYPE_BYTE:
     case MemoryObject::TYPE_WORD:
+    case MemoryObject::TYPE_STRING:
         obj->listing_items.push_back(make_shared<ListingItemData>(0));
         break;
 
@@ -414,6 +416,7 @@ bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where)
 
 bool MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count)
 {
+    // Round up
     if((byte_count % 2) == 1) byte_count++;
 
     // Check to see if all selected memory can be converted
@@ -428,7 +431,7 @@ bool MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte
             auto next_object = GetMemoryObject(where + i + 1);
 
             if(next_object->type != MemoryObject::TYPE_UNDEFINED && next_object->type != MemoryObject::TYPE_BYTE) {
-                cout << "[MemoryRegion::MarkMemoryAsWords] address 0x" << (where.address + i) << "+1 cannot be converted to a word (currently type " << memory_object->type << ")" << endl;
+                cout << "[MemoryRegion::MarkMemoryAsWords] address 0x" << (where.address + i) << "+1 cannot be converted to a word (currently type " << magic_enum::enum_name(next_object->type) << ")" << endl;
                 return false;
             }
 
@@ -436,7 +439,7 @@ bool MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte
         }
 
         default:
-            cout << "[MemoryRegion::MarkMemoryAsWords] address 0x" << (where.address + i) << " cannot be converted to a word (currently type " << memory_object->type << ")" << endl;
+            cout << "[MemoryRegion::MarkMemoryAsWords] address 0x" << (where.address + i) << " cannot be converted to a word (currently type " << magic_enum::enum_name(memory_object->type) << ")" << endl;
             return false;
         }
     }
@@ -482,7 +485,7 @@ bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_
     for(u32 i = 0; i < byte_count; i++) {
         auto memory_object = GetMemoryObject(where + i);
         if(memory_object->type != MemoryObject::TYPE_BYTE && memory_object->type != MemoryObject::TYPE_UNDEFINED) {
-            cout << "[MemoryRegion::MarkMemoryAsWords] address " << (where + i) << " cannot be converted to code (currently type " << memory_object->type << ")" << endl;
+            cout << "[MemoryRegion::MarkMemoryAsCode] address " << (where + i) << " cannot be converted to code (currently type " << magic_enum::enum_name(memory_object->type) << ")" << endl;
             return false;
         }
     }
@@ -499,7 +502,7 @@ bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_
         assert(operand_object->type == MemoryObject::TYPE_BYTE || operand_object->type == MemoryObject::TYPE_UNDEFINED);
         RemoveMemoryObjectFromTree(operand_object);
 
-        // TODO steal data from operand_object
+        // steal data from operand_object
         inst->code.operands[i-1] = operand_object->bval;
 
         // update the object_refs
@@ -509,6 +512,47 @@ bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_
 
     // convert the inst to TYPE_CODE and update the tree
     inst->type = MemoryObject::TYPE_CODE;
+    UpdateMemoryObject(where);
+
+    return true;
+}
+
+bool MemoryRegion::MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byte_count)
+{
+    // Check to see if all selected memory can be converted
+    for(u32 i = 0; i < byte_count; i++) {
+        auto memory_object = GetMemoryObject(where + i);
+        if(memory_object->type != MemoryObject::TYPE_BYTE && memory_object->type != MemoryObject::TYPE_UNDEFINED) {
+            cout << "[MemoryRegion::MarkMemoryAsString] address " << (where + i) << " cannot be converted to code (currently type " << magic_enum::enum_name(memory_object->type) << ")" << endl;
+            return false;
+        }
+    }
+
+    // The first object will be changed into the string
+    auto str_object = GetMemoryObject(where);
+
+    // allocate the storage for the data
+    u8 first_byte = str_object->bval;
+    str_object->str.data = new u8[byte_count];
+    str_object->str.data[0] = first_byte;
+    str_object->str.len = byte_count;
+
+    // get the rest of the string bytes and remove them from the tree, adding them to the string object
+    for(u32 i = 1; i < byte_count; i++) {
+        auto next_byte_object = GetMemoryObject(where + i);
+        assert(next_byte_object->type == MemoryObject::TYPE_BYTE || next_byte_object->type == MemoryObject::TYPE_UNDEFINED);
+        RemoveMemoryObjectFromTree(next_byte_object);
+
+        // steal data from next_byte_object
+        str_object->str.data[i] = next_byte_object->bval;
+
+        // update the object_refs
+        u32 x = ConvertToRegionOffset((where + i).address);
+        object_refs[x] = str_object;
+    }
+
+    // convert the str_object to TYPE_STRING and update the tree
+    str_object->type = MemoryObject::TYPE_STRING;
     UpdateMemoryObject(where);
 
     return true;
@@ -854,6 +898,9 @@ u32 MemoryObject::GetSize(shared_ptr<Disassembler> disassembler)
     case MemoryObject::TYPE_CODE:
         return disassembler->GetInstructionSize(code.opcode);
 
+    case MemoryObject::TYPE_STRING:
+        return str.len;
+
     default:
         assert(false);
         return 0;
@@ -869,6 +916,10 @@ void MemoryObject::Read(u8* buf, int count)
     case MemoryObject::TYPE_WORD:
     case MemoryObject::TYPE_CODE:
         memcpy(buf, (void*)&bval, count);
+        break;
+
+    case MemoryObject::TYPE_STRING:
+        memcpy(buf, str.data, count);
         break;
 
     default:
@@ -891,6 +942,10 @@ string MemoryObject::FormatInstructionField(shared_ptr<Disassembler> disassemble
         ss << ".DW";
         break;
 
+    case MemoryObject::TYPE_STRING:
+        ss << ".DS";
+        break;
+
     case MemoryObject::TYPE_CODE:
         ss << disassembler->GetInstruction(code.opcode);
         break;
@@ -909,7 +964,9 @@ string MemoryObject::FormatOperandField(u32 /* internal_offset */, shared_ptr<Di
     stringstream ss;
 
     if(!backed) { // uninitialized memory has nothing to show and cannot have expressions
-        ss << "??";
+        for(int i = 0; i < GetSize(); i++) {
+            ss << "?";
+        }
     } else {
         // if there's an operand expression, display that, otherwise format a default expression
         if(operand_expression) {
@@ -925,6 +982,15 @@ string MemoryObject::FormatOperandField(u32 /* internal_offset */, shared_ptr<Di
 
             case MemoryObject::TYPE_WORD:
                 ss << "$" << setw(4) << hval;
+                break;
+
+            case MemoryObject::TYPE_STRING:
+                ss << "\"";
+                for(int i = 0; i < GetSize(); i++) {
+                    if(isprint(str.data[i])) ss << (char)str.data[i];
+                    else ss << "\\x" << setw(2) << (int)str.data[i];
+                }
+                ss << "\"";
                 break;
 
             case MemoryObject::TYPE_CODE:
