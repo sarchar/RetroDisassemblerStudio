@@ -35,6 +35,23 @@ public:
     typedef signal<std::function<void(std::shared_ptr<Label> const&, bool)>> label_created_t;
     std::shared_ptr<label_created_t> label_created;
 
+    // On-demand new signal handlers for specific addresses
+    std::shared_ptr<label_created_t> LabelCreatedAt(GlobalMemoryLocation const& where) {
+        if(!label_created_at.contains(where)) {
+            label_created_at[where] = std::make_shared<label_created_t>();
+        }
+        return label_created_at[where];
+    }
+
+    // Be polite and tell me when you disconnect
+    void LabelCreatedAtRemoved(GlobalMemoryLocation const& where) {
+        if(label_created_at.contains(where)) {
+            if(label_created_at[where]->connections.size() == 0) {
+                label_created_at.erase(where);
+            }
+        }
+    }
+
     typedef signal<std::function<void(GlobalMemoryLocation const&)>> disassembly_stopped_t;
     std::shared_ptr<disassembly_stopped_t> disassembly_stopped;
 
@@ -141,6 +158,8 @@ public:
     bool Load(std::istream&, std::string&) override;
 
 private:
+    std::unordered_map<GlobalMemoryLocation, std::shared_ptr<label_created_t>> label_created_at;
+
     // Memory
     std::shared_ptr<NES::RAMRegion> cpu_ram;
     std::shared_ptr<NES::PPURegistersRegion> ppu_registers;

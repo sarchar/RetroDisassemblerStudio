@@ -54,6 +54,9 @@ namespace ExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return Label::base_expression_node_id; }
 
+        bool NoteReference(GlobalMemoryLocation const&);
+        void RemoveReference(GlobalMemoryLocation const&);
+
         std::shared_ptr<NES::Label> GetLabel() { return label.lock(); }
         GlobalMemoryLocation const& GetTarget() const { return where; }
 
@@ -307,6 +310,10 @@ public:
 
     BN CreateLabel(std::shared_ptr<Label> const& label, std::string const& display) {
         return std::make_shared<ExpressionNodes::Label>(label, display);
+    }
+
+    BN CreateLabel(GlobalMemoryLocation const& label_address, std::string const& display) {
+        return std::make_shared<ExpressionNodes::Label>(label_address, display);
     }
 };
 

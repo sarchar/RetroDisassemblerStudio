@@ -206,6 +206,11 @@ struct MemoryObject {
         }
     }
 
+    void LabelCreated(std::shared_ptr<Label> const&, bool);
+
+    struct LabelCreatedData;
+    std::vector<std::shared_ptr<LabelCreatedData>> label_connections; // usually empty, rarely contains more than 1
+
     bool Save(std::ostream&, std::string&);
     bool Load(std::istream&, std::string&);
 

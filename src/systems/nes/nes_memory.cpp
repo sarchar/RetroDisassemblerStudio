@@ -824,35 +824,38 @@ MemoryObjectTreeNode::iterator& MemoryObjectTreeNode::iterator::operator++()
     return *this;
 }
 
+struct MemoryObject::LabelCreatedData {
+    GlobalMemoryLocation target;
+    System::label_created_t::signal_connection_t connection;
+};
+
 void MemoryObject::SetReferences(GlobalMemoryLocation const& where)
 {
     // if there's no operand expresion, there are no references
     if(!operand_expression || !operand_expression->GetRoot()) return;
 
     // Explore operand_expression and mark each referenced Define() that we're referring to it
-    auto cb = [&where](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+    auto cb = [this, &where](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
         if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
             define_node->GetDefine()->NoteReference(where);
         } else if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
-            if(auto label = label_node->GetLabel()) {
-                // label exists, we can tell it that we're refering to it
-                label->NoteReference(where);
-            } else {
-                // label doesn't exist, so we need to watch for labels created at our target
-                GlobalMemoryLocation const& target = label_node->GetTarget();
-                // TODO label_watches.push_back(
-                //          system->LabelCreatedAt(target)->connect(std::bind(&MemoryObject::LabelCreated, this, ...);
-                //
-                // this would create a new label created at signal specific to the address (so every memory object doesn't
-                // get called for every label)
-                //
-                // shared_ptr<label_created> LabelCreatedAt(GlobalMemoryLocation const& where) {
-                //  return label_created_at[where];
-                // }
-                //
-                // where label_created_at is an unordered_map of GlobalMemoryLocation to signals
-                cout << "[MemoryObject::SetReferences] TODO Label referenced at " << where << " to " << target << " doesn't exist yet" << endl;
-            }
+            // tell the expression node to update the reference to the label
+            label_node->NoteReference(where);
+
+            // and create a callback for any label created at the target address
+            auto system = MyApp::Instance()->GetProject()->GetSystem<System>();
+            GlobalMemoryLocation const& target = label_node->GetTarget();
+
+            label_connections.push_back(make_shared<LabelCreatedData>(LabelCreatedData {
+                .target = target,
+                .connection = system->LabelCreatedAt(target)->connect(
+                        [this, where, label_node](shared_ptr<Label> const& label, bool was_user_created) {
+                            // this will notify the new label that we're referring to it. if a different label is created
+                            // at the same address, this won't reference that label since the current expression node already has
+                            // a label
+                            label_node->NoteReference(where);
+                        })
+            }));
         }
         return true;
     };
@@ -863,6 +866,16 @@ void MemoryObject::SetReferences(GlobalMemoryLocation const& where)
 
 void MemoryObject::ClearReferences(GlobalMemoryLocation const& where)
 {
+    auto system = MyApp::Instance()->GetProject()->GetSystem<System>();
+
+    // Clear all the label_created signal connections
+    for(auto& data : label_connections) {
+        data->connection->disconnect();
+        system->LabelCreatedAtRemoved(data->target);
+    }
+
+    label_connections.clear();
+
     // if there's no operand expresion, there are no references
     if(!operand_expression || !operand_expression->GetRoot()) return;
 
@@ -871,18 +884,18 @@ void MemoryObject::ClearReferences(GlobalMemoryLocation const& where)
         if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
             define_node->GetDefine()->RemoveReference(where);
         } else if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
-            if(auto label = label_node->GetLabel()) {
-                // label exists, we can tell it that we're refering to it
-                label->RemoveReference(where);
-            } else {
-                // easy case here, if the label doesn't exist then we can't possibly be referring to it
-            }
+            label_node->RemoveReference(where);
         }
         return true;
     };
 
     // TODO clear all label_created signal handlers
     if(!operand_expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
+}
+
+void MemoryObject::LabelCreated(shared_ptr<Label> const& label, bool was_user_created)
+{
+
 }
 
 u32 MemoryObject::GetSize(shared_ptr<Disassembler> disassembler)

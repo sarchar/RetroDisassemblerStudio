@@ -642,6 +642,11 @@ shared_ptr<Label> System::GetOrCreateLabel(GlobalMemoryLocation const& where, st
 
         // notify the system of new labels
         label_created->emit(label, was_user_created);
+
+        // and the specific listing address
+        if(label_created_at.contains(where)) {
+            label_created_at[where]->emit(label, was_user_created);
+        }
     }
 
     return label;

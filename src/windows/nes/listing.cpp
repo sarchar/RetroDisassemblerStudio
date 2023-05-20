@@ -333,8 +333,10 @@ void Listing::CheckInput()
                     }
 
                     // get the target location and create a label if none exists
-                    int offset;
-                    auto label = system->GetDefaultLabelForTarget(label_address, true, &offset, true, "L_");
+                    int offset = 0;
+
+                    // counterintuitively, this is not a "user created label"
+                    auto label = system->GetDefaultLabelForTarget(label_address, false, &offset, true, "L_");
 
                     // now apply a OperandAddressOrLabel to the data on this memory object
                     auto default_operand_format = memory_object->FormatOperandField(); // will format the data $xxxx

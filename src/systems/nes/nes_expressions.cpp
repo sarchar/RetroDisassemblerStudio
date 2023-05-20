@@ -60,11 +60,11 @@ Label::Label(GlobalMemoryLocation const& _where, string const& _display)
     : where(_where), display(_display)
 { }
 
-void Label::Print(std::ostream& ostream) {
-    // Use the label if it exists
+bool Label::NoteReference(GlobalMemoryLocation const& source) {
     if(auto t = label.lock()) {
-        ostream << t->GetString();
-        return;
+        // valid label
+        t->NoteReference(source);
+        return true;
     }
 
     // No label, so try looking it up. We can't assume anything about the nth label at the address
@@ -74,13 +74,27 @@ void Label::Print(std::ostream& ostream) {
         if(labels.size()) {
             // found a label, so cache that
             label = labels[0];
-            // and print it
-            Print(ostream);
-            return;
+            return NoteReference(source);
         }
     }
 
-    // Still no label, display memory address instead
+    return false;
+}
+
+void Label::RemoveReference(GlobalMemoryLocation const& where) {
+    if(auto t = label.lock()) {
+        t->RemoveReference(where);
+    }
+}
+
+void Label::Print(std::ostream& ostream) {
+    // Use the label if it exists
+    if(auto t = label.lock()) {
+        ostream << t->GetString();
+        return;
+    }
+
+    // no label, display memory address instead
     ostream << display;
 }
 
