@@ -306,67 +306,57 @@ void Listing::CheckInput()
 
         case L'p': // create pointer at cursor (apply a label to the address pointed by the word at this location)
         {
-            // TODO this will be a larger task in the future
-            auto memory_region = system->GetMemoryRegion(current_selection);
-            auto memory_object = memory_region->GetMemoryObject(current_selection);
+            if(auto memory_region = system->GetMemoryRegion(current_selection)) {
+                if(auto memory_object = memory_region->GetMemoryObject(current_selection)) {
+                    // only create pointers from word data
+                    if(memory_object->type != MemoryObject::TYPE_WORD) break;
 
-            u16 dest = 0;
-            if(memory_object->type == MemoryObject::TYPE_CODE) {
-                dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
-            } else if(memory_object->type == MemoryObject::TYPE_WORD) {
-                dest = memory_object->hval;
-            } else if(memory_object->type == MemoryObject::TYPE_BYTE) {
-                dest = memory_object->bval;
-            } else if(memory_object->type == MemoryObject::TYPE_UNDEFINED) {
-                //TODO system->MarkMemoryAsBytes(selection, 1);
-                //dest = memory_object->bval;
-                assert(false);
-            } else {
-                assert(false);
-            }
+                    // use the word data as a pointer to memory
+                    u16 target = memory_object->hval;
 
-            GlobalMemoryLocation label_address(current_selection);
-            label_address.address = dest;
-            if(!(dest >= memory_region->GetBaseAddress() && dest < memory_region->GetEndAddress())) {
-                // destination is not in this memory region, see if we can find it
-                vector<u16> possible_banks;
-                system->GetBanksForAddress(label_address, possible_banks); // only uses the address field
+                    // set up a default address using the current bank/address
+                    GlobalMemoryLocation label_address(current_selection);
+                    label_address.address = target;
 
-                if(possible_banks.size() == 1) {
-                    label_address.prg_rom_bank = possible_banks[0];
-                    memory_region = system->GetMemoryRegion(label_address);
-                } else {
-                    assert(false); // popup dialog and wait for selection of which bank to go to
+                    if(!(target >= memory_region->GetBaseAddress() && target < memory_region->GetEndAddress())) {
+                        // destination is not in this memory region, see if we can find it
+                        vector<u16> possible_banks;
+                        system->GetBanksForAddress(label_address, possible_banks); // only uses the address field
+
+                        if(possible_banks.size() == 1) {
+                            label_address.prg_rom_bank = possible_banks[0];
+                            memory_region = system->GetMemoryRegion(label_address);
+                        } else {
+                            cout << "[Listing::CheckInput] TODO: popup dialog asking for which bank this should point to" << endl;
+                            break;
+                        }
+                    }
+
+                    // get the target location and create a label if none exists
+                    int offset;
+                    auto label = system->GetDefaultLabelForTarget(label_address, true, &offset, true, "L_");
+
+                    // now apply a OperandAddressOrLabel to the data on this memory object
+                    auto default_operand_format = memory_object->FormatOperandField(); // will format the data $xxxx
+                    auto expr = make_shared<Expression>();
+                    auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
+                    auto root = nc->CreateLabel(label, default_operand_format);
+
+                    // if offset is nonzero, create an add offset expression
+                    if(offset != 0) {
+                        stringstream ss;
+                        ss << offset;
+                        auto offset_node = nc->CreateConstant(offset, ss.str());
+                        root = nc->CreateAddOp(root, "+", offset_node);
+                    }
+
+                    // set the root node in the expression
+                    expr->Set(root);
+
+                    // set the expression for memory object at current_selection. it'll show up immediately
+                    memory_region->SetOperandExpression(current_selection, expr);
                 }
             }
-
-            cout << "Creating memory reference to " << label_address << endl;
-            {
-                auto target_object = system->GetMemoryObject(label_address);
-                std::shared_ptr<Label> label;
-                if(target_object && target_object->labels.size() == 0) { // create a label at that address if there isn't one yet
-                    stringstream ss;
-                    ss << "L_" << hex << setfill('0') << uppercase;
-                    if(system->CanBank(label_address)) ss << setw(2) << label_address.prg_rom_bank;
-                    ss << setw(4) << label_address.address;
-
-                    label = system->CreateLabel(label_address, ss.str());
-                } else {
-                    label = target_object->labels[0];
-                }
-
-                // now apply a OperandAddressOrLabel to the data on this memory object
-                auto default_operand_format = memory_object->FormatOperandField();
-                auto expr = make_shared<Expression>();
-                auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
-                auto name = nc->CreateLabel(label, default_operand_format);
-                expr->Set(name);
-
-                // set the expression for memory object at current_selection. it'll show up immediately
-                memory_object->operand_expression = expr;
-            }
-
-
             break;
         }
 

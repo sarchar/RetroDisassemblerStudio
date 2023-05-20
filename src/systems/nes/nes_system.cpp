@@ -596,6 +596,28 @@ shared_ptr<Define> System::AddDefine(string const& name, string const& expressio
     return define;
 }
 
+shared_ptr<Label> System::GetDefaultLabelForTarget(GlobalMemoryLocation const& where, bool was_user_created, int* target_offset, bool wide, string const& prefix)
+{
+    if(auto memory_object = GetMemoryObject(where, target_offset)) {
+        if(memory_object->labels.size() == 0) { // create a label at that address if there isn't one yet
+            stringstream ss;
+            ss << prefix << hex << setfill('0') << uppercase;
+
+            if(CanBank(where)) ss << setw(2) << (where.is_chr ? where.chr_rom_bank : where.prg_rom_bank);
+
+            ss << (wide ? setw(4) : setw(2)) << where.address;
+
+            return CreateLabel(where, ss.str(), was_user_created);
+        } else {
+            // return the first label
+            return memory_object->labels[0];
+        }
+    }
+
+    return nullptr;
+}
+
+
 std::vector<std::shared_ptr<Label>> const& System::GetLabelsAt(GlobalMemoryLocation const& where)
 {
     static vector<shared_ptr<Label>> empty_vector;
@@ -778,7 +800,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
     auto code_region = GetMemoryRegion(where);
     auto code_object = GetMemoryObject(where);
 
-    // TODO generate operand expressions for data?
+    // only create operand expressions for code
     if(code_object->type != MemoryObject::TYPE_CODE) return;
 
     switch(auto am = disassembler->GetAddressingMode(code_object->code.opcode)) {
@@ -821,29 +843,11 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
         }
 
         // only for valid destination addresses do we create a label
-        shared_ptr<Label> label;
+        // can't call GetDefaultLabelForTarget if is_valid is false because target_location might still be
+        // set up to point to something in the wrong bank
         int target_offset = 0;
-        if(is_valid) {
-            auto target_object = GetMemoryObject(target_location, &target_offset);
-            if(target_object) {
-                if(target_object->labels.size() == 0) { // create a label at that address if there isn't one yet
-                    stringstream ss;
-                    ss << hex << setfill('0') << uppercase;
-
-                    if(isrel)     ss << ".";
-                    else if(is16) ss << "L_";
-                    else          ss << "zp_";
-
-                    if(CanBank(target_location)) ss << setw(2) << target_location.prg_rom_bank;
-
-                    ss << (is16 ? setw(4) : setw(2)) << target_location.address;
-
-                    label = CreateLabel(target_location, ss.str());
-                } else {
-                    label = target_object->labels[0];
-                }
-            }
-        }
+        string prefix = isrel ? "." : (is16 ? "L_" : "zp_");
+        shared_ptr<Label> label = is_valid ? GetDefaultLabelForTarget(target_location, false, &target_offset, is16, prefix) : nullptr;
 
         // now create an expression for the operands
         auto expr = make_shared<Expression>();

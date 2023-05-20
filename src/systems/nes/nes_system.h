@@ -90,6 +90,7 @@ public:
     // Labels
     void CreateDefaultLabels(); // for new projects
 
+    std::shared_ptr<Label> GetDefaultLabelForTarget(GlobalMemoryLocation const& where, bool was_user_created, int* offset = nullptr, bool wide = true, std::string const& prefix = "L_");
     std::vector<std::shared_ptr<Label>> const& GetLabelsAt(GlobalMemoryLocation const&);
 
     std::shared_ptr<Label> FindLabel(std::string const& label_str) {
