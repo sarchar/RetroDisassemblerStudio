@@ -225,18 +225,25 @@ void MyApp::CreateINIWindows()
 
 void MyApp::AddWindow(shared_ptr<BaseWindow> window)
 {
-    *window->window_closed += std::bind(&MyApp::ManagedWindowClosedHandler, this, placeholders::_1);
-
-    managed_windows.push_back(window);
     cout << "[MyApp] Added window \"" << window->GetTitle() << "\" (managed window count = " << managed_windows.size() << ")" << endl;
-
-    window_added->emit(window);
+    *window->window_closed += std::bind(&MyApp::ManagedWindowClosedHandler, this, placeholders::_1);
+    queued_windows_for_add.push_back(window);
 }
 
 void MyApp::ManagedWindowClosedHandler(std::shared_ptr<BaseWindow> window)
 {
     cout << "[MyApp] \"" << window->GetTitle() << "\" closed (managed window count = " << managed_windows.size() + queued_windows_for_delete.size() - 1 << ")" << endl;
     queued_windows_for_delete.push_back(window);
+}
+
+void MyApp::ProcessQueuedWindowsForAdd()
+{
+    for(auto& window : queued_windows_for_add) {
+        managed_windows.push_back(window);
+        window_added->emit(window);
+    }
+
+    queued_windows_for_add.resize(0);
 }
 
 void MyApp::ProcessQueuedWindowsForDelete()
@@ -618,6 +625,9 @@ void MyApp::RenderGUI()
 
     // Remove any windows queued for deletion
     ProcessQueuedWindowsForDelete();
+
+    // Add any new windows
+    ProcessQueuedWindowsForAdd();
 
     // CLean up style vars
     ImGui::PopStyleVar(1);

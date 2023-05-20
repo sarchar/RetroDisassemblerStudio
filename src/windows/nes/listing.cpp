@@ -35,6 +35,7 @@ Listing::Listing()
     : BaseWindow("NES::Listing"), current_selection_listing_item(0)
 {
     SetTitle("Listing");
+    SetNoScrollbar(true);
     //SetNav(false); // disable navigation
     
     // create internal signals

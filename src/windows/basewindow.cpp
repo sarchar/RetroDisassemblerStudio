@@ -101,6 +101,7 @@ void BaseWindow::RenderGUI()
 
     ImGuiWindowFlags window_flags = 0;
     if(!enable_nav) window_flags |= ImGuiWindowFlags_NoNav;
+    if(no_scrollbar) window_flags |= ImGuiWindowFlags_NoScrollbar;
 
     bool is_open = ImGui::Begin(window_title.c_str(), &local_open, window_flags);
     focused = false;

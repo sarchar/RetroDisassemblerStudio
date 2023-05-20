@@ -83,6 +83,20 @@ struct GlobalMemoryLocation {
         stream.flags(saveflags);
         return stream;
     }
+
+    void FormatAddress(std::ostream& stream, bool force_16 = false, bool show_bank = true, bool with_colon = true) const {
+        std::ios_base::fmtflags saveflags(stream.flags());
+        stream << "$" << std::hex << std::uppercase << std::setfill('0');
+        if(show_bank) {
+            stream << std::setw(2) << (is_chr ? chr_rom_bank : prg_rom_bank);
+            if(with_colon) stream << ":";
+        }
+        if(force_16 || address >= 0x100) stream << std::setw(4);
+        else stream << std::setw(2);
+        stream << address;
+        stream.flags(saveflags);
+    }
+
 };
 
 class MemoryObject;

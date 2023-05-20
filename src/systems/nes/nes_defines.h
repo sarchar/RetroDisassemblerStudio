@@ -5,6 +5,8 @@
 #include <unordered_set>
 #include <variant>
 
+#include "signals.h"
+
 #include "systems/nes/nes_memory.h"
 
 namespace NES {
@@ -14,6 +16,10 @@ class Expression;
 class Define : public std::enable_shared_from_this<Define> {
 public:
     typedef std::variant<GlobalMemoryLocation, std::shared_ptr<Define>> reverse_reference_type;
+
+    // signals
+    typedef signal<std::function<void()>> reverse_references_changed_t;
+    std::shared_ptr<reverse_references_changed_t> reverse_references_changed;
 
     Define(std::string const&, std::shared_ptr<Expression>&);
     ~Define();
@@ -29,18 +35,24 @@ public:
 
     template<class T>
     void    NoteReference(T const& t) {
+        int size = reverse_references.size();
         reverse_references.insert(t);
+        if(reverse_references.size() != size) reverse_references_changed->emit();
     }
 
     template<class T>
     int RemoveReference(T const& t) {
-        return reverse_references.erase(t);
+        int size = reverse_references.size();
+        auto ret = reverse_references.erase(t);
+        if(reverse_references.size() != size) reverse_references_changed->emit();
+        return ret;
     }
 
     template<typename F>
     void IterateReverseReferences(F func) {
+        int i = 0;
         for(auto& v : reverse_references) {
-            func(v);
+            func(i++, v);
         }
     }
 

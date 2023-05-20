@@ -12,10 +12,16 @@
 //
 // Usage (connect and disconnect):
 //
-// my_signal_t::signal_connection_t conn = object->my_signal->connect([](int a, char b){ std::cout << a << b << std::endl; });
+// signal_connection conn = object->my_signal->connect([](int a, char b){ std::cout << a << b << std::endl; });
 // ...
 // conn.disconnect(); // remove a connected signal
+//
+// or better yet,
+//
+// conn = nullptr;    // disconnect *and* free some memory
+//
 // or
+//
 // *object->my_signal += std::bind(&MyClass::Handler, this, std::placeholders::_1, std::placeholders::_2); // stays connected for the life of the object
 //
 // Usage (emitting):
@@ -33,19 +39,23 @@
 
 typedef unsigned int _signal_id_t;
 
+struct signal_connection_base {
+    virtual void disconnect() = 0;
+};
+
 template <typename SignalType>
-struct signal_connection {
-    signal_connection(std::shared_ptr<SignalType> _signal, _signal_id_t _id)
+struct signal_connection_int : public signal_connection_base {
+    signal_connection_int(std::shared_ptr<SignalType> _signal, _signal_id_t _id)
         : signal(_signal), id(_id) { }
 
-    signal_connection()
+    signal_connection_int()
         : id(-1) { }
 
-    ~signal_connection() {
+    ~signal_connection_int() {
         disconnect();
     }
 
-    void disconnect()
+    void disconnect() override
     {
         if(auto s = signal.lock()) {
             s->disconnect(id);
@@ -57,11 +67,13 @@ private:
     _signal_id_t id;
 };
 
+using signal_connection = std::shared_ptr<signal_connection_base>;
+
 // observer pattern started from
 // https://stackoverflow.com/questions/13592847/c11-observer-pattern-signals-slots-events-change-broadcaster-listener-or
 template <typename Func>
 struct signal : public std::enable_shared_from_this<signal<Func>> {
-    typedef std::shared_ptr<signal_connection<signal<Func>>> signal_connection_t;
+    typedef std::shared_ptr<signal_connection_int<signal<Func>>> signal_connection_t;
 
     _signal_id_t next_id;
 
@@ -72,7 +84,7 @@ struct signal : public std::enable_shared_from_this<signal<Func>> {
     {
         _signal_id_t id = next_id++;
         connections[id] = f;
-        signal_connection_t conn = std::make_shared<signal_connection<signal<Func>>>(this->shared_from_this(), id);
+        signal_connection_t conn = std::make_shared<signal_connection_int<signal<Func>>>(this->shared_from_this(), id);
         return conn;
     }
 

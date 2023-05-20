@@ -34,6 +34,7 @@ private:
 
     std::weak_ptr<System>            current_system;
     int selected_row;
+    int context_row = 0;
 
     std::vector<std::weak_ptr<Define>> defines;
     bool force_reiterate;
@@ -43,7 +44,7 @@ private:
 
     std::shared_ptr<Define> highlight;
 
-    System::define_created_t::signal_connection_t define_created_connection;
+    signal_connection define_created_connection;
 
 public:
     static std::shared_ptr<Defines> CreateWindow();

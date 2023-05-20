@@ -24,6 +24,7 @@ public:
     void SetInitialDock(InitialDockPosition idp) { initial_dock_position = idp; } 
     void SetNav(bool _v) { enable_nav = _v; }
     void SetWindowless(bool _v) { windowless = _v; }
+    void SetNoScrollbar(bool _v) { no_scrollbar = _v; }
     bool IsWindowless() const { return windowless; }
     std::string const& GetTitle() const { return window_title; }
     void SetTitle(std::string const& t);
@@ -76,4 +77,5 @@ private:
     bool focused;
     bool docked;
     bool enable_nav;
+    bool no_scrollbar;
 };

@@ -11,6 +11,8 @@
 #include "main.h"
 #include "util.h"
 
+#include "windows/nes/references.h"
+
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
@@ -383,10 +385,10 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
         } 
 
         if(ImGui::IsKeyPressed(ImGuiKey_R) && ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
-            cout << "Label " << label->GetString() << " has " << label->GetNumReverseReferences() << " reverse references:" << endl;
-            label->IterateReverseReferences([](GlobalMemoryLocation const& where) {
-                cout << "\t" << where << endl;
-            });
+            // show references to label
+            auto wnd = Windows::References::CreateWindow(label);
+            wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
+            MyApp::Instance()->AddWindow(wnd);
         }
     }
 

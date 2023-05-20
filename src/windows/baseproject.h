@@ -63,7 +63,7 @@ private:
     virtual void WindowRemoved(std::shared_ptr<BaseWindow>&) {}
     void _WindowAdded(std::shared_ptr<BaseWindow>& window) { WindowAdded(window); }
     void _WindowRemoved(std::shared_ptr<BaseWindow>& window) { WindowRemoved(window); }
-    MyApp::window_added_t::signal_connection_t window_added_connection;
-    MyApp::window_removed_t::signal_connection_t window_removed_connection;
+    signal_connection window_added_connection;
+    signal_connection window_removed_connection;
 };
 

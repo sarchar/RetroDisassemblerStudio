@@ -86,6 +86,7 @@ protected:
     virtual void OnKeyPress(int glfw_key, int scancode, int action, int mods) override;
 
 private:
+    void ProcessQueuedWindowsForAdd();
     void ProcessQueuedWindowsForDelete();
     void ManagedWindowClosedHandler(std::shared_ptr<BaseWindow>);
 
@@ -121,6 +122,7 @@ private:
 
     // Managed child windows
     std::vector<std::shared_ptr<BaseWindow>> managed_windows;
+    std::vector<std::shared_ptr<BaseWindow>> queued_windows_for_add;
     std::vector<std::shared_ptr<BaseWindow>> queued_windows_for_delete;
 
     // Global popups

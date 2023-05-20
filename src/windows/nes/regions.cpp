@@ -78,7 +78,7 @@ void MemoryRegions::RenderContent()
                     selected_row = i;
                 }
 
-                if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                if(ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
                     if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Listing>()) {
                         // build an address from the bank info
                         GlobalMemoryLocation loc;

@@ -4,6 +4,8 @@
 #include <string>
 #include <unordered_set>
 
+#include "signals.h"
+
 #include "systems/nes/nes_memory.h"
 
 namespace NES {
@@ -12,6 +14,10 @@ class Label : public std::enable_shared_from_this<Label> {
 public:
     Label(GlobalMemoryLocation const&, std::string const&);
     ~Label();
+
+    // signals
+    typedef signal<std::function<void()>> reverse_references_changed_t;
+    std::shared_ptr<reverse_references_changed_t> reverse_references_changed;
 
     void SetString(std::string const& s) { label = s; }
 
@@ -25,17 +31,23 @@ public:
     }
 
     void NoteReference(GlobalMemoryLocation const& where) {
+        int size = reverse_references.size();
         reverse_references.insert(where);
+        if(reverse_references.size() != size) reverse_references_changed->emit();
     }
 
     int RemoveReference(GlobalMemoryLocation const& where) {
-        return reverse_references.erase(where);
+        int size = reverse_references.size();
+        auto ret = reverse_references.erase(where);
+        if(reverse_references.size() != size) reverse_references_changed->emit();
+        return ret;
     }
 
     template<typename F>
     void IterateReverseReferences(F func) {
+        int i = 0;
         for(auto& where : reverse_references) {
-            func(where);
+            func(i++, where);
         }
     }
 

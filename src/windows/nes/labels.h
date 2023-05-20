@@ -35,6 +35,7 @@ private:
 
     std::weak_ptr<System>            current_system;
     int selected_row;
+    int context_row;
 
     std::vector<std::weak_ptr<Label>> labels;
     bool force_reiterate;
@@ -43,7 +44,7 @@ private:
     bool case_sensitive_sort;
     bool show_locals;
 
-    System::label_created_t::signal_connection_t label_created_connection;
+    signal_connection label_created_connection;
 
 public:
     static std::shared_ptr<Labels> CreateWindow();

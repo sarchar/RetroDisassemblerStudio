@@ -10,6 +10,7 @@ namespace NES {
 Define::Define(std::string const& _name, shared_ptr<Expression>& _expression)
     : name(_name), expression(_expression)
 {
+    reverse_references_changed = make_shared<reverse_references_changed_t>();
 }
 
 Define::~Define()

@@ -58,8 +58,8 @@ private:
     bool   editing_listing_item = false;
 
     // signal connections
-    System::label_created_t::signal_connection_t label_created_connection;
-    System::disassembly_stopped_t::signal_connection_t disassembly_stopped_connection;
+    signal_connection label_created_connection;
+    signal_connection disassembly_stopped_connection;
 
     struct {
         struct {

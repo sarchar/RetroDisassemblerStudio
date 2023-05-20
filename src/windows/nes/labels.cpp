@@ -9,6 +9,7 @@
 #include "main.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/labels.h"
+#include "windows/nes/references.h"
 #include "systems/nes/nes_label.h"
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_project.h"
@@ -29,6 +30,7 @@ Labels::Labels()
     : BaseWindow("NES::Labels"), selected_row(-1), force_resort(true), force_reiterate(true), case_sensitive_sort(false), show_locals(false)
 {
     SetTitle("Labels");
+    SetNoScrollbar(true);
     
     // create internal signals
 
@@ -107,10 +109,7 @@ void Labels::RenderContent()
             | ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_Sortable
             | ImGuiTableFlags_ScrollY;
 
-    ImVec2 outer_size = ImGui::GetWindowSize();
-    outer_size.x -= 12;
-
-    if(ImGui::BeginTable("LabelsTable", 3, flags, outer_size)) {
+    if(ImGui::BeginTable("LabelsTable", 3, flags)) {
         ImGui::TableSetupColumn("Name"    , ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_DefaultSort, 0.0f, 0);
         ImGui::TableSetupColumn("Location", ImGuiTableColumnFlags_WidthStretch                                    , 0.0f, 1);
         ImGui::TableSetupColumn("RRefs"   , ImGuiTableColumnFlags_WidthFixed   | ImGuiTableColumnFlags_NoSort     , 0.0f, 2);
@@ -178,10 +177,15 @@ void Labels::RenderContent()
                         selected_row = row;
                     }
 
-                    if(ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
-                        if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Listing>()) {
-                            // build an address from the bank info
-                            wnd->GoToAddress(label->GetMemoryLocation());
+                    if(ImGui::IsItemHovered()) {
+                        if(ImGui::IsMouseClicked(0)) {
+                            if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Listing>()) {
+                                // build an address from the bank info
+                                wnd->GoToAddress(label->GetMemoryLocation());
+                            }
+                        } else if(ImGui::IsMouseClicked(1)) {
+                            context_row = row;
+                            ImGui::OpenPopup("label_context_menu");
                         }
                     }
                     ImGui::SameLine();
@@ -216,6 +220,16 @@ void Labels::RenderContent()
     }
 
     ImGui::PopStyleVar(2);
+
+    if(ImGui::BeginPopupContextItem("label_context_menu")) {
+        if(ImGui::Selectable("View References")) {
+            auto wnd = References::CreateWindow(labels[context_row].lock());
+            wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
+            MyApp::Instance()->AddWindow(wnd);
+        }
+        ImGui::EndPopup();
+    }
+
 }
 
 void Labels::LabelCreated(shared_ptr<Label> const& label, bool was_user_created)

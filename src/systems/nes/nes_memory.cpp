@@ -826,7 +826,7 @@ MemoryObjectTreeNode::iterator& MemoryObjectTreeNode::iterator::operator++()
 
 struct MemoryObject::LabelCreatedData {
     GlobalMemoryLocation target;
-    System::label_created_t::signal_connection_t connection;
+    signal_connection connection;
 };
 
 void MemoryObject::SetReferences(GlobalMemoryLocation const& where)

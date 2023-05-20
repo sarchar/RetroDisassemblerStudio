@@ -6,8 +6,8 @@
 #include "imgui_internal.h"
 
 #include "main.h"
-#include "windows/nes/listing.h"
 #include "windows/nes/defines.h"
+#include "windows/nes/references.h"
 #include "systems/nes/nes_defines.h"
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_project.h"
@@ -187,12 +187,10 @@ void Defines::RenderContent()
                         selected_row = row;
                     }
 
-                    if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                        // double click - show where the define is used
-                        ShowDefineReferencesData data {
-                            .define_name = define->GetString()
-                        };
-                        command_signal->emit(shared_from_this(), "ShowDefineReferences", &data);
+                    if(ImGui::IsItemHovered()) {
+                        context_row = row;
+
+                        if(ImGui::IsMouseClicked(1)) ImGui::OpenPopup("define_context_menu");
                     }
                     ImGui::SameLine();
                 }
@@ -218,6 +216,16 @@ void Defines::RenderContent()
     }
 
     ImGui::PopStyleVar(2);
+
+    if(ImGui::BeginPopupContextItem("define_context_menu")) {
+        if(ImGui::Selectable("View References")) {
+            auto wnd = References::CreateWindow(defines[context_row].lock());
+            wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
+            MyApp::Instance()->AddWindow(wnd);
+        }
+        ImGui::EndPopup();
+    }
+
 }
 
 void Defines::DefineCreated(shared_ptr<Define> const& define)

@@ -8,10 +8,6 @@ namespace NES {
 
 struct CreateNewDefineData {};
 
-struct ShowDefineReferencesData {
-    std::string define_name;
-};
-
 class Project : public BaseProject {
 public:
     virtual char const * const GetWindowClass() { return Project::GetWindowClassStatic(); }
@@ -49,7 +45,6 @@ private:
 
     void RenderPopups();
     void RenderCreateNewDefinePopup();
-    void RenderDefineReferencesPopup();
 
     struct {
         struct {
@@ -63,12 +58,6 @@ private:
             std::string title = "Create New Define";
             bool        focus;
         } create_new_define;
-
-        struct {
-            bool        show = false;
-            std::string title = "References (Define)";
-            std::shared_ptr<Define> define;
-        } define_references;
 
         // Temp editing buffers for various dialogs
         std::string buffer1;
