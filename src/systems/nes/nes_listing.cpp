@@ -61,7 +61,7 @@ void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemor
     }
 }
 
-void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
+void ListingItemPrePostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -69,77 +69,7 @@ void ListingItemData::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
         table_flags |= ImGuiTableFlags_BordersInnerV;
     }
 
-    if(ImGui::BeginTable("listing_item_code", 6, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
-        ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Raw", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthStretch); // stretch comment field to end of table
-        ImGui::TableNextRow();
-    
-        ImGui::TableNextColumn();
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200, (selected || hovered) ? 128 : 255));
-        ImGui::Text("$%02X:0x%04X", where.prg_rom_bank, where.address);
-
-        ImGui::TableNextColumn(); // spacing
-
-    
-        if(auto memory_object = system->GetMemoryObject(where)) {
-            ImGui::TableNextColumn(); // raw display
-            {
-                int objsize = memory_object->GetSize();
-                stringstream ss;
-                ss << hex << setfill('0') << uppercase;
-                for(int i = 0; i < objsize; i++) {
-                    int bval = (int)((u8*)&memory_object->bval)[i];
-                    if(memory_object->type == MemoryObject::TYPE_STRING) {
-                        bval = memory_object->str.data[i];
-                    }
-                    ss << setw(2) << bval;
-                    if(i != (objsize - 1)) ss << " ";
-                }
-
-                ImGui::Text("%s", ss.str().c_str());
-            }
-
-            ImGui::TableNextColumn();
-            ImGui::Text("%s", memory_object->FormatInstructionField().c_str());
-
-            // The internal_offset value will be used to index into the middle of data arrays, so that
-            // multiple data listing items can show something like:
-            // 
-            // .DB $01, $02, $03,
-            //     $04, $05, $06
-            //     $07
-            //
-            ImGui::TableNextColumn();
-            ImGui::Text("%s", memory_object->FormatOperandField(internal_offset).c_str());
-
-            ImGui::TableNextColumn();
-            if(auto eolc = memory_object->comments.eol) {
-                ImGui::Text("; %s", eolc->c_str()); // TODO multiline
-            }
-        }
-
-        ImGui::EndTable();
-    }
-}
-
-bool ListingItemData::IsEditing() const 
-{
-    return false;
-}
-
-void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
-{
-    ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
-    if(flags) {
-        table_flags &= ~ImGuiTableFlags_NoBordersInBody;
-        table_flags |= ImGuiTableFlags_BordersInnerV;
-    }
-
-    if(ImGui::BeginTable("listing_item_comment2", 2, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+    if(ImGui::BeginTable(is_post ? "listing_item_postcomment" : "listing_item_precomment", 2, table_flags)) {
         ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed, 4.0f);
         ImGui::TableSetupColumn("Comment", ImGuiTableColumnFlags_WidthStretch);
 
@@ -149,55 +79,24 @@ void ListingItemPreComment::RenderContent(shared_ptr<System>& system, GlobalMemo
         ImGui::Text("        ");
     
         ImGui::TableNextColumn();
-        string precomment;
-        system->GetComment(where, MemoryObject::COMMENT_TYPE_PRE, precomment); // TODO multiline
+        string comment;
+        system->GetComment(where, is_post ? MemoryObject::COMMENT_TYPE_POST : MemoryObject::COMMENT_TYPE_PRE, comment); // TODO multiline
         //!if(selected) {
-        //!    ImGui::InputTextMultiline("", &precomment, ImVec2(0, 0), 0);
+        //!    ImGui::InputTextMultiline("", &comment, ImVec2(0, 0), 0);
         //!} else {
-            ImGui::Text("; %s", precomment.c_str());
+            ImGui::Text("; %s", comment.c_str());
         //!}
 
         ImGui::EndTable();
     }
 }
 
-bool ListingItemPreComment::IsEditing() const 
+bool ListingItemPrePostComment::IsEditing() const 
 {
     return false;
 }
 
-void ListingItemPostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
-{
-    ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
-    if(flags) {
-        table_flags &= ~ImGuiTableFlags_NoBordersInBody;
-        table_flags |= ImGuiTableFlags_BordersInnerV;
-    }
-
-    if(ImGui::BeginTable("listing_item_comment2", 2, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
-        ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed, 4.0f);
-        ImGui::TableSetupColumn("Comment", ImGuiTableColumnFlags_WidthFixed);
-
-        ImGui::TableNextRow();
-        
-        ImGui::TableNextColumn();
-        ImGui::Text("        ");
-
-        ImGui::TableNextColumn();
-        string postcomment;
-        system->GetComment(where, MemoryObject::COMMENT_TYPE_POST, postcomment); // TODO multiline
-        ImGui::Text("; %s", postcomment.c_str());
-
-        ImGui::EndTable();
-    }
-}
-
-bool ListingItemPostComment::IsEditing() const 
-{
-    return false;
-}
-
-void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
+void ListingItemPrimary::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -224,7 +123,7 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
     }
 
 
-    if(ImGui::BeginTable("listing_item_code", 6, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+    if(ImGui::BeginTable("listing_item_primary", 6, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
         ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Raw", ImGuiTableColumnFlags_WidthFixed);
@@ -240,13 +139,17 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
 
         ImGui::TableNextColumn(); // spacing
 
-        ImGui::TableNextColumn();
+        ImGui::TableNextColumn(); // Raw bytes display
         {
             int objsize = memory_object->GetSize();
             stringstream ss;
             ss << hex << setfill('0') << uppercase;
             for(int i = 0; i < objsize; i++) {
-                ss << setw(2) << (int)((u8*)&memory_object->bval)[i];
+                int bval = (int)((u8*)&memory_object->bval)[i];
+                if(memory_object->type == MemoryObject::TYPE_STRING) {
+                    bval = memory_object->str.data[i];
+                }
+                ss << setw(2) << bval;
                 if(i != (objsize - 1)) ss << " ";
             }
 
@@ -273,7 +176,14 @@ void ListingItemCode::RenderContent(shared_ptr<System>& system, GlobalMemoryLoca
             // when editing, we want this column to take the rest of the row
             goto end_table;
         } else {
-            string operand = memory_object->FormatOperandField(0, disassembler);
+            // TODO The line value will be used to index into the middle of data arrays, so that
+            // multiple data listing items can show something like:
+            // 
+            // .DB $01, $02, $03,
+            //     $04, $05, $06
+            //     $07
+            //
+            string operand = memory_object->FormatOperandField(line, disassembler);
             ImGui::Text("%s", operand.c_str());
             if(hovered && ImGui::IsMouseDoubleClicked(0)) { // edit on double click
                 EditOperandExpression(system, where);
@@ -309,7 +219,7 @@ end_table:
     }
 }
 
-void ListingItemCode::EditOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
+void ListingItemPrimary::EditOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
 {
     auto disassembler = system->GetDisassembler();
     if(auto memory_object = system->GetMemoryObject(where)) {
@@ -327,7 +237,7 @@ void ListingItemCode::EditOperandExpression(shared_ptr<System>& system, GlobalMe
     }
 }
 
-bool ListingItemCode::ParseOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
+bool ListingItemPrimary::ParseOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
 {
     if(!wait_dialog) {
         int errloc;
@@ -365,7 +275,7 @@ bool ListingItemCode::ParseOperandExpression(shared_ptr<System>& system, GlobalM
     return false;
 }
 
-bool ListingItemCode::IsEditing() const 
+bool ListingItemPrimary::IsEditing() const 
 {
     return edit_mode != EDIT_NONE;
 }
@@ -401,7 +311,7 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
 
     if(ImGui::BeginTable("listing_item_label", 2, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
         ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableNextRow();
     
         ImGui::TableNextColumn();

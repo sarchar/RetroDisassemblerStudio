@@ -46,52 +46,26 @@ public:
     bool IsEditing() const override { return false; }
 };
 
-class ListingItemData : public ListingItem {
+class ListingItemPrePostComment : public ListingItem {
 public:
-    ListingItemData(u32 _internal_offset)
-        : ListingItem(), internal_offset(_internal_offset)
+    ListingItemPrePostComment(int _line, bool _is_post)
+        : ListingItem(), line(_line), is_post(_is_post)
     { }
-    virtual ~ListingItemData() { }
-
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool) override;
-    bool IsEditing() const override;
-
-private:
-    u32 internal_offset;
-};
-
-class ListingItemPreComment : public ListingItem {
-public:
-    ListingItemPreComment(int _line)
-        : ListingItem(), line(_line)
-    { }
-    virtual ~ListingItemPreComment() { }
+    virtual ~ListingItemPrePostComment() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool) override;
     bool IsEditing() const override;
 private:
     int line;
+    bool is_post;
 };
 
-class ListingItemPostComment : public ListingItem {
+class ListingItemPrimary : public ListingItem {
 public:
-    ListingItemPostComment(int _line)
+    ListingItemPrimary(int _line)
         : ListingItem(), line(_line)
     { }
-    virtual ~ListingItemPostComment() { }
-
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool) override;
-    bool IsEditing() const override;
-private:
-    int line;
-};
-
-class ListingItemCode : public ListingItem {
-public:
-    ListingItemCode(int _line)
-        : ListingItem(), line(_line)
-    { }
-    virtual ~ListingItemCode() { }
+    virtual ~ListingItemPrimary() { }
 
     void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool) override;
 

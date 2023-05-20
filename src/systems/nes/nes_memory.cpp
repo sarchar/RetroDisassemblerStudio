@@ -134,33 +134,15 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
         obj->listing_items.push_back(make_shared<ListingItemLabel>(label, nth));
     }
 
-    if(obj->comments.pre) {
-        obj->listing_items.push_back(make_shared<ListingItemPreComment>(0));
-    }
+    // create the pre comment
+    if(obj->comments.pre) obj->listing_items.push_back(make_shared<ListingItemPrePostComment>(0, false));
 
-    // the primary index is used to focus on code or data when moving to locations
+    // the primary index is used to focus on code or data when moving to locations in the listing windows
     obj->primary_listing_item_index = obj->listing_items.size();
+    obj->listing_items.push_back(make_shared<ListingItemPrimary>(0));
 
-    switch(obj->type) {
-    case MemoryObject::TYPE_UNDEFINED:
-    case MemoryObject::TYPE_BYTE:
-    case MemoryObject::TYPE_WORD:
-    case MemoryObject::TYPE_STRING:
-        obj->listing_items.push_back(make_shared<ListingItemData>(0));
-        break;
-
-    case MemoryObject::TYPE_CODE:
-        obj->listing_items.push_back(make_shared<ListingItemCode>(0));
-        break;
-
-    default:
-        assert(false);
-        break;
-    }
-
-    if(obj->comments.post) {
-        obj->listing_items.push_back(make_shared<ListingItemPostComment>(0));
-    }
+    // create the post comment
+    if(obj->comments.post) obj->listing_items.push_back(make_shared<ListingItemPrePostComment>(0, true));
 }
 
 void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_node, u32 region_offset, u8* data, int count)

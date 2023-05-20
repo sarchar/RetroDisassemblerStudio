@@ -253,17 +253,7 @@ void Listing::CheckInput()
             break;
         }
 
-        //!case L';': // edit EOL comment
-        //!{
-        //!    popups.edit_comment.title = "Edit EOL comment";
-        //!    popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_EOL;
-        //!    popups.edit_comment.show  = true;
-        //!    popups.edit_comment.where = current_selection;
-        //!    system->GetComment(current_selection, popups.edit_comment.type, popups.edit_comment.buf);
-        //!    break;
-        //!}
-
-        case L':': // edit pre comment
+        case L'O': // edit pre comment
         {
             popups.edit_comment.title = "Edit pre-comment";
             popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_PRE;
