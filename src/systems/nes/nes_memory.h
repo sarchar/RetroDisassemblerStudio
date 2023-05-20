@@ -295,7 +295,7 @@ public:
     void NextLabelReference(GlobalMemoryLocation const& where);
 
     // Data
-    bool MarkMemoryAsUndefined(GlobalMemoryLocation const& where);
+    bool MarkMemoryAsUndefined(GlobalMemoryLocation const& where, u32 byte_count);
     bool MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count);
     bool MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byte_count);
 

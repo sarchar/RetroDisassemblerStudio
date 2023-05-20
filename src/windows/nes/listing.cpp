@@ -1,4 +1,5 @@
 // TODO in the future will need a way to make windows only available to the currently loaded system
+#include <algorithm>
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -216,7 +217,10 @@ void Listing::CheckInput()
     // handle delete button
     if(ImGui::IsKeyPressed(ImGuiKey_Delete)) {
         // TODO open dialog and ask what to clear - data type, labels, etc
-        system->MarkMemoryAsUndefined(current_selection);
+        int len = GetSelection();
+        if(len > 0) {
+            system->MarkMemoryAsUndefined(current_selection, len);
+        }
     }
 
     if(ImGui::IsKeyPressed(ImGuiKey_UpArrow)) MoveSelectionUp();
@@ -241,8 +245,18 @@ void Listing::CheckInput()
             break;
 
         case L'w': // mark data as a word
-            system->MarkMemoryAsWords(current_selection, 2);
+        {
+            int len = GetSelection();
+            if(len > 0) system->MarkMemoryAsWords(current_selection, len);
             break;
+        }
+
+        case L's': // mark data as a string
+        {
+            int len = GetSelection();
+            if(len > 0) system->MarkMemoryAsString(current_selection, len);
+            break;
+        }
 
         case L'l': // create or edit a label
         {
@@ -413,6 +427,14 @@ void Listing::RenderContent()
                 clipper.ForceDisplayRangeByIndices(listing_item_index - 25, listing_item_index + 25);
             }
 
+            // determine the ending item index (which may be before the start, since we can select upwards)
+            u32 end_listing_item_index = 0;
+            if(has_end_selection) {
+                end_listing_item_index = memory_region->GetListingIndexByAddress(end_selection) + end_selection_listing_item;
+                // swap if so
+                if(end_listing_item_index < listing_item_index) swap(listing_item_index, end_listing_item_index);
+            }
+
             while(clipper.Step()) {
                 auto listing_item_iterator = memory_region->GetListingItemIterator(clipper.DisplayStart);
                 bool did_scroll = false;
@@ -429,7 +451,7 @@ void Listing::RenderContent()
                     //cout << "row = 0x" << row << " current_address.address = 0x" << hex << current_address.address << endl;
 
                     // selected and hovered let the listing item know how to behave wrt to inputs
-                    bool selected = (listing_item_index == row);
+                    bool selected = has_end_selection ? (row >= listing_item_index && row <= end_listing_item_index) : (listing_item_index == row);
                     bool hovered  = (hovered_listing_item_index == row) && !was_editing; // Don't show hovered items when editing something
 
                     // Begin a new row and next column
@@ -443,7 +465,12 @@ void Listing::RenderContent()
                     listing_item->RenderContent(system, current_address, adjust_columns, selected, hovered); // render the content
 
                     // if the item has determined to be editing something, take note
-                    if(listing_item->IsEditing()) editing_listing_item = true;
+                    if(listing_item->IsEditing()) {
+                        editing_listing_item = true;
+                        // if you enter into editing mode, no way can you stay in multiple selections
+                        // so the first listing item that (i.e., the current_selection) will be editing and the rest will not
+                        has_end_selection = false;
+                    }
 
                     // update the currently hovered and selected row
                     if(ImGui::IsItemHovered()) {
@@ -451,8 +478,23 @@ void Listing::RenderContent()
 
                         // if the mouse was clicked on this row, change the selection as well
                         if(ImGui::IsMouseClicked(0)) {
-                            current_selection = current_address;
-                            current_selection_listing_item = listing_item_iterator->GetListingItemIndex();
+                            if(ImGui::IsKeyDown(ImGuiKey_LeftShift) || ImGui::IsKeyDown(ImGuiKey_RightShift)) {
+                                // select range 
+                                end_selection = current_address;
+                                end_selection_listing_item = listing_item_iterator->GetListingItemIndex();
+                                if(!(current_selection == end_selection)) {
+                                    has_end_selection = true;
+
+                                    // end listing item has to be updated immediately but might be before the current_selection
+                                    end_listing_item_index = memory_region->GetListingIndexByAddress(end_selection) + end_selection_listing_item;
+                                    // swap if so
+                                    if(end_listing_item_index < listing_item_index) swap(listing_item_index, end_listing_item_index);
+                                }
+                            } else {
+                                current_selection = current_address;
+                                current_selection_listing_item = listing_item_iterator->GetListingItemIndex();
+                                has_end_selection = false;
+                            }
                         }
                     }
 
@@ -472,6 +514,35 @@ void Listing::RenderContent()
     }
 
     RenderPopups();
+}
+
+// If the end_selection address comes before the current_selection address, they need to be swapped
+// and then we should return the distance between the two addresses (+ length of the end object)
+int Listing::GetSelection()
+{
+    // All access goes through the system
+    auto system = current_system.lock();
+    if(!system) return 0;
+
+    if(!has_end_selection) { // no selection, just return the size of the current object
+        if(auto memory_object = system->GetMemoryObject(current_selection)) {
+            return memory_object->GetSize();
+        } else {
+            return 0;
+        }
+    }
+
+    if(end_selection.address < current_selection.address) {
+        swap(current_selection, end_selection);
+        swap(current_selection_listing_item, end_selection_listing_item);
+    }
+
+    if(auto end_object = system->GetMemoryObject(end_selection)) {
+        return (end_selection.address - current_selection.address) + end_object->GetSize();
+    }
+
+    // Bogus end address?
+    return 0;
 }
 
 void Listing::RenderPopups() 

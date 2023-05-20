@@ -68,8 +68,9 @@ public:
     std::shared_ptr<MemoryRegion> GetMemoryRegionByIndex(int);
     std::shared_ptr<MemoryObject> GetMemoryObject(GlobalMemoryLocation const&, int* offset = NULL);
 
-    void MarkMemoryAsUndefined(GlobalMemoryLocation const&);
+    void MarkMemoryAsUndefined(GlobalMemoryLocation const&, u32 byte_count);
     void MarkMemoryAsWords(GlobalMemoryLocation const&, u32 byte_count);
+    void MarkMemoryAsString(GlobalMemoryLocation const&, u32 byte_count);
     bool SetOperandExpression(GlobalMemoryLocation const&, std::shared_ptr<Expression>&, std::string& errmsg);
 
     int GetSortableMemoryLocation(GlobalMemoryLocation const& s) {

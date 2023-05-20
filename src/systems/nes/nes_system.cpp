@@ -204,16 +204,22 @@ std::shared_ptr<MemoryObject> System::GetMemoryObject(GlobalMemoryLocation const
     return nullptr;
 }
 
-void System::MarkMemoryAsUndefined(GlobalMemoryLocation const& where)
+void System::MarkMemoryAsUndefined(GlobalMemoryLocation const& where, u32 byte_count)
 {
     auto memory_region = GetMemoryRegion(where);
-    memory_region->MarkMemoryAsUndefined(where);
+    memory_region->MarkMemoryAsUndefined(where, byte_count);
 }
 
 void System::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count)
 {
     auto memory_region = GetMemoryRegion(where);
     memory_region->MarkMemoryAsWords(where, byte_count);
+}
+
+void System::MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byte_count)
+{
+    auto memory_region = GetMemoryRegion(where);
+    memory_region->MarkMemoryAsString(where, byte_count);
 }
 
 shared_ptr<ExpressionNodeCreator> System::GetNodeCreator()

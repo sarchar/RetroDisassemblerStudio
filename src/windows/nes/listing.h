@@ -47,8 +47,13 @@ private:
     GlobalMemoryLocation             current_selection;
     int                              current_selection_listing_item;
     int                              hovered_listing_item_index;
+    bool                             has_end_selection = false;
+    GlobalMemoryLocation             end_selection;
+    int                              end_selection_listing_item;
     std::stack<GlobalMemoryLocation> selection_history_back;
     std::stack<GlobalMemoryLocation> selection_history_forward;
+
+    int    GetSelection();
 
     bool   adjust_columns = false;
 

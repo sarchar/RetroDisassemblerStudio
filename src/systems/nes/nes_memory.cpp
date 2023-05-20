@@ -346,51 +346,62 @@ shared_ptr<MemoryObject> MemoryRegion::GetMemoryObject(GlobalMemoryLocation cons
 }
 
 // to mark data as undefined, we just delete the current node and recreate new bytes in its place
-bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where)
+bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where, u32 byte_count)
 {
-    auto memory_object = GetMemoryObject(where);
-    assert(memory_object);
+    for(u32 offset = 0; offset < byte_count;) {
+        auto memory_object = GetMemoryObject(where + offset);
+        assert(memory_object);
 
-    int size = memory_object->GetSize();
+        // Don't convert already dead objects
+        if(memory_object->type == MemoryObject::TYPE_UNDEFINED) {
+            offset += memory_object->GetSize();
+            continue;
+        }
 
-    // store the memory's actual raw data
-    u8* tmp = (u8*)_alloca(size);
-    memory_object->Read(tmp, size);
+        int size = memory_object->GetSize();
 
-    // save the is_object tree node before clearing memory_object from the tree
-    auto tree_node = memory_object->parent.lock();
+        // store the memory's actual raw data
+        u8* tmp = (u8*)_alloca(size);
+        memory_object->Read(tmp, size);
 
-    // save this objects labels
-    auto& labels = memory_object->labels;
+        // save the is_object tree node before clearing memory_object from the tree
+        auto tree_node = memory_object->parent.lock();
 
-    // clear any references this object is making
-    memory_object->ClearReferences(where);
+        // save this objects labels
+        auto& labels = memory_object->labels;
 
-    // remove memory_object from the tree first, this will correct listing item counts
-    RemoveMemoryObjectFromTree(memory_object, true);
+        // clear any references this object is making
+        memory_object->ClearReferences(where + offset);
 
-    // clear the is_object status of the tree node and build a tree with the data under it
-    // this will update the object_refs[] array
-    tree_node->is_object = false;
-    u32 region_offset = ConvertToRegionOffset(where.address);
-    _InitializeFromData(tree_node, region_offset, tmp, size);
+        // remove memory_object from the tree first, this will correct listing item counts
+        RemoveMemoryObjectFromTree(memory_object, true);
 
-    // copy the labels to the new object
-    auto new_object = object_refs[region_offset];
-    new_object->labels = labels;
+        // clear the is_object status of the tree node and build a tree with the data under it
+        // this will update the object_refs[] array
+        tree_node->is_object = false;
+        u32 region_offset = ConvertToRegionOffset(where.address + offset);
+        _InitializeFromData(tree_node, region_offset, tmp, size);
 
-    // recreate the listing items for each of the new memory objects
-    for(u32 i = region_offset; i < region_offset + size; i++) {
-        new_object = object_refs[i];
-        RecreateListingItemsForMemoryObject(new_object, i);
+        // copy the labels to the new object
+        auto new_object = object_refs[region_offset];
+        new_object->labels = labels;
+
+        // recreate the listing items for each of the new memory objects
+        for(u32 i = region_offset; i < region_offset + size; i++) {
+            new_object = object_refs[i];
+            RecreateListingItemsForMemoryObject(new_object, i);
+        }
+
+        // fix up this tree_node's listing item count
+        _RecalculateListingItemCounts(tree_node);
+
+        // and update the rest of the tree
+        tree_node = tree_node->parent.lock();
+        _SumListingItemCountsUp(tree_node);
+
+        // move past this object
+        offset += size;
     }
-
-    // fix up this tree_node's listing item count
-    _RecalculateListingItemCounts(tree_node);
-
-    // and update the rest of the tree
-    tree_node = tree_node->parent.lock();
-    _SumListingItemCountsUp(tree_node);
 
     // the old memory_object will go out of scope here
     return true;
@@ -1069,7 +1080,11 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
     // save the data (for now, TODO: don't save data and instead read from the rom file?)
     if(backed) {
         WriteVarInt(os, GetSize());
-        os.write((char*)&bval, GetSize());
+        if(type == MemoryObject::TYPE_STRING) {
+            os.write((char*)str.data, GetSize());
+        } else {
+            os.write((char*)&bval, GetSize());
+        }
     }
 
     if(!os.good()) {
@@ -1116,13 +1131,19 @@ bool MemoryObject::Load(std::istream& is, std::string& errmsg)
     type = (MemoryObject::TYPE)inttype;
     is.read((char*)&backed, sizeof(backed));
 
-    //cout << "MemoryObject::type = " << type << endl;
+    //cout << "MemoryObject::type = " << magic_enum::enum_name(type) << endl;
     //cout << "MemoryObject::backed = " << backed << endl;
 
     if(backed) {
         u32 size = ReadVarInt<u32>(is);
         //cout << "MemoryObject::size = " << size << endl;
-        is.read((char*)&bval, size);
+        if(type == MemoryObject::TYPE_STRING) {
+            str.data = new u8[size];
+            str.len = size;
+            is.read((char*)str.data, str.len);
+        } else {
+            is.read((char*)&bval, size);
+        }
     }
 
     int nlabels = ReadVarInt<int>(is);
