@@ -116,7 +116,7 @@ void ListingItemPrimary::RenderContent(shared_ptr<System>& system, GlobalMemoryL
         } else if(ImGui::IsKeyPressed(ImGuiKey_Enter)) { // edit the operand expression
             EditOperandExpression(system, where);
         } else if(ImGui::IsKeyPressed(ImGuiKey_Backspace)) { // clear labels
-            ClearOperandExpressionLabels(system, where);
+            ResetOperandExpression(system, where);
         } else if(ImGui::IsKeyPressed(ImGuiKey_A)) { // next label
             NextLabelReference(system, where);
         }
@@ -279,11 +279,9 @@ bool ListingItemPrimary::ParseOperandExpression(shared_ptr<System>& system, Glob
     return false;
 }
 
-void ListingItemPrimary::ClearOperandExpressionLabels(shared_ptr<System>& system, GlobalMemoryLocation const& where)
+void ListingItemPrimary::ResetOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
 {
-    if(auto memory_region = system->GetMemoryRegion(where)) {
-        memory_region->ClearReferencesToLabels(where);
-    }
+    system->CreateDefaultOperandExpression(where, false);
 }
 
 void ListingItemPrimary::NextLabelReference(shared_ptr<System>& system, GlobalMemoryLocation const& where)

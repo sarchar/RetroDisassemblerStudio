@@ -147,7 +147,7 @@ public:
     bool IsDisassembling() const { return disassembling; }
     void InitDisassembly(GlobalMemoryLocation const&);
     int  DisassemblyThread();
-    void CreateDefaultOperandExpression(GlobalMemoryLocation const&);
+    void CreateDefaultOperandExpression(GlobalMemoryLocation const&, bool with_labels);
 
     //!std::shared_ptr<LabelList> GetLabels(GlobalMemoryLocation const& where) {
     //!    if(!label_database.contains(where)) return nullptr;

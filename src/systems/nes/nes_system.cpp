@@ -742,7 +742,7 @@ int System::DisassemblyThread()
             memory_object = memory_region->GetMemoryObject(current_loc);
 
             // create the expressions as necessary
-            CreateDefaultOperandExpression(current_loc);
+            CreateDefaultOperandExpression(current_loc, true);
 
             // certain instructions must stop disassembly and others cause branches
             switch(op) {
@@ -806,7 +806,7 @@ int System::DisassemblyThread()
     return 0;
 }
 
-void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
+void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, bool with_labels)
 {
     auto code_region = GetMemoryRegion(where);
     auto code_object = GetMemoryObject(where);
@@ -858,7 +858,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
         // set up to point to something in the wrong bank
         int target_offset = 0;
         string prefix = isrel ? "." : (is16 ? "L_" : "zp_");
-        shared_ptr<Label> label = is_valid ? GetDefaultLabelForTarget(target_location, false, &target_offset, is16, prefix) : nullptr;
+        shared_ptr<Label> label = (is_valid && with_labels) ? GetDefaultLabelForTarget(target_location, false, &target_offset, is16, prefix) : nullptr;
 
         // now create an expression for the operands
         auto expr = make_shared<Expression>();
@@ -876,7 +876,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where)
         auto root = label ? nc->CreateLabel(label, 0, buf)
                           : nc->CreateConstant(target_location.address, buf);
 
-        // append "+offset" as an expression to the label
+        // append "+offset" as an expression to the label (target_offset != 0 iff label != null)
         if(is_valid && target_offset != 0) {
             stringstream ss;
             ss << target_offset;
