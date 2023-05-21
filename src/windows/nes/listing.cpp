@@ -76,14 +76,39 @@ void Listing::Follow()
 {
     if(auto system = current_system.lock()) {
         if(auto memory_object = system->GetMemoryObject(current_selection)) {
-            u16 dest = 0;
-            if(memory_object->type == MemoryObject::TYPE_CODE) {
-                dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
+            if(memory_object->operand_expression && memory_object->operand_expression->GetRoot()) {
+                // look for a label
+                bool found = false;
+                memory_object->operand_expression->Explore([this, &found](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+                    if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
+                        // first label found, go to it
+                        GoToAddress(label_node->GetTarget());
+                        found = true;
+                        return false; // bail
+                    }
+                    return true; // keep hunting
+                }, nullptr);
+
+                // if no label was found, go to the evaluation
+                if(!found) {
+                    s64 result;
+                    string errmsg;
+                    if(memory_object->operand_expression->Evaluate(&result, errmsg)) {
+                        GoToAddress((u16)(result & 0xFFFF));
+                    }
+                }
+            } else if(memory_object->type == MemoryObject::TYPE_CODE) {
+                u16 dest = 0;
+                if(memory_object->GetSize() == 1) {
+                    dest = (u16)memory_object->code.operands[0];
+                } else if(memory_object->GetSize() == 1) {
+                    dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
+                }
+                GoToAddress(dest);
             } else if(memory_object->type == MemoryObject::TYPE_WORD) {
-                dest = memory_object->hval;
+                GoToAddress(memory_object->hval);
             }
 
-            GoToAddress(dest);
         }
     }
 }
