@@ -677,12 +677,14 @@ bool MyApp::StartPopup(std::string const& title, bool resizeable)
     return true;
 }
 
-int MyApp::EndPopup(int ret, bool show_ok, bool show_cancel, bool allow_escape)
+int MyApp::EndPopup(int ret, bool show_ok, bool show_cancel, bool allow_escape, bool focus_ok)
 {
     ImVec2 button_size(ImGui::GetFontSize() * 5.0f, 0.0f);
     if(show_ok) {
         // if OK is pressed return 1
         if(ImGui::Button("OK", button_size)) ret = 1;
+
+        if(focus_ok && !ImGui::IsAnyItemFocused()) ImGui::SetKeyboardFocusHere(-1);
     }
 
     if(show_cancel) {
@@ -714,8 +716,7 @@ bool MyApp::OKPopup(std::string const& title, std::string const& content, bool r
     ImGui::Text("%s", content.c_str());
 
     // Give the first button focus
-    if(!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
-    return EndPopup(ret, true, false);
+    return EndPopup(ret, true, false, true, true);
 }
 
 int MyApp::InputNamePopup(std::string const& title, std::string const& label, std::string* buffer, bool enter_returns_true, bool resizeable)

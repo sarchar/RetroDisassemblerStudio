@@ -26,7 +26,7 @@ namespace NES {
 
 unsigned long ListingItem::common_inner_table_flags = ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_Resizable;
 
-void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
+void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool focused, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -42,7 +42,7 @@ void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryL
     }
 }
 
-void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
+void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool focused, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -61,7 +61,7 @@ void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemor
     }
 }
 
-void ListingItemPrePostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
+void ListingItemPrePostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool focused, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -96,7 +96,7 @@ bool ListingItemPrePostComment::IsEditing() const
     return false;
 }
 
-void ListingItemPrimary::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
+void ListingItemPrimary::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool focused, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -108,21 +108,29 @@ void ListingItemPrimary::RenderContent(shared_ptr<System>& system, GlobalMemoryL
     if(!memory_object) return;
     auto disassembler = system->GetDisassembler();
 
-    if(selected && edit_mode == EDIT_NONE) {
-        if(ImGui::IsKeyPressed(ImGuiKey_Semicolon)) { // edit the EOL comment
-            system->GetComment(where, MemoryObject::COMMENT_TYPE_EOL, edit_buffer);
-            edit_mode = EDIT_EOL_COMMENT;
-            started_editing = true;
-        } else if(ImGui::IsKeyPressed(ImGuiKey_Enter)) { // edit the operand expression
-            EditOperandExpression(system, where);
-        } else if(ImGui::IsKeyPressed(ImGuiKey_Backspace)) { // clear labels
-            ResetOperandExpression(system, where);
-        } else if(ImGui::IsKeyPressed(ImGuiKey_A)) { // next label
-            NextLabelReference(system, where);
-        }
-    } 
+    // only receive keyboard input if the window the listing item is in is in focus
+    if(focused) {
+        if(selected && edit_mode == EDIT_NONE) {
+            if(ImGui::IsKeyPressed(ImGuiKey_Semicolon)) { // edit the EOL comment
+                system->GetComment(where, MemoryObject::COMMENT_TYPE_EOL, edit_buffer);
+                edit_mode = EDIT_EOL_COMMENT;
+                started_editing = true;
+            } else if(ImGui::IsKeyPressed(ImGuiKey_Enter)) { // edit the operand expression
+                EditOperandExpression(system, where);
+            } else if(ImGui::IsKeyPressed(ImGuiKey_Backspace)) { // clear labels
+                ResetOperandExpression(system, where);
+            } else if(ImGui::IsKeyPressed(ImGuiKey_A)) { // next label
+                NextLabelReference(system, where);
+            }
+        } 
 
-    if(!selected || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        if(ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            edit_mode = EDIT_NONE;
+        }
+    }
+
+    // losing selection can happen without focus
+    if(!selected) {
         edit_mode = EDIT_NONE;
     }
 
@@ -165,16 +173,98 @@ void ListingItemPrimary::RenderContent(shared_ptr<System>& system, GlobalMemoryL
 
         ImGui::TableNextColumn();
         if(edit_mode == EDIT_OPERAND_EXPRESSION) {
-            if(started_editing) {
-                ImGui::SetKeyboardFocusHere();
-                started_editing = false;
-            }
+            ImGuiInputTextFlags input_flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackAlways;
+            auto cb = [this, &system](ImGuiInputTextCallbackData* data)->int {
+                if(data->EventFlag != ImGuiInputTextFlags_CallbackAlways) return 0;
+                if(!data->Buf) return 0;
+                //cout << "CursorPos = " << data->CursorPos << " buf = " << data->Buf << endl;
+                suggestions.clear();
+
+                // naive filter: every keypress
+                string bufstr(data->Buf);
+                system->IterateLabels([this, &bufstr](shared_ptr<Label>& label) {
+                    auto label_name = label->GetString();
+                    //cout << "checking " << label_name << " find = " << label_name.find(bufstr) << endl;
+                    if(label_name.find(bufstr) == 0) {
+                        suggestions.push_back(label);
+                    }
+                });
+
+                system->IterateDefines([this, &bufstr](shared_ptr<Define>& define) {
+                    auto define_name = define->GetString();
+                    if(define_name.find(bufstr) == 0) {
+                        suggestions.push_back(define);
+                    }
+                });
+
+                sort(suggestions.begin(), suggestions.end(), [](suggestion_type const& a, suggestion_type const& b) {
+                    string a_str, b_str;
+                    if(auto const label = get_if<shared_ptr<Label>>(&a)) {
+                        a_str = (*label)->GetString();
+                    } else if(auto const define = get_if<shared_ptr<Define>>(&a)) {
+                        a_str = (*define)->GetString();
+                    }
+                    if(auto const label = get_if<shared_ptr<Label>>(&b)) {
+                        b_str = (*label)->GetString();
+                    } else if(auto const define = get_if<shared_ptr<Define>>(&b)) {
+                        b_str = (*define)->GetString();
+                    }
+                            
+                    return a_str <= b_str;
+                });
+                return 0;
+            };
+
+            auto wrapper = [](ImGuiInputTextCallbackData* data)->int {
+                std::function<int(ImGuiInputTextCallbackData*)>* f = static_cast<std::function<int(ImGuiInputTextCallbackData*)>*>(data->UserData);
+                return (*f)(data);
+            };
+
             ImGui::PushItemWidth(-FLT_MIN);
-            if(ImGui::InputText("", &edit_buffer, ImGuiInputTextFlags_EnterReturnsTrue)) {
+            std::function<int(ImGuiInputTextCallbackData*)> fcb(cb);
+            if(ImGui::InputText("", &edit_buffer, input_flags, wrapper, (void*)&fcb)) {
                 parse_operand_expression = true;
             }
-            if(parse_operand_expression && ParseOperandExpression(system, where)) {
-                edit_mode = EDIT_NONE;
+
+            if(started_editing) {
+                ImGui::SetKeyboardFocusHere(-1);
+            }
+
+            if(ImGui::IsItemActivated()) {
+                ImGui::OpenPopup("##suggestions");
+                cout << "input text activated!" << endl;
+                started_editing = false;
+            }
+
+            bool is_input_active = ImGui::IsItemActive();
+
+            ImGui::SameLine();
+            ImGui::SetNextWindowPos({ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y});
+            ImGui::SetNextWindowSize({ImGui::GetItemRectSize().x, 0});
+            if(ImGui::BeginPopup("##suggestions", ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize
+                        | ImGuiWindowFlags_ChildWindow)) {
+                //ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+                for(int i = 0; i < suggestions.size(); i++) {
+                    stringstream ss;
+                    if(auto label = get_if<shared_ptr<Label>>(&suggestions[i])) {
+                        ss << (*label)->GetString();
+                    } else if(auto define = get_if<shared_ptr<Define>>(&suggestions[i])) {
+                        ss << (*define)->GetString(); 
+                    }
+
+                    string s = ss.str();
+                    if(ImGui::Selectable(s.c_str())) {
+                        ImGui::ClearActiveID();
+                        edit_buffer = s;
+                        parse_operand_expression = true;
+                    }
+                }
+
+                if(parse_operand_expression || (!is_input_active && !ImGui::IsWindowFocused())) {
+                    cout << "closing suggestions" << endl;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
             }
 
             // when editing, we want this column to take the rest of the row
@@ -221,6 +311,9 @@ void ListingItemPrimary::RenderContent(shared_ptr<System>& system, GlobalMemoryL
 end_table:
         ImGui::EndTable();
     }
+
+    // if we're told to parse the operand expression, try to do so
+    if(parse_operand_expression && ParseOperandExpression(system, where)) edit_mode = EDIT_NONE;
 }
 
 void ListingItemPrimary::EditOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
@@ -273,6 +366,7 @@ bool ListingItemPrimary::ParseOperandExpression(shared_ptr<System>& system, Glob
             wait_dialog = false;
             parse_operand_expression = false;
             started_editing = true; // re-edit the expression
+            cout << "OKPopup closed" << endl;
         }
     }
 
@@ -297,7 +391,7 @@ bool ListingItemPrimary::IsEditing() const
     return edit_mode != EDIT_NONE;
 }
 
-void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool selected, bool hovered)
+void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool focused, bool selected, bool hovered)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {

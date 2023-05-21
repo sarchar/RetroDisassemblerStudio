@@ -99,7 +99,7 @@ void Defines::RenderContent()
         auto cb = [this](shared_ptr<Define>& define)->void {
             defines.push_back(define);
         };
-        system->IterateDefines(&cb);
+        system->IterateDefines(cb);
         force_reiterate = false;
     }
 

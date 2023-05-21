@@ -96,7 +96,7 @@ void Labels::RenderContent()
             if(!show_locals && label->GetString()[0] == '.') return;
             labels.push_back(label);
         };
-        system->IterateLabels(&cb);
+        system->IterateLabels(cb);
         force_reiterate = false;
     }
 

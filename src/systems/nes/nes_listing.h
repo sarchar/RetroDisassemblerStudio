@@ -1,10 +1,13 @@
 #pragma once
 
+#include <variant>
+
 #include "systems/nes/nes_defs.h"
 #include "systems/nes/nes_memory.h"
 
 namespace NES {
 
+class Define;
 class Label;
 class System;
 class ProgramRomBank;
@@ -18,7 +21,7 @@ public:
     ListingItem() {}
     virtual ~ListingItem() {}
 
-    virtual void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool) = 0;
+    virtual void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool) = 0;
     virtual bool IsEditing() const = 0;
 
 protected:
@@ -31,7 +34,7 @@ public:
     { }
     virtual ~ListingItemUnknown() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool) override;
     bool IsEditing() const override { return false; }
 };
 
@@ -42,7 +45,7 @@ public:
     { }
     virtual ~ListingItemBlankLine() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool) override;
     bool IsEditing() const override { return false; }
 };
 
@@ -53,7 +56,7 @@ public:
     { }
     virtual ~ListingItemPrePostComment() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool) override;
     bool IsEditing() const override;
 private:
     int line;
@@ -67,7 +70,7 @@ public:
     { }
     virtual ~ListingItemPrimary() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool) override;
 
     void EditOperandExpression(std::shared_ptr<System>&, GlobalMemoryLocation const&);
     bool ParseOperandExpression(std::shared_ptr<System>&, GlobalMemoryLocation const&);
@@ -90,6 +93,12 @@ private:
     bool parse_operand_expression = false;
     bool wait_dialog = false;
     std::string parse_errmsg;
+
+    typedef std::variant<
+        std::shared_ptr<Define>,
+        std::shared_ptr<Label>
+    > suggestion_type;
+    std::vector<suggestion_type> suggestions;
 };
 
 class ListingItemLabel : public ListingItem {
@@ -99,7 +108,7 @@ public:
     { }
     virtual ~ListingItemLabel() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool) override;
     bool IsEditing() const override;
 
 private:

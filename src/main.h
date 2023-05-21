@@ -101,7 +101,7 @@ private:
 
     // Popups
     bool StartPopup(std::string const&, bool);
-    int  EndPopup(int, bool show_ok = true, bool show_cancel = true, bool allow_escape = true);
+    int  EndPopup(int, bool show_ok = true, bool show_cancel = true, bool allow_escape = true, bool focus_ok = false);
     void RenderPopups();
 
     void EditCommentPopup();

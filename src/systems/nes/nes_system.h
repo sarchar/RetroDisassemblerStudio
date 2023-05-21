@@ -98,10 +98,10 @@ public:
     }
 
     template <typename F>
-    void IterateDefines(F const* cb) {
+    void IterateDefines(F cb) {
         for(auto iter : define_by_name) {
             std::shared_ptr<Define> define = iter.second;
-            (*cb)(define);
+            cb(define);
         }
     }
 
@@ -117,10 +117,10 @@ public:
     }
 
     template <typename F>
-    void IterateLabels(F const* cb) {
+    void IterateLabels(F cb) {
         for(auto iter : label_database) {
             std::shared_ptr<Label> label = iter.second;
-            (*cb)(label);
+            cb(label);
         }
     }
     

@@ -381,6 +381,8 @@ void Listing::RenderContent()
     auto system = current_system.lock();
     if(!system) return;
 
+    bool focused = IsFocused();
+
     // reset the editing flag
     bool was_editing = editing_listing_item;
     editing_listing_item = false;
@@ -462,7 +464,7 @@ void Listing::RenderContent()
                     if(selected || hovered) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, row_color);
 
                     ImGui::TableNextColumn(); // start the content of the listing item
-                    listing_item->RenderContent(system, current_address, adjust_columns, selected, hovered); // render the content
+                    listing_item->RenderContent(system, current_address, adjust_columns, focused, selected, hovered); // render the content
 
                     // if the item has determined to be editing something, take note
                     if(listing_item->IsEditing()) {
