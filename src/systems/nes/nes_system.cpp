@@ -821,6 +821,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
     case AM_ZEROPAGE:
     case AM_ZEROPAGE_X:
     case AM_ZEROPAGE_Y:
+    case AM_INDIRECT:
     case AM_INDIRECT_X:
     case AM_INDIRECT_Y:
     case AM_RELATIVE:
@@ -890,6 +891,9 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
             root = nc->CreateIndexedX(root, ",X");
         } else if(am == AM_ABSOLUTE_Y || am == AM_ZEROPAGE_Y) {
             root = nc->CreateIndexedY(root, ",Y");
+        } else if(am == AM_INDIRECT) {
+            // (v)
+            root = nc->CreateParens("(", root, ")");
         } else if(am == AM_INDIRECT_X) {
             // (v,X)
             root = nc->CreateIndexedX(root, ",X");
