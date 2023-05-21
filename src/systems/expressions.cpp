@@ -98,6 +98,7 @@ void Tenderizer::Gobble() // gobble, gobble
 }
 
 std::vector<std::shared_ptr<BaseExpressionNodeCreator::BaseExpressionNodeInfo>> BaseExpressionNodeCreator::expression_nodes;
+int BaseExpressionNodeCreator::expression_node_id_offset = 0;
 
 BaseExpressionNode::BaseExpressionNode()
 {
@@ -155,6 +156,11 @@ void BaseExpressionNodeCreator::RegisterBaseExpressionNodes()
 
     RegisterBaseExpressionNode<BaseExpressionNodes::FunctionCall>();
     RegisterBaseExpressionNode<BaseExpressionNodes::ExpressionList>();
+
+    // any node registered after this point is a subclassed node. using an ID
+    // offset lets us add new base nodes without corrupting the subnode indexes in save files
+#define SUBCLASS_NODE_ID_OFFSET 128
+    expression_node_id_offset = SUBCLASS_NODE_ID_OFFSET;
 }
 
 bool BaseExpressionNodeCreator::Save(shared_ptr<BaseExpressionNode> const& node, ostream& os, string& errmsg)
@@ -171,6 +177,9 @@ std::shared_ptr<BaseExpressionNode> BaseExpressionNodeCreator::Load(std::istream
         errmsg = "Error reading expression node";
         return nullptr;
     }
+
+    // subtract out subclass node id offset
+    if(node_type >= SUBCLASS_NODE_ID_OFFSET) node_type -= SUBCLASS_NODE_ID_OFFSET;
 
     if(node_type >= expression_nodes.size()) {
         errmsg = "Invalid expression node type";

@@ -473,7 +473,7 @@ public:
     static void RegisterBaseExpressionNodes();
     template <class T>
     static void RegisterBaseExpressionNode() {
-        int id = BaseExpressionNodeCreator::expression_nodes.size();
+        int id = BaseExpressionNodeCreator::expression_nodes.size() + expression_node_id_offset;
         auto info = std::make_shared<BaseExpressionNodeInfo>(BaseExpressionNodeInfo {
             .load = std::bind(&T::Load, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)
         });
@@ -567,6 +567,7 @@ public:
 
 private:
     static std::vector<std::shared_ptr<BaseExpressionNodeInfo>> expression_nodes;
+    static int expression_node_id_offset;
 };
 
 class Tenderizer;
