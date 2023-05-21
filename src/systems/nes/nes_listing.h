@@ -90,7 +90,7 @@ private:
     bool started_editing = false;
     std::string edit_buffer;
 
-    bool parse_operand_expression = false;
+    bool do_parse_operand_expression = false;
     bool wait_dialog = false;
     std::string parse_errmsg;
 
@@ -99,6 +99,13 @@ private:
         std::shared_ptr<Label>
     > suggestion_type;
     std::vector<suggestion_type> suggestions;
+
+    int suggestion_start;
+    bool deselect_input = false;
+
+    void RecalculateSuggestions(std::shared_ptr<System>&);
+    int  EditOperandExpressionTextCallback(void*);
+    void RenderEditOperandExpression(std::shared_ptr<System>&);
 };
 
 class ListingItemLabel : public ListingItem {

@@ -173,101 +173,8 @@ void ListingItemPrimary::RenderContent(shared_ptr<System>& system, GlobalMemoryL
 
         ImGui::TableNextColumn();
         if(edit_mode == EDIT_OPERAND_EXPRESSION) {
-            ImGuiInputTextFlags input_flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackAlways;
-            auto cb = [this, &system](ImGuiInputTextCallbackData* data)->int {
-                if(data->EventFlag != ImGuiInputTextFlags_CallbackAlways) return 0;
-                if(!data->Buf) return 0;
-                //cout << "CursorPos = " << data->CursorPos << " buf = " << data->Buf << endl;
-                suggestions.clear();
-
-                // naive filter: every keypress
-                string bufstr(data->Buf);
-                system->IterateLabels([this, &bufstr](shared_ptr<Label>& label) {
-                    auto label_name = label->GetString();
-                    //cout << "checking " << label_name << " find = " << label_name.find(bufstr) << endl;
-                    if(label_name.find(bufstr) == 0) {
-                        suggestions.push_back(label);
-                    }
-                });
-
-                system->IterateDefines([this, &bufstr](shared_ptr<Define>& define) {
-                    auto define_name = define->GetString();
-                    if(define_name.find(bufstr) == 0) {
-                        suggestions.push_back(define);
-                    }
-                });
-
-                sort(suggestions.begin(), suggestions.end(), [](suggestion_type const& a, suggestion_type const& b) {
-                    string a_str, b_str;
-                    if(auto const label = get_if<shared_ptr<Label>>(&a)) {
-                        a_str = (*label)->GetString();
-                    } else if(auto const define = get_if<shared_ptr<Define>>(&a)) {
-                        a_str = (*define)->GetString();
-                    }
-                    if(auto const label = get_if<shared_ptr<Label>>(&b)) {
-                        b_str = (*label)->GetString();
-                    } else if(auto const define = get_if<shared_ptr<Define>>(&b)) {
-                        b_str = (*define)->GetString();
-                    }
-                            
-                    return a_str <= b_str;
-                });
-                return 0;
-            };
-
-            auto wrapper = [](ImGuiInputTextCallbackData* data)->int {
-                std::function<int(ImGuiInputTextCallbackData*)>* f = static_cast<std::function<int(ImGuiInputTextCallbackData*)>*>(data->UserData);
-                return (*f)(data);
-            };
-
-            ImGui::PushItemWidth(-FLT_MIN);
-            std::function<int(ImGuiInputTextCallbackData*)> fcb(cb);
-            if(ImGui::InputText("", &edit_buffer, input_flags, wrapper, (void*)&fcb)) {
-                parse_operand_expression = true;
-            }
-
-            if(started_editing) {
-                ImGui::SetKeyboardFocusHere(-1);
-            }
-
-            if(ImGui::IsItemActivated()) {
-                ImGui::OpenPopup("##suggestions");
-                cout << "input text activated!" << endl;
-                started_editing = false;
-            }
-
-            bool is_input_active = ImGui::IsItemActive();
-
-            ImGui::SameLine();
-            ImGui::SetNextWindowPos({ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y});
-            ImGui::SetNextWindowSize({ImGui::GetItemRectSize().x, 0});
-            if(ImGui::BeginPopup("##suggestions", ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize
-                        | ImGuiWindowFlags_ChildWindow)) {
-                //ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
-                for(int i = 0; i < suggestions.size(); i++) {
-                    stringstream ss;
-                    if(auto label = get_if<shared_ptr<Label>>(&suggestions[i])) {
-                        ss << (*label)->GetString();
-                    } else if(auto define = get_if<shared_ptr<Define>>(&suggestions[i])) {
-                        ss << (*define)->GetString(); 
-                    }
-
-                    string s = ss.str();
-                    if(ImGui::Selectable(s.c_str())) {
-                        ImGui::ClearActiveID();
-                        edit_buffer = s;
-                        parse_operand_expression = true;
-                    }
-                }
-
-                if(parse_operand_expression || (!is_input_active && !ImGui::IsWindowFocused())) {
-                    cout << "closing suggestions" << endl;
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::EndPopup();
-            }
-
             // when editing, we want this column to take the rest of the row
+            RenderEditOperandExpression(system);
             goto end_table;
         } else {
             // TODO The line value will be used to index into the middle of data arrays, so that
@@ -313,26 +220,184 @@ end_table:
     }
 
     // if we're told to parse the operand expression, try to do so
-    if(parse_operand_expression && ParseOperandExpression(system, where)) edit_mode = EDIT_NONE;
+    if(do_parse_operand_expression && ParseOperandExpression(system, where)) edit_mode = EDIT_NONE;
 }
 
 void ListingItemPrimary::EditOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
 {
     auto disassembler = system->GetDisassembler();
     if(auto memory_object = system->GetMemoryObject(where)) {
-        switch(disassembler->GetAddressingMode(memory_object->code.opcode)) {
-        case AM_IMPLIED:
-        case AM_ACCUM:
-            break;
+        if(memory_object->type == MemoryObject::TYPE_CODE) {
+            switch(disassembler->GetAddressingMode(memory_object->code.opcode)) {
+            case AM_IMPLIED:
+            case AM_ACCUM:
+                break;
 
-        default:
+            default:
+                edit_buffer = memory_object->FormatOperandField(0, disassembler);
+                edit_mode = EDIT_OPERAND_EXPRESSION;
+                started_editing = true;
+                break;
+            }
+        } else {
             edit_buffer = memory_object->FormatOperandField(0, disassembler);
             edit_mode = EDIT_OPERAND_EXPRESSION;
             started_editing = true;
-            break;
         }
     }
+
+    RecalculateSuggestions(system);
+    deselect_input = false;
 }
+
+void ListingItemPrimary::RecalculateSuggestions(shared_ptr<System>& system)
+{
+    suggestions.clear();
+    suggestion_start = -1;
+
+    // find the start of the word
+    int i = edit_buffer.size();
+    while(i > 0 && edit_buffer[i] != '.' && (isalnum(edit_buffer[i-1]) || edit_buffer[i-1] == '_')) --i;
+
+    // labels and defines can't start with a digit, but we
+    // TODO might have to allow digits when we have expression completions
+    if(i < edit_buffer.size() && isdigit(edit_buffer[i])) return;
+
+    string bufstr = edit_buffer.substr(i);
+    suggestion_start = i;
+
+    system->IterateLabels([this, &bufstr](shared_ptr<Label>& label) {
+        auto label_name = label->GetString();
+        if(label_name.find(bufstr) == 0) {
+            suggestions.push_back(label);
+        }
+    });
+    
+    system->IterateDefines([this, &bufstr](shared_ptr<Define>& define) {
+        auto define_name = define->GetString();
+        if(define_name.find(bufstr) == 0) {
+            suggestions.push_back(define);
+        }
+    });
+    
+    sort(suggestions.begin(), suggestions.end(), [](suggestion_type const& a, suggestion_type const& b) {
+        string a_str, b_str;
+        if(auto const label = get_if<shared_ptr<Label>>(&a)) {
+            a_str = (*label)->GetString();
+        } else if(auto const define = get_if<shared_ptr<Define>>(&a)) {
+            a_str = (*define)->GetString();
+        }
+        if(auto const label = get_if<shared_ptr<Label>>(&b)) {
+            b_str = (*label)->GetString();
+        } else if(auto const define = get_if<shared_ptr<Define>>(&b)) {
+            b_str = (*define)->GetString();
+        }
+                
+        return a_str <= b_str;
+    });
+}
+
+int ListingItemPrimary::EditOperandExpressionTextCallback(void* _data)
+{
+    ImGuiInputTextCallbackData* data = static_cast<ImGuiInputTextCallbackData*>(_data);
+
+    if(data->EventFlag != ImGuiInputTextFlags_CallbackAlways) return 0;
+    if(!data->Buf) return 0;
+    //cout << "CursorPos = " << data->CursorPos << " buf = " << data->Buf << endl;
+
+    // when we make changes to the input text, it doesn't make sense to select the entire text again
+    if(deselect_input) {
+        data->SelectionStart = data->SelectionEnd;
+        deselect_input = false;
+    }
+    return 0;
+}
+
+void ListingItemPrimary::RenderEditOperandExpression(shared_ptr<System>& system)
+{
+    ImGuiInputTextFlags input_flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackAlways;
+
+    // wrapper function calls EditOperandExpressionTextCallback
+    typedef function<int(void*)> cb_func;
+    cb_func cb = std::bind(&ListingItemPrimary::EditOperandExpressionTextCallback, this, placeholders::_1);
+
+    auto wrapped_cb = [](ImGuiInputTextCallbackData* data)->int {
+        cb_func* func = static_cast<cb_func*>(data->UserData);
+        return (*func)((void*)data);
+    };
+
+    ImGui::PushItemWidth(-FLT_MIN); // render as wide as possible
+
+    string tmp_buffer = edit_buffer; // edit on a duplicate buffer, and check for changes
+    if(ImGui::InputText("", &tmp_buffer, input_flags, wrapped_cb, (void*)&cb)) {
+        do_parse_operand_expression = true;
+    }
+    
+    // if we just started editing, focus on the input text item
+    if(started_editing) {
+        ImGui::SetKeyboardFocusHere(-1);
+        started_editing = false;
+    }
+
+    // once the item becomes activated, open the suggestions popup, which will stay open for the duration of the edit
+    if(ImGui::IsItemActivated()) {
+        if(!ImGui::IsPopupOpen("##suggestions")) ImGui::OpenPopup("##suggestions");
+    }
+
+    // react to the text changing by changing the suggestions. cursor position is set in the callback
+    if(tmp_buffer != edit_buffer) {
+        edit_buffer = tmp_buffer;
+        // TODO the inefficient version here loops over every label every time the buffer changes, but we could improve
+        // the situation by only doing that with backspace but filtering the set more when characters are added.
+        // we'll see in the future how performance looks when we have lots of labels
+        RecalculateSuggestions(system);
+    }
+    
+    // true when the text input is being edited
+    bool is_input_active = ImGui::IsItemActive();
+    
+    // render the suggestions popup
+    float height = ImGui::GetItemRectSize().y * 8; // set to 0 for variable height
+    ImGui::SetNextWindowPos({ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y}); // position to the bottom left corner of the inputtext
+    ImGui::SetNextWindowSize({ImGui::GetItemRectSize().x, height});                  // set the width equal to the input text
+                                                                                     //
+    if(ImGui::BeginPopup("##suggestions", ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize
+                | ImGuiWindowFlags_ChildWindow)) {
+
+        for(int i = 0; i < suggestions.size(); i++) {
+            stringstream ss;
+            if(auto label = get_if<shared_ptr<Label>>(&suggestions[i])) {
+                ss << (*label)->GetString();
+            } else if(auto define = get_if<shared_ptr<Define>>(&suggestions[i])) {
+                ss << (*define)->GetString(); 
+            }
+    
+            string s = ss.str();
+            if(ImGui::Selectable(s.c_str())) {
+                ImGui::ClearActiveID();
+
+                if(suggestion_start != -1) {
+                    edit_buffer = edit_buffer.substr(0, suggestion_start) + s;
+                    RecalculateSuggestions(system);
+
+                    // Close the popup, and restart editing which will refocus on the inputtext
+                    // but we want to keep the cursor at the end of the line, not reselect everything
+                    ImGui::CloseCurrentPopup();
+                    started_editing = true;
+                    deselect_input = true;
+                }
+            }
+        }
+    
+        if(do_parse_operand_expression) {
+            cout << "closing suggestions" << endl;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+}
+
 
 bool ListingItemPrimary::ParseOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
 {
@@ -350,7 +415,7 @@ bool ListingItemPrimary::ParseOperandExpression(shared_ptr<System>& system, Glob
                 parse_errmsg = ss.str();
             } else {
                 // the operand expression was set successfully
-                parse_operand_expression = false;
+                do_parse_operand_expression = false;
                 return true;
             }
         } else {
@@ -364,7 +429,7 @@ bool ListingItemPrimary::ParseOperandExpression(shared_ptr<System>& system, Glob
     if(wait_dialog) {
         if(MyApp::Instance()->OKPopup("Operand parse error", parse_errmsg)) {
             wait_dialog = false;
-            parse_operand_expression = false;
+            do_parse_operand_expression = false;
             started_editing = true; // re-edit the expression
             cout << "OKPopup closed" << endl;
         }
