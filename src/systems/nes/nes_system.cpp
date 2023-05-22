@@ -1090,7 +1090,7 @@ u8 SystemView::Read(u16 address)
 void SystemView::Write(u16 address, u8 value)
 {
     if(address < 0x6000) {
-        assert(false);
+        cout << "[SystemView::Write] unhandled Write($" << hex << setw(4) << setfill('0') << address << ", $" << setw(2) << (int)value << ")" << endl;
     } else {
         cartridge_view->Write(address, value);
     }
