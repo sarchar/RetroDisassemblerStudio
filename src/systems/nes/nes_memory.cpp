@@ -360,9 +360,12 @@ bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where, u32 
 
         int size = memory_object->GetSize();
 
-        // store the memory's actual raw data
-        u8* tmp = (u8*)_alloca(size);
-        memory_object->Read(tmp, size);
+        // store the memory's actual raw data if it exists
+        u8* tmp = nullptr;
+        if(memory_object->backed) {
+            tmp = (u8*)_alloca(size);
+            memory_object->Read(tmp, size);
+        }
 
         // save the is_object tree node before clearing memory_object from the tree
         auto tree_node = memory_object->parent.lock();
@@ -380,7 +383,11 @@ bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where, u32 
         // this will update the object_refs[] array
         tree_node->is_object = false;
         u32 region_offset = ConvertToRegionOffset(where.address + offset);
-        _InitializeFromData(tree_node, region_offset, tmp, size);
+        if(memory_object->backed) {
+            _InitializeFromData(tree_node, region_offset, tmp, size);
+        } else {
+            _InitializeEmpty(tree_node, region_offset, size);
+        }
 
         // copy the labels to the new object
         auto new_object = object_refs[region_offset];
