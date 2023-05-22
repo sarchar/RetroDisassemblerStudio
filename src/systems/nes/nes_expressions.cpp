@@ -70,12 +70,13 @@ bool Label::NoteReference(GlobalMemoryLocation const& source) {
     // No label, so try looking it up. We can't assume anything about the nth label at the address
     // now that our old label is gone
     if(auto system = MyApp::Instance()->GetProject()->GetSystem<System>()) {
-        auto labels = system->GetLabelsAt(where);
-        if(labels.size()) {
-            // found a label, so cache that
-            nth = nth % labels.size();
-            label = labels[nth];
-            return NoteReference(source);
+        if(auto memory_object = system->GetMemoryObject(where)) {
+            if(memory_object->labels.size()) {
+                // found a label, so cache that
+                nth = nth % memory_object->labels.size();
+                label = memory_object->labels[nth];
+                return NoteReference(source);
+            }
         }
     }
 
