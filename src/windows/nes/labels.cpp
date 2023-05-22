@@ -38,9 +38,11 @@ Labels::Labels()
         // grab a weak_ptr so we don't have to continually use dynamic_pointer_cast
         current_system = system;
 
-        // watch for new labels
+        // watch for label changes
         label_created_connection = 
             system->label_created->connect(std::bind(&Labels::LabelCreated, this, placeholders::_1, placeholders::_2));
+        label_deleted_connection = 
+            system->label_deleted->connect(std::bind(&Labels::LabelDeleted, this, placeholders::_1, placeholders::_2));
     }
 }
 
@@ -242,6 +244,18 @@ void Labels::LabelCreated(shared_ptr<Label> const& label, bool was_user_created)
     }
 }
 
+void Labels::LabelDeleted(shared_ptr<Label> const& label, int nth)
+{
+    if(show_locals || label->GetString()[0] != '.') {
+        auto it = find_if(labels.begin(), labels.end(), [&label](weak_ptr<Label> const& a) {
+            if(auto ap = a.lock()) {
+                return ap->GetString() == label->GetString();
+            }
+            return false;
+        });
+        labels.erase(it);
+    }
+}
 
 } //namespace Windows
 } //namespace NES

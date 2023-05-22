@@ -16,6 +16,7 @@
 #include "systems/nes/nes_cartridge.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
+#include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 
@@ -239,15 +240,6 @@ void Listing::CheckInput()
         GoToAddress(dest);
     }
 
-    // handle delete button
-    if(ImGui::IsKeyPressed(ImGuiKey_Delete)) {
-        // TODO open dialog and ask what to clear - data type, labels, etc
-        int len = GetSelection();
-        if(len > 0) {
-            system->MarkMemoryAsUndefined(current_selection, len);
-        }
-    }
-
     if(ImGui::IsKeyPressed(ImGuiKey_UpArrow)) MoveSelectionUp();
 
     if(ImGui::IsKeyPressed(ImGuiKey_DownArrow)) MoveSelectionDown();
@@ -402,6 +394,9 @@ void Listing::CheckInput()
 
 void Listing::RenderContent() 
 {
+    // postponed actions (things that change the listing display that cannot happen while rendering)
+    ListingItem::postponed_changes changes;
+
     // All access goes through the system
     auto system = current_system.lock();
     if(!system) return;
@@ -468,8 +463,13 @@ void Listing::RenderContent()
 
                 //cout << "DisplayStart = " << hex << clipper.DisplayStart << " - " << clipper.DisplayEnd << endl;
                 for(int row = clipper.DisplayStart; row < clipper.DisplayEnd && listing_item_iterator; ++row, ++*listing_item_iterator) {
+                    // it's possible that the listing can change in the middle of render -- i.e., deleting a label which 
+                    // occurs in ListingItemLabel::RenderContent. So if our listing count changes at all, we stop rendering this frame
+                    // this prevents multiple listing items from processing the same keystroke 
+//                    if(memory_region->GetTotalListingItems() != total_listing_items) break;
+
                     // get the listing item
-                    auto& listing_item = listing_item_iterator->GetListingItem();
+                    auto listing_item = listing_item_iterator->GetListingItem();
 
                     // Get the address this listing_item belongs to so we can highlight it when selected
                     GlobalMemoryLocation current_address(current_selection); // start with a copy since we're in the same memory region
@@ -489,7 +489,7 @@ void Listing::RenderContent()
                     if(selected || hovered) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, row_color);
 
                     ImGui::TableNextColumn(); // start the content of the listing item
-                    listing_item->RenderContent(system, current_address, adjust_columns, focused, selected, hovered); // render the content
+                    listing_item->RenderContent(system, current_address, adjust_columns, focused, selected, hovered, changes); // render the content
 
                     // if the item has determined to be editing something, take note
                     if(listing_item->IsEditing()) {
@@ -541,6 +541,13 @@ void Listing::RenderContent()
     }
 
     RenderPopups();
+
+    // any changes to listing items can now be applied
+    while(changes.size()) {
+        std::function<void()> func = changes.front();
+        changes.pop_front();
+        func();
+    }
 }
 
 // If the end_selection address comes before the current_selection address, they need to be swapped

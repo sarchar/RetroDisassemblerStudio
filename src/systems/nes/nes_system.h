@@ -35,6 +35,9 @@ public:
     typedef signal<std::function<void(std::shared_ptr<Label> const&, bool)>> label_created_t;
     std::shared_ptr<label_created_t> label_created;
 
+    typedef signal<std::function<void(std::shared_ptr<Label> const&, int)>> label_deleted_t;
+    std::shared_ptr<label_deleted_t> label_deleted;
+
     // On-demand new signal handlers for specific addresses
     std::shared_ptr<label_created_t> LabelCreatedAt(GlobalMemoryLocation const& where) {
         if(!label_created_at.contains(where)) {
@@ -43,11 +46,26 @@ public:
         return label_created_at[where];
     }
 
+    std::shared_ptr<label_deleted_t> LabelDeletedAt(GlobalMemoryLocation const& where) {
+        if(!label_deleted_at.contains(where)) {
+            label_deleted_at[where] = std::make_shared<label_deleted_t>();
+        }
+        return label_deleted_at[where];
+    }
+
     // Be polite and tell me when you disconnect
     void LabelCreatedAtRemoved(GlobalMemoryLocation const& where) {
         if(label_created_at.contains(where)) {
             if(label_created_at[where]->connections.size() == 0) {
                 label_created_at.erase(where);
+            }
+        }
+    }
+
+    void LabelDeletedAtRemoved(GlobalMemoryLocation const& where) {
+        if(label_deleted_at.contains(where)) {
+            if(label_deleted_at[where]->connections.size() == 0) {
+                label_deleted_at.erase(where);
             }
         }
     }
@@ -116,6 +134,8 @@ public:
         return nullptr;
     }
 
+    void DeleteLabel(std::shared_ptr<Label> const&);
+
     template <typename F>
     void IterateLabels(F cb) {
         for(auto iter : label_database) {
@@ -127,7 +147,6 @@ public:
     std::shared_ptr<Label> GetOrCreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
     std::shared_ptr<Label> CreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
     std::shared_ptr<Label> EditLabel(GlobalMemoryLocation const&, std::string const&, int nth, bool was_user_edited = false);
-    void                   InsertLabel(std::shared_ptr<Label>&);
 
     // Comments
     void GetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, std::string& out) {
@@ -160,6 +179,7 @@ public:
 
 private:
     std::unordered_map<GlobalMemoryLocation, std::shared_ptr<label_created_t>> label_created_at;
+    std::unordered_map<GlobalMemoryLocation, std::shared_ptr<label_deleted_t>> label_deleted_at;
 
     // Memory
     std::shared_ptr<NES::RAMRegion> cpu_ram;

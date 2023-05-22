@@ -60,9 +60,14 @@ namespace ExpressionNodes {
         void NextLabel();
         bool Update();
 
+        void Reset() {
+            label.reset();
+        }
+
         std::shared_ptr<NES::Label> GetLabel() { return label.lock(); }
         GlobalMemoryLocation const& GetTarget() const { return where; }
         std::string const&          GetDisplay() const { return display; }
+        int                         GetNth() const { return nth; }
 
         // Labels evaluate to their address, whether they be zero page or not
         bool Evaluate(s64* result, std::string& errmsg) const override {

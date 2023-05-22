@@ -1,5 +1,6 @@
 #pragma once
 
+#include <deque>
 #include <variant>
 
 #include "systems/nes/nes_defs.h"
@@ -16,12 +17,15 @@ class ProgramRomBank;
 // all sorts of row types: comments, labels, actual code, data, etc.
 class ListingItem {
 public:
+    typedef std::function<void()> postponed_change_t;
+    typedef std::deque<postponed_change_t> postponed_changes;
+
     static unsigned long common_inner_table_flags;
 
     ListingItem() {}
     virtual ~ListingItem() {}
 
-    virtual void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool) = 0;
+    virtual void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool, postponed_changes&) = 0;
     virtual bool IsEditing() const = 0;
 
 protected:
@@ -34,7 +38,7 @@ public:
     { }
     virtual ~ListingItemUnknown() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool, postponed_changes&) override;
     bool IsEditing() const override { return false; }
 };
 
@@ -45,7 +49,7 @@ public:
     { }
     virtual ~ListingItemBlankLine() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool, postponed_changes&) override;
     bool IsEditing() const override { return false; }
 };
 
@@ -56,7 +60,7 @@ public:
     { }
     virtual ~ListingItemPrePostComment() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool, postponed_changes&) override;
     bool IsEditing() const override;
 private:
     int line;
@@ -70,7 +74,7 @@ public:
     { }
     virtual ~ListingItemPrimary() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool, postponed_changes&) override;
 
     void EditOperandExpression(std::shared_ptr<System>&, GlobalMemoryLocation const&);
     bool ParseOperandExpression(std::shared_ptr<System>&, GlobalMemoryLocation const&);
@@ -115,11 +119,11 @@ public:
     { }
     virtual ~ListingItemLabel() { }
 
-    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool) override;
+    void RenderContent(std::shared_ptr<System>&, GlobalMemoryLocation const&, u32, bool, bool, bool, postponed_changes&) override;
     bool IsEditing() const override;
 
 private:
-    std::shared_ptr<Label> const& label;
+    std::shared_ptr<Label> const label;
     int nth;
     std::string edit_buffer;
     bool editing;

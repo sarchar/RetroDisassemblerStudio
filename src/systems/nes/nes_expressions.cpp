@@ -92,7 +92,7 @@ bool Label::Update()
 void Label::NextLabel()
 {
     nth += 1;
-    label.reset();
+    Reset();
 }
 
 void Label::Print(std::ostream& ostream) {
@@ -114,6 +114,8 @@ void Label::Print(std::ostream& ostream) {
 bool Label::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator>) 
 {
     if(!where.Save(os, errmsg)) return false;
+    // update the index if possible
+    if(auto t = label.lock()) nth = t->GetIndex();
     WriteVarInt(os, nth);
     WriteString(os, display);
     if(!os.good()) {

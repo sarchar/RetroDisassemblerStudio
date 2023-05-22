@@ -19,9 +19,12 @@ public:
     typedef signal<std::function<void()>> reverse_references_changed_t;
     std::shared_ptr<reverse_references_changed_t> reverse_references_changed;
 
+    typedef signal<std::function<void(std::shared_ptr<Label>, int)>> index_changed_t;
+    std::shared_ptr<index_changed_t> index_changed;
+
     void SetString(std::string const& s) { label = s; }
 
-    void                 SetIndex(int _index)             { index = _index; }
+    void                 SetIndex(int _index)             { index = _index; index_changed->emit(shared_from_this(), index); }
     int                  const& GetIndex()          const { return index; }
     GlobalMemoryLocation const& GetMemoryLocation() const { return memory_location; }
     std::string          const& GetString()         const { return label; }

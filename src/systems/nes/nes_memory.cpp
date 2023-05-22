@@ -671,6 +671,18 @@ void MemoryRegion::ApplyLabel(shared_ptr<Label>& label)
     UpdateMemoryObject(where);
 }
 
+int MemoryRegion::DeleteLabel(shared_ptr<Label> const& label)
+{
+    int ret = -1;
+    auto where = label->GetMemoryLocation();
+    if(auto memory_object = GetMemoryObject(where)) {
+        ret = memory_object->DeleteLabel(label);
+        UpdateMemoryObject(where);
+    }
+
+    return ret;
+}
+
 void MemoryRegion::ClearReferencesToLabels(GlobalMemoryLocation const& where)
 {
     if(auto memory_object = GetMemoryObject(where)) {
@@ -844,7 +856,8 @@ MemoryObjectTreeNode::iterator& MemoryObjectTreeNode::iterator::operator++()
 
 struct MemoryObject::LabelCreatedData {
     GlobalMemoryLocation target;
-    signal_connection connection;
+    signal_connection created_connection;
+    signal_connection deleted_connection;
 };
 
 void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
@@ -852,7 +865,7 @@ void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
     // if there's no operand expresion, there are no references
     if(!operand_expression || !operand_expression->GetRoot()) return;
 
-    // Explore operand_expression and mark each referenced Define() that we're referring to it
+    // Explore operand_expression and mark each referenced define and label that we're referring to
     auto cb = [this, &where](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
         if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
             define_node->GetDefine()->NoteReference(where);
@@ -866,12 +879,20 @@ void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
 
             label_connections.push_back(make_shared<LabelCreatedData>(LabelCreatedData {
                 .target = target,
-                .connection = system->LabelCreatedAt(target)->connect(
+                .created_connection = system->LabelCreatedAt(target)->connect(
                         [this, where, label_node](shared_ptr<Label> const& label, bool was_user_created) {
                             // this will notify the new label that we're referring to it. if a different label is created
                             // at the same address, this won't reference that label since the current expression node already has
                             // a label
                             label_node->NoteReference(where);
+                        }),
+                .deleted_connection = system->LabelDeletedAt(target)->connect(
+                        [this, where, label_node](shared_ptr<Label> const& label, int nth) {
+                            if(label_node->GetNth() == nth) { // only if the deleted label is the one we are referring to
+                                label_node->RemoveReference(where);
+                                label_node->Reset();
+                                label_node->Update();
+                            }
                         })
             }));
         }
@@ -888,8 +909,10 @@ void MemoryObject::RemoveReferences(GlobalMemoryLocation const& where)
 
     // Clear all the label_created signal connections
     for(auto& data : label_connections) {
-        data->connection->disconnect();
+        data->created_connection->disconnect();
+        data->deleted_connection->disconnect();
         system->LabelCreatedAtRemoved(data->target);
+        system->LabelDeletedAtRemoved(data->target);
     }
 
     label_connections.clear();
@@ -908,6 +931,19 @@ void MemoryObject::RemoveReferences(GlobalMemoryLocation const& where)
     };
 
     if(!operand_expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
+}
+
+int MemoryObject::DeleteLabel(std::shared_ptr<Label> const& label)
+{
+    assert(label->GetIndex() < labels.size() && label->GetString() == labels[label->GetIndex()]->GetString());
+    int nth = label->GetIndex();
+    labels.erase(labels.begin() + nth);
+
+    for(; nth < labels.size(); nth++) {
+        labels[nth]->SetIndex(nth);
+    }
+
+    return nth;
 }
 
 void MemoryObject::ClearReferencesToLabels(GlobalMemoryLocation const& where)

@@ -30,6 +30,7 @@ System::System()
 
     define_created = make_shared<define_created_t>();
     label_created = make_shared<label_created_t>();
+    label_deleted = make_shared<label_deleted_t>();
     disassembly_stopped = make_shared<disassembly_stopped_t>();
 }
 
@@ -677,9 +678,21 @@ shared_ptr<Label> System::EditLabel(GlobalMemoryLocation const& where, string co
     return nullptr;
 }
 
-void System::InsertLabel(shared_ptr<Label>& label)
+void System::DeleteLabel(std::shared_ptr<Label> const& label)
 {
-    label_database[label->GetString()] = label;
+    auto where = label->GetMemoryLocation();
+    if(auto memory_region = GetMemoryRegion(where)) {
+        if(int nth = memory_region->DeleteLabel(label); nth >= 0) {
+            auto name = label->GetString();
+            label_database.erase(name);
+
+            label_deleted->emit(label, nth);
+
+            if(label_deleted_at.contains(where)) {
+                label_deleted_at[where]->emit(label, nth);
+            }
+        }
+    }
 }
 
 void System::InitDisassembly(GlobalMemoryLocation const& where)

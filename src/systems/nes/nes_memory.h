@@ -229,6 +229,7 @@ struct MemoryObject {
 private:
     void ClearReferencesToLabels(GlobalMemoryLocation const& where);
     void NextLabelReference(GlobalMemoryLocation const& where);
+    int  DeleteLabel(std::shared_ptr<Label> const&); // call MemoryRegion::DeleteLabel
 
     void SetComment(COMMENT_TYPE type, std::string const& comment) {
         switch(type) {
@@ -291,6 +292,7 @@ public:
 
     // Labels
     void ApplyLabel(std::shared_ptr<Label>&);
+    int  DeleteLabel(std::shared_ptr<Label> const&);
     void ClearReferencesToLabels(GlobalMemoryLocation const& where);
     void NextLabelReference(GlobalMemoryLocation const& where);
 

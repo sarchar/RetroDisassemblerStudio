@@ -26,7 +26,8 @@ namespace NES {
 
 unsigned long ListingItem::common_inner_table_flags = ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_Resizable;
 
-void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool focused, bool selected, bool hovered)
+void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, 
+        bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -42,7 +43,8 @@ void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryL
     }
 }
 
-void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool focused, bool selected, bool hovered)
+void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, 
+        bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -61,7 +63,8 @@ void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemor
     }
 }
 
-void ListingItemPrePostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool focused, bool selected, bool hovered)
+void ListingItemPrePostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, 
+        bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -96,7 +99,8 @@ bool ListingItemPrePostComment::IsEditing() const
     return false;
 }
 
-void ListingItemPrimary::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool focused, bool selected, bool hovered)
+void ListingItemPrimary::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, 
+        bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -121,6 +125,12 @@ void ListingItemPrimary::RenderContent(shared_ptr<System>& system, GlobalMemoryL
                 ResetOperandExpression(system, where);
             } else if(ImGui::IsKeyPressed(ImGuiKey_A)) { // next label
                 NextLabelReference(system, where);
+            } else if(ImGui::IsKeyPressed(ImGuiKey_Delete)) { // delete data type
+                // we have to be cautious about capturing 'this', as the listing item could be deleted when something else
+                // recreates the listing items for a memory object. so we'll capture a copy of the label instead
+                changes.push_back([system, where]() {
+                    system->MarkMemoryAsUndefined(where, 1); // can specify 1 for size instead of GetSize()
+                });
             }
         } 
 
@@ -456,7 +466,8 @@ bool ListingItemPrimary::IsEditing() const
     return edit_mode != EDIT_NONE;
 }
 
-void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, bool focused, bool selected, bool hovered)
+void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, 
+        bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
     if(flags) {
@@ -475,6 +486,15 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
             auto wnd = Windows::References::CreateWindow(label);
             wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
             MyApp::Instance()->AddWindow(wnd);
+        }
+
+        if(ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+            // we have to be cautious about capturing 'this', as the listing item could be deleted when something else
+            // recreates the listing items for a memory object. so we'll capture a copy of the label instead
+            auto lcopy = label;
+            changes.push_back([system, lcopy]() {
+                system->DeleteLabel(lcopy);
+            });
         }
     }
 

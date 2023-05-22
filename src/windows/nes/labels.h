@@ -32,6 +32,7 @@ protected:
 
 private:
     void LabelCreated(std::shared_ptr<Label> const&, bool);
+    void LabelDeleted(std::shared_ptr<Label> const&, int);
 
     std::weak_ptr<System>            current_system;
     int selected_row;
@@ -45,6 +46,7 @@ private:
     bool show_locals;
 
     signal_connection label_created_connection;
+    signal_connection label_deleted_connection;
 
 public:
     static std::shared_ptr<Labels> CreateWindow();
