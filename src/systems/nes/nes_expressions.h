@@ -47,7 +47,6 @@ namespace ExpressionNodes {
 
     class Label : public ExpressionNode {
     public:
-        Label(std::shared_ptr<NES::Label> const& _label, int _nth, std::string const& _display);
         Label(GlobalMemoryLocation const&, int _nth, std::string const& _display);
         virtual ~Label() { }
 
@@ -59,6 +58,7 @@ namespace ExpressionNodes {
 
         // You're expected to call RemoveReference before and NoteReference() after
         void NextLabel();
+        bool Update();
 
         std::shared_ptr<NES::Label> GetLabel() { return label.lock(); }
         GlobalMemoryLocation const& GetTarget() const { return where; }
@@ -66,7 +66,7 @@ namespace ExpressionNodes {
 
         // Labels evaluate to their address, whether they be zero page or not
         bool Evaluate(s64* result, std::string& errmsg) const override {
-            *result = where.address;
+            *result = where.address + offset;
             return true;
         }
 
@@ -84,6 +84,7 @@ namespace ExpressionNodes {
         std::weak_ptr<NES::Label>   label;
         GlobalMemoryLocation        where;
         int                         nth;
+        int                         offset;
         std::string                 display;
     };
 
@@ -311,10 +312,6 @@ public:
 
     BN CreateDefine(std::shared_ptr<Define> const& define) {
         return std::make_shared<ExpressionNodes::Define>(define);
-    }
-
-    BN CreateLabel(std::shared_ptr<Label> const& label, int nth, std::string const& display) {
-        return std::make_shared<ExpressionNodes::Label>(label, nth, display);
     }
 
     BN CreateLabel(GlobalMemoryLocation const& label_address, int nth, std::string const& display) {

@@ -37,6 +37,8 @@ public:
 
     u16 GetResetVectorBank();
 
+    void NoteReferences();
+
     bool Save(std::ostream&, std::string&);
     bool Load(std::istream&, std::string&, std::shared_ptr<System>&);
 private:

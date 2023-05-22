@@ -174,6 +174,8 @@ private:
     std::vector<std::shared_ptr<Define>> defines = {};
     std::unordered_map<std::string, std::shared_ptr<Define>> define_by_name = {};
 
+    void NoteReferences();
+
     bool disassembling;
     GlobalMemoryLocation disassembly_address;
 

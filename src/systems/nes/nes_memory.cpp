@@ -374,7 +374,7 @@ bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where, u32 
         auto& labels = memory_object->labels;
 
         // clear any references this object is making
-        memory_object->ClearReferences(where + offset);
+        memory_object->RemoveReferences(where + offset);
 
         // remove memory_object from the tree first, this will correct listing item counts
         RemoveMemoryObjectFromTree(memory_object, true);
@@ -561,9 +561,9 @@ bool MemoryRegion::MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byt
 void MemoryRegion::SetOperandExpression(GlobalMemoryLocation const& where, std::shared_ptr<Expression> const& expr)
 {
     if(auto memory_object = GetMemoryObject(where)) {
-        memory_object->ClearReferences(where); // clear any references the previous operand expression referred to
+        memory_object->RemoveReferences(where); // clear any references the previous operand expression referred to
         memory_object->operand_expression = expr;
-        memory_object->SetReferences(where);   // mark the new ones
+        memory_object->NoteReferences(where);   // mark the new ones
     }
 }
 
@@ -674,18 +674,18 @@ void MemoryRegion::ApplyLabel(shared_ptr<Label>& label)
 void MemoryRegion::ClearReferencesToLabels(GlobalMemoryLocation const& where)
 {
     if(auto memory_object = GetMemoryObject(where)) {
-        memory_object->ClearReferences(where); // clear all references first
+        memory_object->RemoveReferences(where); // clear all references first
         memory_object->ClearReferencesToLabels(where);
-        memory_object->SetReferences(where);   // re-set all references (i.e., define)
+        memory_object->NoteReferences(where);   // re-set all references (i.e., define)
     }
 }
 
 void MemoryRegion::NextLabelReference(GlobalMemoryLocation const& where)
 {
     if(auto memory_object = GetMemoryObject(where)) {
-        memory_object->ClearReferences(where); // clear all references first
+        memory_object->RemoveReferences(where); // clear all references first
         memory_object->NextLabelReference(where);
-        memory_object->SetReferences(where);   // re-set all references (i.e., define)
+        memory_object->NoteReferences(where);   // re-set all references (i.e., define)
     }
 }
 
@@ -847,7 +847,7 @@ struct MemoryObject::LabelCreatedData {
     signal_connection connection;
 };
 
-void MemoryObject::SetReferences(GlobalMemoryLocation const& where)
+void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
 {
     // if there's no operand expresion, there are no references
     if(!operand_expression || !operand_expression->GetRoot()) return;
@@ -882,7 +882,7 @@ void MemoryObject::SetReferences(GlobalMemoryLocation const& where)
     if(!operand_expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
 }
 
-void MemoryObject::ClearReferences(GlobalMemoryLocation const& where)
+void MemoryObject::RemoveReferences(GlobalMemoryLocation const& where)
 {
     auto system = MyApp::Instance()->GetProject()->GetSystem<System>();
 
@@ -1186,21 +1186,21 @@ bool MemoryObject::Load(std::istream& is, std::string& errmsg)
         string s;
         ReadString(is, s);
         comments.eol = make_shared<string>(s);
-        cout << "comment.eol: " << *comments.eol << endl;
+        //cout << "comment.eol: " << *comments.eol << endl;
     }
 
     if(fields_present & (1 << 2)) {
         string s;
         ReadString(is, s);
         comments.pre = make_shared<string>(s);
-        cout << "comment.pre: " << *comments.pre << endl;
+        //cout << "comment.pre: " << *comments.pre << endl;
     }
 
     if(fields_present & (1 << 3)) {
         string s;
         ReadString(is, s);
         comments.post = make_shared<string>(s);
-        cout << "comment.post: " << *comments.post << endl;
+        //cout << "comment.post: " << *comments.post << endl;
     }
 
     return true;
@@ -1262,15 +1262,10 @@ bool MemoryRegion::Load(GlobalMemoryLocation const& base, std::istream& is, std:
         auto obj = make_shared<MemoryObject>();
         if(!obj->Load(is, errmsg)) return false;
         
-        // put labels in the systems's label database
-        if(auto system = parent_system.lock()) {
-            for(auto& label : obj->labels) {
-                system->InsertLabel(label);
-            }
-        }
-
-        // update label/define references
-        obj->SetReferences(where);
+        // we used to call obj->NoteReference() here, but we need all memory locations to be loaded
+        // (and therefore assigned all their labels) before we can note any references. 
+        // It's a problem if there's a label reference at $8000 referring to $9000, but memory object $9000
+        // hasn't been loaded yet. So after ALL memory has been loaded, NoteReferences() is called
 
         // set all memory locations offset..offset+size-1 to the object
         for(u32 i = 0; i < obj->GetSize(); i++) object_refs[offset + i] = obj;
@@ -1283,6 +1278,20 @@ bool MemoryRegion::Load(GlobalMemoryLocation const& base, std::istream& is, std:
     ReinitializeFromObjectRefs();
 
     return true;
+}
+
+void MemoryRegion::NoteReferences(GlobalMemoryLocation const& base)
+{
+    GlobalMemoryLocation where(base);
+
+    for(u32 offset = 0; offset < region_size;) {
+        where.address = base_address + offset;
+
+        auto memory_object = GetMemoryObject(where);
+        memory_object->NoteReferences(where);
+
+        offset += memory_object->GetSize();
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1355,6 +1364,16 @@ shared_ptr<ProgramRomBank> ProgramRomBank::Load(std::istream& is, std::string& e
     };
     if(!prg_bank->MemoryRegion::Load(base, is, errmsg)) return nullptr;
     return prg_bank;
+}
+
+void ProgramRomBank::NoteReferences()
+{
+    GlobalMemoryLocation base {
+        .is_chr = false,
+        .prg_rom_bank = (u16)prg_rom_bank
+    };
+
+    MemoryRegion::NoteReferences(base);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

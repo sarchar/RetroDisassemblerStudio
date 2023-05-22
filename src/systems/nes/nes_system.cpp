@@ -270,7 +270,11 @@ bool System::ExploreExpressionNodeCallback(shared_ptr<BaseExpressionNode>& node,
                 ss << loc.address;
 
                 // replace the current node with a Label expression node
-                node = GetNodeCreator()->CreateLabel(label, label->GetIndex(), ss.str());
+                node = GetNodeCreator()->CreateLabel(loc, label->GetIndex(), ss.str());
+
+                // make sure offset is updated
+                auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node);
+                label_node->Update();
 
                 explore_data->labels.push_back(label);
                 was_a_thing = true;
@@ -430,8 +434,6 @@ bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<
         break;
     }
 
-    // One major problem with DetermineAddressingMode is that it can't determine the difference between AM_ABSOLUTE and AM_RELATIVE
-    // So we 
     memory_region->SetOperandExpression(where, expr);
     return true;
 }
@@ -866,18 +868,9 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
             snprintf(buf, sizeof(buf), "$%02X", target_location.address);
         }
 
-        // if the destination is not valid memory, we can't really create a Label node
-        auto root = label ? nc->CreateLabel(label, 0, buf)
+        // use a label node if we know the label exist
+        auto root = label ? nc->CreateLabel(target_location, 0, buf)
                           : nc->CreateConstant(target_location.address, buf);
-
-        // append "+offset" as an expression to the label (target_offset != 0 iff label != null)
-        if(is_valid && target_offset != 0) {
-            stringstream ss;
-            ss << target_offset;
-            auto constant_node = nc->CreateConstant(target_offset, ss.str());
-
-            root = nc->CreateAddOp(root, "+", constant_node);
-        }
 
         // wrap the address/label with whatever is necessary to format this instruction
         if(am == AM_ABSOLUTE_X || am == AM_ZEROPAGE_X) {
@@ -900,7 +893,8 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
         // set the expression root
         expr->Set(root);
 
-        // set the expression for memory object at current_selection. it'll show up immediately
+        // call SetOperandExpression directly on the region bypassing the System::SetOperandExpression checks, which configure
+        // the addressing modes and labels, etc., which we've already done
         code_region->SetOperandExpression(where, expr);
         break;
     }
@@ -920,7 +914,8 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
         root = nc->CreateImmediate("#", root);
         expr->Set(root);
 
-        // set the expression for memory object at current_selection. it'll show up immediately
+        // call SetOperandExpression directly on the region bypassing the System::SetOperandExpression checks, which configure
+        // the addressing modes and labels, etc., which we've already done
         code_region->SetOperandExpression(where, expr);
 
         break;
@@ -934,7 +929,8 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
         auto root = nc->CreateAccum("A"); // if you don't want to type the A, leave this string blank
         expr->Set(root);
 
-        // set the expression for memory object at current_selection. it'll show up immediately
+        // call SetOperandExpression directly on the region bypassing the System::SetOperandExpression checks, which configure
+        // the addressing modes and labels, etc., which we've already done
         code_region->SetOperandExpression(where, expr);
         break;
     }
@@ -944,7 +940,8 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
         auto expr = make_shared<Expression>();
         auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
 
-        // set the expression for memory object at current_selection. it'll show up immediately
+        // call SetOperandExpression directly on the region bypassing the System::SetOperandExpression checks, which configure
+        // the addressing modes and labels, etc., which we've already done
         code_region->SetOperandExpression(where, expr);
         break;
     }
@@ -1039,7 +1036,16 @@ bool System::Load(std::istream& is, std::string& errmsg)
     cartridge     = make_shared<Cartridge>(selfptr);          // 0x6000-0xFFFF
     if(!cartridge->Load(is, errmsg, selfptr)) return false;
 
+    // note all references
+    NoteReferences();
+
     return true;
+}
+
+void System::NoteReferences()
+{
+    // cpu_ram, ppu_registers, and io_registers aren't backed memory, so they can't refer to other memory
+    cartridge->NoteReferences();
 }
 
 }

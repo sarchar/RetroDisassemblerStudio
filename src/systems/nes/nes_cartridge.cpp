@@ -248,19 +248,11 @@ bool Cartridge::Load(std::istream& is, std::string& errmsg, shared_ptr<System>& 
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//!u8 ProgramRomBank::ReadByte(u16 offset)
-//!{
-//!    assert(false);
-//!    return 0xEA;
-//!    u16 cref = content_ptrs[offset];
-//!    if(cref == (u16)-1) return 0xEA;
-//!
-//!    auto& c = content[cref];
-//!    assert(c->type == CONTENT_BLOCK_TYPE_DATA);
-//!    assert((offset - c->offset) < c->data.count); // TODO take into account data size
-//!    return static_cast<u8*>(c->data.ptr)[offset - c->offset];
-//!}
+void Cartridge::NoteReferences()
+{
+    for(auto& prg_rom : program_rom_banks) {
+        prg_rom->NoteReferences();
+    }
+}
 
 }

@@ -365,14 +365,14 @@ void Listing::CheckInput()
                     // get the target location and create a label if none exists
                     int offset = 0;
 
-                    // counterintuitively, this is not a "user created label"
+                    // create a label at the target address. counterintuitively, this is not a "user created label"
                     auto label = system->GetDefaultLabelForTarget(label_address, false, &offset, true, "L_");
 
                     // now apply a OperandAddressOrLabel to the data on this memory object
                     auto default_operand_format = memory_object->FormatOperandField(); // will format the data $xxxx
                     auto expr = make_shared<Expression>();
                     auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
-                    auto root = nc->CreateLabel(label, label->GetIndex(), default_operand_format);
+                    auto root = nc->CreateLabel(label_address, label->GetIndex(), default_operand_format);
 
                     // if offset is nonzero, create an add offset expression
                     if(offset != 0) {

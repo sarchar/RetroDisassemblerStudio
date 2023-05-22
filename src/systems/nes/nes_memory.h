@@ -195,8 +195,8 @@ struct MemoryObject {
         if(type == TYPE_STRING) delete [] str.data;
     }
 
-    void SetReferences(GlobalMemoryLocation const&);
-    void ClearReferences(GlobalMemoryLocation const&);
+    void NoteReferences(GlobalMemoryLocation const&);
+    void RemoveReferences(GlobalMemoryLocation const&);
 
     u32 GetSize(std::shared_ptr<Disassembler> disassembler = nullptr);
     void Read(u8*, int);
@@ -317,6 +317,9 @@ public:
         }
     }
 
+    // References
+    void NoteReferences(GlobalMemoryLocation const&);
+
     // Load and save
     virtual bool Save(std::ostream&, std::string&);
     virtual bool Load(GlobalMemoryLocation const&, std::istream&, std::string&);
@@ -366,6 +369,8 @@ public:
     virtual ~ProgramRomBank() {};
 
     bool GetGlobalMemoryLocation(u32, GlobalMemoryLocation*) override;
+
+    void NoteReferences();
 
     bool Save(std::ostream&, std::string&) override;
     static std::shared_ptr<ProgramRomBank> Load(std::istream&, std::string&, std::shared_ptr<System>&);
