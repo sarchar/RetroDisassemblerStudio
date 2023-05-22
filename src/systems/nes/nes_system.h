@@ -22,6 +22,7 @@ class Expression;
 class ExpressionNodeCreator;
 class Label;
 class ProgramRomBank;
+class SystemView;
 
 class System : public ::BaseSystem {
 public:
@@ -103,6 +104,8 @@ public:
         }
         return ret;
     }
+
+    std::shared_ptr<MemoryView> CreateMemoryView();
 
     // Listings
     void GetListingItems(GlobalMemoryLocation const&, std::vector<std::shared_ptr<NES::ListingItem>>& out);
@@ -219,6 +222,21 @@ private:
     std::shared_ptr<ExpressionNodeCreator> GetNodeCreator();
     bool ExploreExpressionNodeCallback(std::shared_ptr<BaseExpressionNode>&, std::shared_ptr<BaseExpressionNode> const&, int, void*);
 	bool DetermineAddressingMode(std::shared_ptr<Expression>&, ADDRESSING_MODE*, s64*, std::string&);
+
+    friend class SystemView;
+};
+
+class SystemView : public MemoryView {
+public:
+    SystemView(std::shared_ptr<BaseSystem> const&);
+    ~SystemView();
+
+    u8 Read(u16) override;
+    void Write(u16, u8) override;
+
+private:
+    std::shared_ptr<System> system;
+    std::shared_ptr<MemoryView> cartridge_view;
 };
 
 }

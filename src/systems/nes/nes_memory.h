@@ -288,7 +288,7 @@ public:
 
     u32  GetListingIndexByAddress(GlobalMemoryLocation const&);
 
-    virtual u8  ReadByte(GlobalMemoryLocation const&);
+    u8  ReadByte(int offset);
 
     // Labels
     void ApplyLabel(std::shared_ptr<Label>&);
@@ -421,6 +421,11 @@ public:
     bool Load(std::istream&, std::string&);
 };
 
+class MemoryView {
+public:
+    virtual u8 Read(u16) = 0;
+    virtual void Write(u16, u8) = 0;
+};
 
 }
 

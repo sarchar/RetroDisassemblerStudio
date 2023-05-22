@@ -1,13 +1,16 @@
 #pragma once
 
+#include <memory>
+
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
 
 namespace NES {
 
+class CartridgeView;
 class System;
 
-class Cartridge {
+class Cartridge : public std::enable_shared_from_this<Cartridge> {
 public:
     struct {
         u8 num_prg_rom_banks;
@@ -35,9 +38,13 @@ public:
     std::shared_ptr<MemoryRegion>      GetMemoryRegion(GlobalMemoryLocation const&);
     std::shared_ptr<MemoryRegion>      GetMemoryRegionByIndex(int);
 
+    std::shared_ptr<MemoryView>        CreateMemoryView();
+
     u16 GetResetVectorBank();
 
     void NoteReferences();
+
+    u8 ReadProgramRom(int, u16);
 
     bool Save(std::ostream&, std::string&);
     bool Load(std::istream&, std::string&, std::shared_ptr<System>&);
@@ -48,6 +55,22 @@ private:
 
     std::vector<std::shared_ptr<ProgramRomBank>>   program_rom_banks;
     std::vector<std::shared_ptr<CharacterRomBank>> character_rom_banks;
+};
+
+class CartridgeView : public MemoryView {
+public:
+    CartridgeView(std::shared_ptr<Cartridge> const&);
+    ~CartridgeView();
+
+    u8 Read(u16) override;
+    void Write(u16, u8) override;
+
+    friend class Cartridge;
+
+private:
+    std::shared_ptr<Cartridge> cartridge;
+    int prg_rom_bank_low;
+    int prg_rom_bank_high;
 };
 
 }

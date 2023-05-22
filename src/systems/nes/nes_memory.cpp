@@ -1242,9 +1242,23 @@ bool MemoryObject::Load(std::istream& is, std::string& errmsg)
     return true;
 }
 
-u8 MemoryRegion::ReadByte(GlobalMemoryLocation const& where)
+u8 MemoryRegion::ReadByte(int offset)
 {
-    return 0;
+    int region_offset = ConvertToRegionOffset(offset);
+    auto& memory_object = object_refs[region_offset];
+
+    // TODO might be worth having this cached in a new table object_refs_offsets
+    int obj_offset = 0;
+    while(region_offset > 0 && object_refs[region_offset - 1] == memory_object) {
+        region_offset -= 1;
+        obj_offset += 1;
+    };
+
+    if(memory_object->type == MemoryObject::TYPE_STRING) {
+        return memory_object->str.data[obj_offset];
+    } else {
+        return ((u8*)&memory_object->bval)[obj_offset];
+    }
 }
 
 bool MemoryRegion::Save(std::ostream& os, std::string& errmsg)

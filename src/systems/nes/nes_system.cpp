@@ -1061,4 +1061,39 @@ void System::NoteReferences()
     cartridge->NoteReferences();
 }
 
+shared_ptr<MemoryView> System::CreateMemoryView()
+{
+    return make_shared<SystemView>(shared_from_this());
+}
+
+SystemView::SystemView(shared_ptr<BaseSystem> const& _system)
+{
+    system = dynamic_pointer_cast<System>(_system);
+
+    cartridge_view = system->cartridge->CreateMemoryView();
+}
+
+SystemView::~SystemView()
+{
+}
+
+u8 SystemView::Read(u16 address)
+{
+    if(address < 0x6000) {
+        assert(false); 
+        return 0;
+    } else {
+        return cartridge_view->Read(address);
+    }
+}
+
+void SystemView::Write(u16 address, u8 value)
+{
+    if(address < 0x6000) {
+        assert(false);
+    } else {
+        cartridge_view->Write(address, value);
+    }
+}
+
 }

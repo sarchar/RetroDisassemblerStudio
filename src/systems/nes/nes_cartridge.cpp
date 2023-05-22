@@ -255,4 +255,40 @@ void Cartridge::NoteReferences()
     }
 }
 
+u8 Cartridge::ReadProgramRom(int bank, u16 address)
+{
+    auto memory_region = program_rom_banks[bank];
+    return memory_region->ReadByte(address);
+}
+
+shared_ptr<MemoryView> Cartridge::CreateMemoryView()
+{
+    return make_shared<CartridgeView>(shared_from_this());
+}
+
+CartridgeView::CartridgeView(std::shared_ptr<Cartridge> const& _cartridge)
+    : cartridge(_cartridge)
+{
+    prg_rom_bank_low = 0;
+    prg_rom_bank_high = cartridge->GetResetVectorBank();
+}
+
+CartridgeView::~CartridgeView()
+{
+}
+
+u8 CartridgeView::Read(u16 address)
+{
+    if(address < 0xC000) {
+        return cartridge->ReadProgramRom(prg_rom_bank_low, address);
+    } else {
+        return cartridge->ReadProgramRom(prg_rom_bank_high, address);
+    }
+}
+
+void CartridgeView::Write(u16 address, u8 value)
+{
+    assert(false);
+}
+
 }

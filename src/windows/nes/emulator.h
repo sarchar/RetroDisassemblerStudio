@@ -47,6 +47,7 @@ private:
     bool                         exit_thread = false;
     bool                         thread_exited = false;
     std::shared_ptr<CPU>         cpu;
+    std::shared_ptr<MemoryView>  memory_view;
 };
 
 } //namespace Windows
