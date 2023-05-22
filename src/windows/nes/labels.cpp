@@ -89,6 +89,9 @@ void Labels::RenderContent()
         ImGui::Separator();
     }
 
+    // don't render while disassembling
+    if(system->IsDisassembling()) return;
+
     // rebuild the labels list
     if(force_reiterate) {
         labels.clear();
@@ -99,7 +102,6 @@ void Labels::RenderContent()
         system->IterateLabels(cb);
         force_reiterate = false;
     }
-
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
