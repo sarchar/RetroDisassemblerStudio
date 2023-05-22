@@ -897,6 +897,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
             root = nc->CreateIndexedY(root, ",Y");
         }
 
+        // set the expression root
         expr->Set(root);
 
         // set the expression for memory object at current_selection. it'll show up immediately

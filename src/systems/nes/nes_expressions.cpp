@@ -67,8 +67,7 @@ bool Label::NoteReference(GlobalMemoryLocation const& source) {
         return true;
     }
 
-    // No label, so try looking it up. We can't assume anything about the nth label at the address
-    // now that our old label is gone
+    // look up the labels at the saved address and use the nth one
     if(auto system = MyApp::Instance()->GetProject()->GetSystem<System>()) {
         if(auto memory_object = system->GetMemoryObject(where)) {
             if(memory_object->labels.size()) {
