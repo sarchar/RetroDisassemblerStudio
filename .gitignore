@@ -2,3 +2,6 @@
 build
 roms/*.bin
 roms/*.lst
+*.nes
+*.rdsproj
+ext/*.ttf
