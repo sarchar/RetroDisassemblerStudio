@@ -45,7 +45,8 @@ private:
     bool force_resort     = true;
     bool force_repopulate = true;
 
-    std::shared_ptr<signal_connection_base> changed_connection;
+    signal_connection changed_connection;
+    signal_connection label_deleted_connection;
 
     typedef std::variant<
         GlobalMemoryLocation,

@@ -236,6 +236,20 @@ void Labels::RenderContent()
 
 }
 
+void Labels::CheckInput()
+{
+    auto system = current_system.lock();
+    if(!system) return;
+
+    if(ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        if(selected_row >= 0 && selected_row < labels.size()) {
+            if(auto label = labels[selected_row].lock()) {
+                system->DeleteLabel(label); // will trigger the LabelDeleted() signal
+            }
+        }
+    }
+}
+
 void Labels::LabelCreated(shared_ptr<Label> const& label, bool was_user_created)
 {
     if(show_locals || label->GetString()[0] != '.') {

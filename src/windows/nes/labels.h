@@ -29,6 +29,7 @@ public:
 protected:
     void UpdateContent(double deltaTime) override;
     void RenderContent() override;
+    void CheckInput() override;
 
 private:
     void LabelCreated(std::shared_ptr<Label> const&, bool);

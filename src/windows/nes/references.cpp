@@ -31,30 +31,37 @@ References::References(reference_type const& _reference_to)
     : BaseWindow("NES::References"), reference_to(_reference_to), selected_row(-1)
 {
     SetNoScrollbar(true);
-
-    stringstream ss;
-    ss << "References: ";
-
-    if(auto label = get_if<shared_ptr<NES::Label>>(&reference_to)) {
-        ss << (*label)->GetString();
-        changed_connection = (*label)->reverse_references_changed->connect([this]() {
-            force_repopulate = true;
-        });
-    } else if(auto define = get_if<shared_ptr<NES::Define>>(&reference_to)) {
-        ss << (*define)->GetString();
-        changed_connection = (*define)->reverse_references_changed->connect([this]() {
-            force_repopulate = true;
-        });
-    }
-
-    SetTitle(ss.str());
-    
+   
     // create internal signals
 
     if(auto system = (MyApp::Instance()->GetProject()->GetSystem<System>())) {
         // grab a weak_ptr so we don't have to continually use dynamic_pointer_cast
         current_system = system;
 
+        stringstream ss;
+        ss << "References: ";
+
+        if(auto label = get_if<shared_ptr<NES::Label>>(&reference_to)) {
+            ss << (*label)->GetString();
+            changed_connection = (*label)->reverse_references_changed->connect([this]() {
+                force_repopulate = true;
+            });
+
+            label_deleted_connection = system->label_deleted->connect([this, label](shared_ptr<Label> const& other, int nth) {
+                // if our label is deleted, close the window
+                if(other->GetString() == (*label)->GetString()) {
+                    CloseWindow();
+                }
+            });
+        } else if(auto define = get_if<shared_ptr<NES::Define>>(&reference_to)) {
+            ss << (*define)->GetString();
+            changed_connection = (*define)->reverse_references_changed->connect([this]() {
+                force_repopulate = true;
+            });
+        }
+
+        SetTitle(ss.str());
+ 
         // watch for new labels
         //label_created_connection = 
         //    system->label_created->connect(std::bind(&References::LabelCreated, this, placeholders::_1, placeholders::_2));
