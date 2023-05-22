@@ -99,9 +99,9 @@ void Listing::Follow()
                 }
             } else if(memory_object->type == MemoryObject::TYPE_CODE) {
                 u16 dest = 0;
-                if(memory_object->GetSize() == 1) {
+                if(memory_object->GetSize() == 2) {
                     dest = (u16)memory_object->code.operands[0];
-                } else if(memory_object->GetSize() == 1) {
+                } else if(memory_object->GetSize() == 3) {
                     dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
                 }
                 GoToAddress(dest);

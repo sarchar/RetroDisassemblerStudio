@@ -858,8 +858,9 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
         // can't call GetDefaultLabelForTarget if is_valid is false because target_location might still be
         // set up to point to something in the wrong bank
         int target_offset = 0;
-        string prefix = isrel ? "." : (is16 ? "L_" : "zp_");
-        shared_ptr<Label> label = (is_valid && with_labels) ? GetDefaultLabelForTarget(target_location, false, &target_offset, is16, prefix) : nullptr;
+        bool wide = !(target < 0x100);
+        string prefix = isrel ? "." : (wide ? "L_" : "zp_");
+        shared_ptr<Label> label = (is_valid && with_labels) ? GetDefaultLabelForTarget(target_location, false, &target_offset, wide, prefix) : nullptr;
 
         // now create an expression for the operands
         auto expr = make_shared<Expression>();
@@ -898,7 +899,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
             // (v,X)
             root = nc->CreateIndexedX(root, ",X");
             root = nc->CreateParens("(", root, ")");
-        } else if(am == AM_INDIRECT_X) {
+        } else if(am == AM_INDIRECT_Y) {
             // (v),Y
             root = nc->CreateParens("(", root, ")");
             root = nc->CreateIndexedY(root, ",Y");

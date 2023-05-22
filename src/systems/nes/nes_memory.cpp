@@ -1010,6 +1010,10 @@ string MemoryObject::FormatInstructionField(shared_ptr<Disassembler> disassemble
 
     case MemoryObject::TYPE_CODE:
         ss << disassembler->GetInstruction(code.opcode);
+
+        // For word instructions with an operand address of less than $100, force the word instruction
+        if(GetSize() == 3 && code.operands[1] == 0) ss << ".W";
+
         break;
 
     default:
