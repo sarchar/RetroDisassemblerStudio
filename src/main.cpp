@@ -28,6 +28,7 @@
 #include "windows/baseproject.h"
 #include "windows/rom_loader.h"
 #include "windows/nes/defines.h"
+#include "windows/nes/emulator.h"
 #include "windows/nes/labels.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/regions.h"
@@ -505,6 +506,11 @@ void MyApp::RenderMainMenuBar()
             //!}
             if(ImGui::MenuItem("Defines")) {
                 auto wnd = NES::Windows::Defines::CreateWindow();
+                AddWindow(wnd);
+            }
+
+            if(ImGui::MenuItem("Emulator")) {
+                auto wnd = NES::Windows::Emulator::CreateWindow();
                 AddWindow(wnd);
             }
 

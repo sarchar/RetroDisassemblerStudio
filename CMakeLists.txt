@@ -30,6 +30,7 @@ add_executable(${PROJECT_NAME}
 
                src/systems/system.cpp
                src/systems/nes/nes_cartridge.cpp
+               src/systems/nes/nes_cpu.cpp
                src/systems/nes/nes_defines.cpp
                src/systems/nes/nes_disasm.cpp
                src/systems/nes/nes_expressions.cpp
@@ -44,6 +45,7 @@ add_executable(${PROJECT_NAME}
                src/windows/rom_loader.cpp
 
                src/windows/nes/defines.cpp
+               src/windows/nes/emulator.cpp
                src/windows/nes/labels.cpp
                src/windows/nes/listing.cpp
                src/windows/nes/references.cpp
