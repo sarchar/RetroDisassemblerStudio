@@ -1080,7 +1080,7 @@ SystemView::~SystemView()
 u8 SystemView::Read(u16 address)
 {
     if(address < 0x6000) {
-        assert(false); 
+        cout << "[SystemView::Read] unhandled Read($" << hex << setw(4) << setfill('0') << address << ")" << endl;
         return 0;
     } else {
         return cartridge_view->Read(address);

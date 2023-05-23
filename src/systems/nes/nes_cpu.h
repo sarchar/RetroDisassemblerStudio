@@ -27,9 +27,9 @@ private:
         u8         istep;
         u8         opcode;
         u8         intermediate;
-        u16        addr;
-        u16        addr2;
-        bool       carry_addr;
+        u16        eaddr;
+        //u16        addr2;
+        //bool       carry_addr;
         int const* ops;
     } state;
 
