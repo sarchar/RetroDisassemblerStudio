@@ -33,6 +33,7 @@ void CPU::Reset()
 void CPU::Step()
 {
     if(state.ops == nullptr) {
+        cout << "[CPU::Step] stopped after " << dec << cycle_count << " cycles" << endl;
         cout << "[CPU::Step] invalid opcode $" << hex << setw(2) << setfill('0') << (int)state.opcode << endl;
         assert(false);
     }
@@ -41,7 +42,7 @@ void CPU::Step()
     auto op = *state.ops++;
 
     // set up address line. regs.PC should always be mux item 0
-    u16 address_mux[] = { regs.PC, state.eaddr, (u16)state.intermediate };
+    u16 address_mux[] = { regs.PC, state.eaddr, (u16)state.intermediate, (u16)0x100 + (u16)regs.S };
     u16 address = address_mux[(op & CPU_ADDRESS_mask) >> CPU_ADDRESS_shift];
 
     // set up read/write
@@ -50,7 +51,8 @@ void CPU::Step()
 
     if(write) {
         // set up data line
-        u8 data_mux[] = { regs.A, regs.X, regs.Y, 0, 0, 0, 0, 0 };
+        u8 data_mux[] = { regs.A, regs.X, regs.Y, regs.P, state.intermediate, 
+            (u8)regs.PC, (u8)(regs.PC >> 8), 0 };
         data = data_mux[(op & CPU_DATA_BUS_mask) >> CPU_DATA_BUS_shift];
         Write(address, data);
     } else {
@@ -64,6 +66,10 @@ void CPU::Step()
     // check inc INTM
     if((op & CPU_INCINTM_mask) == CPU_INCINTM) state.intermediate += 1;
 
+    // check dec and inc stack
+    if((op & CPU_INCS_mask) == CPU_INCS) regs.S += 1;
+    if((op & CPU_DECS_mask) == CPU_DECS) regs.S -= 1;
+
     // setup the ALU
     auto alu_op = (op & CPU_ALU_OP_mask);
     u8 alu_out = 0xEE;
@@ -71,7 +77,8 @@ void CPU::Step()
 
     if(alu_op != CPU_ALU_OP_IDLE) { // optimization
         u8 alu_a_mux[] = { regs.A, regs.X, regs.Y, regs.S, 
-            (u8)(regs.PC & 0x00FF), (u8)(regs.PC >> 8), (u8)(state.eaddr >> 8), regs.P };
+            (u8)(regs.PC & 0x00FF), (u8)(regs.PC >> 8), (u8)(state.eaddr >> 8), regs.P,
+            state.intermediate };
         alu_a = alu_a_mux[(op & CPU_ALU_A_mask) >> CPU_ALU_A_shift];
 
         u8 alu_b_mux[] = { 0, (u8)(state.eaddr & 0x00FF), state.intermediate, data, 0, 0, 0, 0, 
@@ -112,6 +119,26 @@ void CPU::Step()
             alu_out = alu_a & ~alu_b;
             break;
 
+        case CPU_ALU_OP_ASL:
+            alu_c = alu_a >> 7;
+            alu_out = alu_a << 1;
+            break;
+
+        case CPU_ALU_OP_LSR:
+            alu_c = alu_a & 0x01;
+            alu_out = alu_a >> 1;
+            break;
+
+        case CPU_ALU_OP_ROL:
+            alu_out = (alu_a << 1) | alu_c;
+            alu_c = alu_a >> 7;
+            break;
+
+        case CPU_ALU_OP_ROR:
+            alu_out = (alu_a >> 1) | (alu_c << 7);
+            alu_c = alu_a & 0x01;
+            break;
+
         default:
             assert(false);
             return;
@@ -134,6 +161,7 @@ void CPU::Step()
 
     // check latch opcode
     if((op & CPU_LATCH_OPCODE_mask) == CPU_LATCH_OPCODE) {
+        cout << "opcode: " << hex << uppercase << setw(2) << setfill('0') << (int)ibus << endl;
         state.opcode = (u8)ibus;
         state.ops    = OpTable[state.opcode];
         state.istep  = 0;
