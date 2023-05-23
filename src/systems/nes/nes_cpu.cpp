@@ -74,7 +74,7 @@ void CPU::Step()
             (u8)(regs.PC & 0x00FF), (u8)(regs.PC >> 8), (u8)(state.eaddr >> 8), regs.P };
         alu_a = alu_a_mux[(op & CPU_ALU_A_mask) >> CPU_ALU_A_shift];
 
-        u8 alu_b_mux[] = { 0, (u8)(state.eaddr & 0x00FF), state.intermediate, 0, 0, 0, 0, 0, 
+        u8 alu_b_mux[] = { 0, (u8)(state.eaddr & 0x00FF), state.intermediate, data, 0, 0, 0, 0, 
             CPU_FLAG_C, CPU_FLAG_D, CPU_FLAG_I, CPU_FLAG_V, CPU_FLAG_Z, CPU_FLAG_N, 0, 0 };
         alu_b = alu_b_mux[(op & CPU_ALU_B_mask) >> CPU_ALU_B_shift];
 
@@ -89,12 +89,23 @@ void CPU::Step()
             alu_c = tmp > 0xFF ? 1 : 0;
             break;
         }
+        case CPU_ALU_OP_SBC:
+        {
+            u16 tmp = (u16)alu_a - (u16)alu_b - (u16)(alu_c ? 0 : 1);
+            alu_out = (u8)tmp;
+            alu_c = tmp > 0xFF ? 0 : 1;
+            break;
+        }
         case CPU_ALU_OP_AND:
             alu_out = alu_a & alu_b;
             break;
 
         case CPU_ALU_OP_OR:
             alu_out = alu_a | alu_b;
+            break;
+
+        case CPU_ALU_OP_EOR:
+            alu_out = alu_a ^ alu_b;
             break;
 
         case CPU_ALU_OP_CLRBIT:
