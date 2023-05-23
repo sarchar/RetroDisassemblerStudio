@@ -30,7 +30,7 @@ private:
         u16        eaddr;
         //u16        addr2;
         //bool       carry_addr;
-        int const* ops;
+        u64 const* ops;
     } state;
 
     u64    cycle_count;

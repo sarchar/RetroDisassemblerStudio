@@ -41,7 +41,7 @@ void CPU::Step()
     auto op = *state.ops++;
 
     // set up address line. regs.PC should always be mux item 0
-    u16 address_mux[] = { regs.PC, state.eaddr };
+    u16 address_mux[] = { regs.PC, state.eaddr, (u16)state.intermediate };
     u16 address = address_mux[(op & CPU_ADDRESS_mask) >> CPU_ADDRESS_shift];
 
     // set up read/write
@@ -61,17 +61,20 @@ void CPU::Step()
     // check inc PC
     if((op & CPU_INCPC_mask) == CPU_INCPC) regs.PC += 1;
 
+    // check inc INTM
+    if((op & CPU_INCINTM_mask) == CPU_INCINTM) state.intermediate += 1;
+
     // setup the ALU
-    int alu_op = (op & CPU_ALU_OP_mask);
+    auto alu_op = (op & CPU_ALU_OP_mask);
     u8 alu_out = 0xEE;
     u8 alu_a, alu_b, alu_c;
 
     if(alu_op != CPU_ALU_OP_IDLE) { // optimization
         u8 alu_a_mux[] = { regs.A, regs.X, regs.Y, regs.S, 
-            (u8)(regs.PC & 0x00FF), (u8)(regs.PC >> 8), state.intermediate, regs.P };
+            (u8)(regs.PC & 0x00FF), (u8)(regs.PC >> 8), (u8)(state.eaddr >> 8), regs.P };
         alu_a = alu_a_mux[(op & CPU_ALU_A_mask) >> CPU_ALU_A_shift];
 
-        u8 alu_b_mux[] = { 0, (u8)(state.eaddr & 0x00FF), 0, 0, 0, 0, 0, 0, 
+        u8 alu_b_mux[] = { 0, (u8)(state.eaddr & 0x00FF), state.intermediate, 0, 0, 0, 0, 0, 
             CPU_FLAG_C, CPU_FLAG_D, CPU_FLAG_I, CPU_FLAG_V, CPU_FLAG_Z, CPU_FLAG_N, 0, 0 };
         alu_b = alu_b_mux[(op & CPU_ALU_B_mask) >> CPU_ALU_B_shift];
 
@@ -157,6 +160,11 @@ void CPU::Step()
         regs.PC = (regs.PC & 0x00FF) | ((u16)ibus << 8);
     }
 
+    // check EADDR latch
+    if((op & CPU_LATCH_EADDR_mask) == CPU_LATCH_EADDR) {
+        state.eaddr = (u16)ibus;
+    }
+
     // check EADDR_LO latch
     if((op & CPU_LATCH_EADDR_LO_mask) == CPU_LATCH_EADDR_LO) {
         state.eaddr = (state.eaddr & 0xFF00) | (u16)ibus;
@@ -165,6 +173,21 @@ void CPU::Step()
     // check EADDR_HI latch
     if((op & CPU_LATCH_EADDR_HI_mask) == CPU_LATCH_EADDR_HI) {
         state.eaddr = (state.eaddr & 0x00FF) | ((u16)ibus << 8);
+    }
+
+    // check EADDR_HI_EXTC latch. bypass IBUS (take data directly)
+    // and skip the next instruction if there's no ALU carry
+    if((op & CPU_LATCH_EADDR_HI_EXTC_mask) == CPU_LATCH_EADDR_HI_EXT) {
+        state.eaddr = (state.eaddr & 0x00FF) | ((u16)data << 8);
+        state.intermediate = alu_c;
+        if(!alu_c) state.ops++;
+    }
+
+    // check EADDR_HI_EXT latch. same as the EADDR_HI_EXTC but always
+    // executes the high byte add following this instruction
+    if((op & CPU_LATCH_EADDR_HI_EXT_mask) == CPU_LATCH_EADDR_HI_EXT) {
+        state.eaddr = (state.eaddr & 0x00FF) | ((u16)data << 8);
+        state.intermediate = alu_c;
     }
 
     // check REGP latch
@@ -190,6 +213,11 @@ void CPU::Step()
     // check REGS latch
     if((op & CPU_LATCH_REGS_mask) == CPU_LATCH_REGS) {
         regs.S = ibus;
+    }
+
+    // check INTM latch
+    if((op & CPU_LATCH_INTM_mask) == CPU_LATCH_INTM) {
+        state.intermediate = ibus;
     }
 
 /*
