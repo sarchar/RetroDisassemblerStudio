@@ -15,7 +15,6 @@ namespace NES {
 CPU::CPU(read_func_t const& read_func, write_func_t const& write_func)
     : Read(read_func), Write(write_func)
 {
-    Reset();
 }
 
 CPU::~CPU()
@@ -24,6 +23,7 @@ CPU::~CPU()
 
 void CPU::Reset()
 {
+    state.nmi = 0;
     state.ops = CpuReset;
     state.istep = 0;
     regs.PC = 0xFFFC;
@@ -64,6 +64,9 @@ bool CPU::Step()
 
     // check inc PC
     if((op & CPU_INCPC_mask) == CPU_INCPC) regs.PC += 1;
+
+    // check inc EADDR
+    if((op & CPU_INCEADDR_mask) == CPU_INCEADDR) state.eaddr += 1;
 
     // check inc INTM
     if((op & CPU_INCINTM_mask) == CPU_INCINTM) state.intermediate += 1;
@@ -200,10 +203,12 @@ bool CPU::Step()
     }
 
     // check latch PC JMP
+    // PC JMP takes the high byte from the data bus plus the low byte from EADDR or intermediate
     if((op & CPU_LATCH_PC_JMP_mask) == CPU_LATCH_PC_JMP) {
-        // PC JMP takes the high byte from the data bus plus the low byte from EADDR
         regs.PC = (state.eaddr & 0x00FF) | ((u16)ibus << 8);
-    } 
+    } else if((op & CPU_LATCH_PC_JMPI_mask) == CPU_LATCH_PC_JMPI) {
+        regs.PC = (u16)state.intermediate | ((u16)ibus << 8);
+    }
 
     // perform a relative branch
     if((op & CPU_LATCH_PC_BRANCH) == CPU_LATCH_PC_BRANCH) {
@@ -315,6 +320,16 @@ bool CPU::Step()
 
     state.istep++;
     cycle_count++;
+
+    // check for NMI before opcode fetch
+    // TODO look up when the NMI happens.. I think it's before opcode fetch, not after
+    // TODO NMI can hijack BRK if done before cycle 4
+    if(state.nmi && (state.ops && *state.ops == OPCODE_FETCH)) {
+        state.nmi     = 0;
+        state.eaddr   = 0xFFFA;
+        state.ops     = CpuNMI;
+        state.istep   = 0;
+    }
 
 	return ret;
 }

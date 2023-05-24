@@ -49,7 +49,9 @@ Emulator::Emulator()
     if(auto system = MyApp::Instance()->GetProject()->GetSystem<System>()) {
         current_system = system;
 
-        ppu = make_shared<PPU>();
+        ppu = make_shared<PPU>([this]() {
+            cpu->Nmi();
+        });
 
         memory_view = system->CreateMemoryView(ppu->CreateMemoryView());
 
@@ -64,6 +66,8 @@ Emulator::Emulator()
 
         current_state = State::PAUSED;
     }
+
+    Reset();
 }
 
 Emulator::~Emulator()
@@ -158,7 +162,7 @@ void Emulator::RenderContent()
     ImGui::SameLine();
     if(ImGui::Button("Reset")) {
         if(current_state == State::PAUSED) {
-            cpu->Reset();
+            Reset();
         }
     }
 
@@ -217,6 +221,12 @@ void Emulator::RenderContent()
 
 void Emulator::CheckInput()
 {
+}
+
+void Emulator::Reset()
+{
+    cpu->Reset();
+    ppu->Reset();
 }
 
 bool Emulator::SingleCycle()

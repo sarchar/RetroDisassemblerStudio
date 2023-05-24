@@ -24,6 +24,7 @@ public:
 
     void Reset();
     bool Step(); // return true on instruction decode cycle
+    inline void Nmi() { state.nmi = 1; }
 
     inline u64 GetNextUC()     const { auto ptr = state.ops; if(!ptr) return (u64)-1; else return *ptr; }
     inline u16 GetOpcode()     const { return state.opcode; }
@@ -44,6 +45,7 @@ private:
     } regs;
 
     struct {
+        u8         nmi;
         u8         istep;
         u8         opcode;
         u8         intermediate;

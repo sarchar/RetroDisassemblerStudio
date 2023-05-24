@@ -42,6 +42,7 @@ protected:
     void CheckInput() override;
 
 private:
+    void Reset();
     bool SingleCycle();
     void EmulationThread();
 
