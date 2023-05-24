@@ -232,8 +232,8 @@ void Emulator::Reset()
 bool Emulator::SingleCycle()
 {
     bool ret = cpu->Step();
-    // PPU clock is 4x faster than CPU clock
-    ppu->Step();
+
+    // PPU clock is /4 master clock and CPU is /12 master clock
     ppu->Step();
     ppu->Step();
     ppu->Step();
