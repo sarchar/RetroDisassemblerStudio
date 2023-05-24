@@ -38,6 +38,7 @@ add_executable(${PROJECT_NAME}
                src/systems/nes/nes_listing.cpp
                src/systems/nes/nes_memory.cpp
                src/systems/nes/nes_project.cpp
+               src/systems/nes/nes_ppu.cpp
                src/systems/nes/nes_system.cpp
 
                src/windows/baseproject.cpp

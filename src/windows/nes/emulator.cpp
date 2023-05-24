@@ -3,6 +3,8 @@
 #include <memory>
 #include <thread>
 
+#include <GL/gl3w.h>
+
 #include "magic_enum.hpp"
 
 #include "main.h"
@@ -10,6 +12,7 @@
 
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_project.h"
+#include "systems/nes/nes_ppu.h"
 #include "systems/nes/nes_system.h"
 #include "windows/nes/emulator.h"
 
@@ -28,23 +31,33 @@ Emulator::Emulator()
 {
     SetTitle("Emulator :: Paused");
 
+    framebuffer = (u32*)new u8[4 * 256 * 256];
+    for(u32 i = 0; i < 256 * 256; i++) {
+        framebuffer[i] = 0xFF000000; // 0xAARRGGBB
+    }
+
+    GLuint _display_texture;
+    glGenTextures(1, &_display_texture);
+    glBindTexture(GL_TEXTURE_2D, _display_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    display_texture = (void*)(intptr_t)_display_texture;
+
     if(auto system = MyApp::Instance()->GetProject()->GetSystem<System>()) {
         current_system = system;
 
-        memory_view = system->CreateMemoryView();
+        ppu = make_shared<PPU>();
+
+        memory_view = system->CreateMemoryView(ppu->CreateMemoryView());
 
         cpu = make_shared<CPU>(
             std::bind(&MemoryView::Read, memory_view, placeholders::_1),
             std::bind(&MemoryView::Write, memory_view, placeholders::_1, placeholders::_2)
-            //[](u16 address)->u8 {
-            //    cout << "read(" << hex << setw(4) << setfill('0') << address << ") = $EA" << endl;
-            //    return 0xEA;
-            //},
-
-            //[](u16 address, u8 value)->void {
-            //    cout << "write(" << hex << setw(4) << setfill('0') << address << ", " << value << ")" << endl;
-            //}
         );
+
 
         // start the emulation thread
         emulation_thread = make_shared<thread>(std::bind(&Emulator::EmulationThread, this));
@@ -57,6 +70,11 @@ Emulator::~Emulator()
 {
 	exit_thread = true;
     if(emulation_thread) emulation_thread->join();
+
+    GLuint _display_texture = (GLuint)(intptr_t)display_texture;
+    glDeleteTextures(1, &_display_texture);
+
+    delete [] (u8*)framebuffer;
 }
 
 void Emulator::UpdateContent(double deltaTime)
@@ -74,6 +92,29 @@ void Emulator::UpdateContent(double deltaTime)
         last_cycle_time = current_time;
         last_cycle_count = cycle_count;
     }
+
+    static int c = 0;
+    int color = 0xFF000000 | c;
+    c++;
+    int cx = 0;
+    int cy = 0;
+    int sz = 5;
+    for(int i = 0; i < 0x800; i++) {
+        u8 v = memory_view->Read(i);
+        // render 8x8
+        for(int i = 0; i < sz; i++) {
+            int y = cy + i;
+            for(int j = 0; j < sz; j++) {
+                int x = cx + j;
+                framebuffer[y * 256 + x] = 0xFF000000 | (0x010101 * (u32)v);
+            }
+        }
+        cx += sz;
+        if(cx >= 256) {
+            cx = 0;
+            cy += sz;
+        }
+    }
 }
 
 void Emulator::RenderContent()
@@ -81,6 +122,11 @@ void Emulator::RenderContent()
     auto system = current_system.lock();
     if(!system) return;
     auto disassembler = system->GetDisassembler();
+
+    auto size = ImGui::GetWindowSize();
+    size.x /= 2;
+    ImGui::PushItemWidth(size.x / 2);
+    ImGui::BeginChild("CPU view", size);
 
     if(ImGui::Button("Step Cycle")) {
         if(current_state == State::PAUSED) {
@@ -116,7 +162,6 @@ void Emulator::RenderContent()
         }
     }
 
-    ImGui::SameLine();
     ImGui::Text("%s :: %f Hz", magic_enum::enum_name(current_state).data(), cycles_per_sec);
 
     ImGui::Separator();
@@ -152,10 +197,38 @@ void Emulator::RenderContent()
     if(p & CPU_FLAG_Z) flags[8] = 'Z';
     if(p & CPU_FLAG_C) flags[9] = 'C';
     ImGui::Text("%s", flags);
+
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+    ImGui::PushItemWidth(size.x / 2);
+    ImGui::BeginChild("PPU view", size);
+
+    // update the opengl texture
+    GLuint _display_texture = (GLuint)(intptr_t)display_texture;
+    glBindTexture(GL_TEXTURE_2D, _display_texture);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    ImGui::Image(display_texture, ImVec2(256, 256));
+
+    ImGui::EndChild();
 }
 
 void Emulator::CheckInput()
 {
+}
+
+bool Emulator::SingleCycle()
+{
+    bool ret = cpu->Step();
+    // PPU clock is 4x faster than CPU clock
+    ppu->Step();
+    ppu->Step();
+    ppu->Step();
+    ppu->Step();
+
+    return ret;
 }
 
 void Emulator::EmulationThread()
@@ -167,12 +240,12 @@ void Emulator::EmulationThread()
             break;
 
         case State::STEP_CYCLE:
-            cpu->Step();
+            SingleCycle();
             current_state = State::PAUSED;
             break;
 
         case State::STEP_INSTRUCTION:
-            while(current_state == State::STEP_INSTRUCTION && !cpu->Step()) ;
+            while(current_state == State::STEP_INSTRUCTION && !SingleCycle()) ;
             if(current_state == State::STEP_INSTRUCTION) {
                 current_state = State::PAUSED;
             }
@@ -180,7 +253,7 @@ void Emulator::EmulationThread()
 
         case State::RUNNING:
             while(!exit_thread && current_state == State::RUNNING) {
-                cpu->Step();
+                SingleCycle();
             }
             break;
 

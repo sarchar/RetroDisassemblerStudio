@@ -12,6 +12,7 @@
 namespace NES {
 
 class GlobalMemoryLocation;
+class PPU;
 
 namespace Windows {
 
@@ -41,6 +42,7 @@ protected:
     void CheckInput() override;
 
 private:
+    bool SingleCycle();
     void EmulationThread();
 
     std::weak_ptr<System>        current_system;
@@ -49,11 +51,15 @@ private:
     bool                         exit_thread = false;
     bool                         thread_exited = false;
     std::shared_ptr<CPU>         cpu;
+    std::shared_ptr<PPU>         ppu;
     std::shared_ptr<MemoryView>  memory_view;
 
     u64 last_cycle_count = 0;
     std::chrono::time_point<std::chrono::steady_clock> last_cycle_time;
     double cycles_per_sec;
+
+    u32*                         framebuffer;
+    void*                        display_texture;
 };
 
 } //namespace Windows
