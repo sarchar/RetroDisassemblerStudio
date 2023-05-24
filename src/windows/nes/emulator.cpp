@@ -103,6 +103,8 @@ void Emulator::RenderContent()
         }
     }
 
+    ImGui::Separator();
+
     u64 next_uc = cpu->GetNextUC();
     // stop the system clock on invalid opcodes
     if(next_uc == (u64)-1) {
@@ -116,6 +118,10 @@ void Emulator::RenderContent()
         ImGui::Text("Current inst: %s %s", inst.c_str(), operand.c_str());
         ImGui::Text("Next uc: 0x%X", next_uc);
     }
+
+    ImGui::Separator();
+
+    ImGui::Text("PC:$%04X", cpu->GetPC());
 }
 
 void Emulator::CheckInput()

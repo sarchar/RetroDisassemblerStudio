@@ -306,7 +306,7 @@ typedef u64 CPU_INST;
 #define CPU_LATCH_INTM       ON(CPU_LATCH_INTM_shift)
 
 // 3 bits: data bus
-#define CPU_DATA_BUS_shift   (CPU_LATCH_REGY_shift + CPU_LATCH_REGY_bits)
+#define CPU_DATA_BUS_shift   (CPU_LATCH_INTM_shift + CPU_LATCH_INTM_bits)
 #define CPU_DATA_BUS_bits    3
 #define CPU_DATA_BUS_mask    (7ULL << CPU_DATA_BUS_shift)
 #define CPU_DATA_BUS_REGA    (0ULL << CPU_DATA_BUS_shift)
@@ -523,6 +523,39 @@ A(AND);
 A(EOR);
 A(ORA);
 
+#undef A
+
+#define INCDEC(m,M) \
+    static CPU_INST CpuOpINC_##m[]   = {                                           \
+        M,                                                                         \
+        /* read memory */                                                          \
+        CPU_ADDRESS_BUS_EADDR | CPU_READ | CPU_IBUS_DATA | CPU_LATCH_INTM,         \
+        /* write back memory, perform operation */                                 \
+        CPU_ADDRESS_BUS_EADDR | CPU_WRITE | CPU_DATA_BUS_INTM                      \
+            | CPU_ALU_OP_ADC | CPU_ALU_A_INTM | CPU_ALU_B_ZERO | CPU_ALU_C_ONE     \
+            | CPU_IBUS_ALU | CPU_LATCH_INTM,                                       \
+        /* write back memory */                                                    \
+        CPU_ADDRESS_BUS_EADDR | CPU_WRITE | CPU_DATA_BUS_INTM,                     \
+        OPCODE_FETCH };                                                            \
+    static CPU_INST CpuOpDEC_##m[]   = {                                           \
+        M,                                                                         \
+        /* read memory */                                                          \
+        CPU_ADDRESS_BUS_EADDR | CPU_READ | CPU_IBUS_DATA | CPU_LATCH_INTM,         \
+        /* write back memory, perform operation */                                 \
+        CPU_ADDRESS_BUS_EADDR | CPU_WRITE | CPU_DATA_BUS_INTM                      \
+            | CPU_ALU_OP_SBC | CPU_ALU_A_INTM | CPU_ALU_B_ZERO | CPU_ALU_C_ZERO    \
+            | CPU_IBUS_ALU | CPU_LATCH_INTM,                                       \
+        /* write back memory */                                                    \
+        CPU_ADDRESS_BUS_EADDR | CPU_WRITE | CPU_DATA_BUS_INTM,                     \
+        OPCODE_FETCH };                                                            \
+
+INCDEC(zp,ZP);
+INCDEC(zpx,ZP_X);
+INCDEC(abs,ABS);
+INCDEC(absx,ABS_X_SLOW);
+
+#undef INCDEC
+
 static CPU_INST CpuOpBIT_zp[]   = { 
     ZP, 
     READMEM_ALU | CPU_ALU_OP_BIT | CPU_ALU_A_REGA, 
@@ -535,7 +568,6 @@ static CPU_INST CpuOpBIT_abs[]  = {
     OPCODE_FETCH 
 };
 
-#undef A
 #undef READMEM_ALU
 
 #define RMW(x) \
@@ -712,21 +744,21 @@ static CPU_INST const* OpTable[256] = {
     /* 0xB8 */ CpuOpCLV,            /* 0xB9 */ CpuOpLDA_absy,       /* 0xBA */ CpuOpTSX,            /* 0xBB */ CpuOpUnimpl,
     /* 0xBC */ CpuOpLDY_absx,       /* 0xBD */ CpuOpLDA_absx,       /* 0xBE */ CpuOpLDX_absy,       /* 0xBF */ CpuOpUnimpl,
     /* 0xC0 */ CpuOpCPY_imm,        /* 0xC1 */ CpuOpCMP_indx,       /* 0xC2 */ CpuOpUnimpl,         /* 0xC3 */ CpuOpUnimpl,
-    /* 0xC4 */ CpuOpCPY_zp,         /* 0xC5 */ CpuOpCMP_zp,         /* 0xC6 */ CpuOpUnimpl,         /* 0xC7 */ CpuOpUnimpl,
+    /* 0xC4 */ CpuOpCPY_zp,         /* 0xC5 */ CpuOpCMP_zp,         /* 0xC6 */ CpuOpDEC_zp,         /* 0xC7 */ CpuOpUnimpl,
     /* 0xC8 */ CpuOpINY,            /* 0xC9 */ CpuOpCMP_imm,        /* 0xCA */ CpuOpDEX,            /* 0xCB */ CpuOpUnimpl,
-    /* 0xCC */ CpuOpCPY_abs,        /* 0xCD */ CpuOpCMP_abs,        /* 0xCE */ CpuOpUnimpl,         /* 0xCF */ CpuOpUnimpl,
+    /* 0xCC */ CpuOpCPY_abs,        /* 0xCD */ CpuOpCMP_abs,        /* 0xCE */ CpuOpDEC_abs,        /* 0xCF */ CpuOpUnimpl,
     /* 0xD0 */ CpuOpBNE,            /* 0xD1 */ CpuOpCMP_indy,       /* 0xD2 */ CpuOpUnimpl,         /* 0xD3 */ CpuOpUnimpl,
-    /* 0xD4 */ CpuOpUnimpl,         /* 0xD5 */ CpuOpCMP_zpx,        /* 0xD6 */ CpuOpUnimpl,         /* 0xD7 */ CpuOpUnimpl,
+    /* 0xD4 */ CpuOpUnimpl,         /* 0xD5 */ CpuOpCMP_zpx,        /* 0xD6 */ CpuOpDEC_zpx,        /* 0xD7 */ CpuOpUnimpl,
     /* 0xD8 */ CpuOpCLD,            /* 0xD9 */ CpuOpCMP_absy,       /* 0xDA */ CpuOpUnimpl,         /* 0xDB */ CpuOpUnimpl,
-    /* 0xDC */ CpuOpUnimpl,         /* 0xDD */ CpuOpCMP_absx,       /* 0xDE */ CpuOpUnimpl,         /* 0xDF */ CpuOpUnimpl,
+    /* 0xDC */ CpuOpUnimpl,         /* 0xDD */ CpuOpCMP_absx,       /* 0xDE */ CpuOpDEC_absx,       /* 0xDF */ CpuOpUnimpl,
     /* 0xE0 */ CpuOpCPX_imm,        /* 0xE1 */ CpuOpSBC_indx,       /* 0xE2 */ CpuOpUnimpl,         /* 0xE3 */ CpuOpUnimpl,
-    /* 0xE4 */ CpuOpCPX_zp,         /* 0xE5 */ CpuOpSBC_zp,         /* 0xE6 */ CpuOpUnimpl,         /* 0xE7 */ CpuOpUnimpl,
+    /* 0xE4 */ CpuOpCPX_zp,         /* 0xE5 */ CpuOpSBC_zp,         /* 0xE6 */ CpuOpINC_zp,         /* 0xE7 */ CpuOpUnimpl,
     /* 0xE8 */ CpuOpINX,            /* 0xE9 */ CpuOpSBC_imm,        /* 0xEA */ CpuOpNOP,            /* 0xEB */ CpuOpUnimpl,
-    /* 0xEC */ CpuOpCPX_abs,        /* 0xED */ CpuOpSBC_abs,        /* 0xEE */ CpuOpUnimpl,         /* 0xEF */ CpuOpUnimpl,
+    /* 0xEC */ CpuOpCPX_abs,        /* 0xED */ CpuOpSBC_abs,        /* 0xEE */ CpuOpINC_abs,        /* 0xEF */ CpuOpUnimpl,
     /* 0xF0 */ CpuOpBEQ,            /* 0xF1 */ CpuOpSBC_indy,       /* 0xF2 */ CpuOpUnimpl,         /* 0xF3 */ CpuOpUnimpl,
-    /* 0xF4 */ CpuOpUnimpl,         /* 0xF5 */ CpuOpSBC_zpx,        /* 0xF6 */ CpuOpUnimpl,         /* 0xF7 */ CpuOpUnimpl,
+    /* 0xF4 */ CpuOpUnimpl,         /* 0xF5 */ CpuOpSBC_zpx,        /* 0xF6 */ CpuOpINC_zpx,        /* 0xF7 */ CpuOpUnimpl,
     /* 0xF8 */ CpuOpSED,            /* 0xF9 */ CpuOpSBC_absy,       /* 0xFA */ CpuOpUnimpl,         /* 0xFB */ CpuOpUnimpl,
-    /* 0xFC */ CpuOpUnimpl,         /* 0xFD */ CpuOpSBC_absx,       /* 0xFE */ CpuOpUnimpl,         /* 0xFF */ CpuOpUnimpl,
+    /* 0xFC */ CpuOpUnimpl,         /* 0xFD */ CpuOpSBC_absx,       /* 0xFE */ CpuOpINC_absx,       /* 0xFF */ CpuOpUnimpl,
 };
 
 

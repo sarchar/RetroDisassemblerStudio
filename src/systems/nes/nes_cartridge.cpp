@@ -288,7 +288,8 @@ u8 CartridgeView::Read(u16 address)
 
 void CartridgeView::Write(u16 address, u8 value)
 {
-    assert(false);
+    cout << "[CartridgeView::Write] unhandled write $" << hex << uppercase << setw(2) << setfill('0') << (int)value
+         << " to $" << setw(4) << address << endl;
 }
 
 }

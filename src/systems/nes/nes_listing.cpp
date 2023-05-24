@@ -323,6 +323,9 @@ int ListingItemPrimary::EditOperandExpressionTextCallback(void* _data)
     return 0;
 }
 
+// this thread was full of useful information that made this suggestion popup possible
+// still has some quirks though.
+// https://github.com/ocornut/imgui/issues/718
 void ListingItemPrimary::RenderEditOperandExpression(shared_ptr<System>& system)
 {
     ImGuiInputTextFlags input_flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackAlways;
