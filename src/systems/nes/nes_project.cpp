@@ -15,6 +15,7 @@
 #include "systems/nes/nes_system.h"
 #include "util.h"
 #include "windows/nes/defines.h"
+#include "windows/nes/emulator.h"
 #include "windows/nes/labels.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/regions.h"
@@ -178,6 +179,9 @@ void Project::CreateDefaultWorkspace()
     wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
     app->AddWindow(wnd);
 
+    wnd = Windows::Emulator::CreateWindow();
+    wnd->SetInitialDock(BaseWindow::DOCK_BOTTOM);
+    app->AddWindow(wnd);
 }
 
 bool Project::Save(std::ostream& os, std::string& errmsg) 

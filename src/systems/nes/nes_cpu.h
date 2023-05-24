@@ -15,7 +15,12 @@ public:
     ~CPU();
 
     void Reset();
-    void Step();
+    bool Step(); // return true on instruction decode cycle
+
+    u64 GetNextUC()   const { auto ptr = state.ops; if(!ptr) return (u64)-1; else return *ptr; }
+    u16 GetOpcode()   const { return state.opcode; }
+    u16 GetOpcodePC() const { return state.inst_pc; }
+    u16 GetPC()       const { return regs.PC; }
 
 private:
     struct {
@@ -29,6 +34,8 @@ private:
         u8         intermediate;
         u16        eaddr;
         u64 const* ops;
+
+        u16        inst_pc;
     } state;
 
     u64    cycle_count;

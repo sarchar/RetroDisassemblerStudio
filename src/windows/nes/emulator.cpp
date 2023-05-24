@@ -5,6 +5,7 @@
 #include "main.h"
 #include "util.h"
 
+#include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 #include "windows/nes/emulator.h"
@@ -45,7 +46,7 @@ Emulator::Emulator()
         // start the emulation thread
         emulation_thread = make_shared<thread>(std::bind(&Emulator::EmulationThread, this));
 
-        current_state = State::RUNNING;
+        current_state = State::PAUSED;
     }
 }
 
@@ -64,7 +65,57 @@ void Emulator::UpdateContent(double deltaTime)
 
 void Emulator::RenderContent()
 {
-    ImGui::Text("emulator goes here lul");
+    auto system = current_system.lock();
+    if(!system) return;
+    auto disassembler = system->GetDisassembler();
+
+    if(ImGui::Button("Step Cycle")) {
+        if(current_state == State::PAUSED) {
+            current_state = State::STEP_CYCLE;
+        }
+    }
+
+    ImGui::SameLine();
+    if(ImGui::Button("Step Inst")) {
+        if(current_state == State::PAUSED) {
+            current_state = State::STEP_INSTRUCTION;
+        }
+    }
+
+    ImGui::SameLine();
+    if(ImGui::Button("Run")) {
+        if(current_state == State::PAUSED) {
+            current_state = State::RUNNING;
+        }
+    }
+
+    ImGui::SameLine();
+    if(ImGui::Button("Pause")) {
+        if(current_state == State::RUNNING) {
+            current_state = State::PAUSED;
+        }
+    }
+
+    ImGui::SameLine();
+    if(ImGui::Button("Reset")) {
+        if(current_state == State::PAUSED) {
+            cpu->Reset();
+        }
+    }
+
+    u64 next_uc = cpu->GetNextUC();
+    // stop the system clock on invalid opcodes
+    if(next_uc == (u64)-1) {
+        current_state = State::PAUSED;
+        ImGui::Text("Invalid opcode $%02X at $%04X", cpu->GetOpcode(), cpu->GetOpcodePC()-1);
+    } else {
+        string inst = disassembler->GetInstruction(cpu->GetOpcode());
+        auto pc = cpu->GetOpcodePC();
+        u8 operands[] = { memory_view->Read(pc), memory_view->Read(pc+1) };
+        string operand = disassembler->FormatOperand(cpu->GetOpcode(), operands);
+        ImGui::Text("Current inst: %s %s", inst.c_str(), operand.c_str());
+        ImGui::Text("Next uc: 0x%X", next_uc);
+    }
 }
 
 void Emulator::CheckInput()
@@ -77,6 +128,18 @@ void Emulator::EmulationThread()
         switch(current_state) {
         case State::INIT:
         case State::PAUSED:
+            break;
+
+        case State::STEP_CYCLE:
+            cpu->Step();
+            current_state = State::PAUSED;
+            break;
+
+        case State::STEP_INSTRUCTION:
+            while(current_state == State::STEP_INSTRUCTION && !cpu->Step()) ;
+            if(current_state == State::STEP_INSTRUCTION) {
+                current_state = State::PAUSED;
+            }
             break;
 
         case State::RUNNING:

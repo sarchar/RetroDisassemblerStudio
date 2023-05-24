@@ -21,6 +21,8 @@ public:
         INIT,
         PAUSED,
         RUNNING,
+        STEP_CYCLE,
+        STEP_INSTRUCTION,
         CRASHED
     };
 

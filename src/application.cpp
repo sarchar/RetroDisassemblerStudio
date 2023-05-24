@@ -276,12 +276,12 @@ void Application::ShowDockSpace(bool dockSpaceHasBackground)
             ImGuiID right_id;
             imgui_dock_builder_left_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_root_id, ImGuiDir_Left, 0.3f, nullptr, &right_id);
 
-            // split the right area, creating a temporary middle
-            ImGuiID middle_id;
-            imgui_dock_builder_right_id = ImGui::DockBuilderSplitNode(right_id, ImGuiDir_Right, 0.5f, nullptr, &middle_id);
+            // split the right area, creating a temporary top/bottom
+            ImGuiID top_id;
+            imgui_dock_builder_bottom_id = ImGui::DockBuilderSplitNode(right_id, ImGuiDir_Down, 0.5f, nullptr, &top_id);
 
-            // now split the middle area into a top and bottom
-            imgui_dock_builder_bottom_id = ImGui::DockBuilderSplitNode(middle_id, ImGuiDir_Down, 0.5f, nullptr, nullptr);
+            // now split the top area into a middle and right
+            imgui_dock_builder_right_id = ImGui::DockBuilderSplitNode(top_id, ImGuiDir_Right, 0.5f, nullptr, nullptr);
 
             ImGui::DockBuilderFinish(imgui_dockspace_id);
 

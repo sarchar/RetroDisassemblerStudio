@@ -475,7 +475,7 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
         table_flags |= ImGuiTableFlags_BordersInnerV;
     }
     
-    if(selected) {
+    if(focused && selected) {
         if(ImGui::IsKeyPressed(ImGuiKey_Enter)) {
             editing = true;
             started_editing = true;
@@ -497,7 +497,6 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
             });
         }
     }
-
 
     if(editing) {
         if(!selected || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // must stop editing, discard
