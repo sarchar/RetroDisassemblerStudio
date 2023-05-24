@@ -1,3 +1,4 @@
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <thread>
@@ -63,6 +64,16 @@ void Emulator::UpdateContent(double deltaTime)
     if(thread_exited) {
         cout << "uh oh thread exited" << endl;
     }
+
+    u64 cycle_count = cpu->GetCycleCount();
+    auto current_time = chrono::steady_clock::now();
+    u64 delta = cycle_count - last_cycle_count;
+    double delta_time = (current_time - last_cycle_time) / 1.0s;
+    if(delta_time >= 1.0) {
+        cycles_per_sec = delta / delta_time;
+        last_cycle_time = current_time;
+        last_cycle_count = cycle_count;
+    }
 }
 
 void Emulator::RenderContent()
@@ -106,7 +117,7 @@ void Emulator::RenderContent()
     }
 
     ImGui::SameLine();
-    ImGui::Text("%s", magic_enum::enum_name(current_state).data());
+    ImGui::Text("%s :: %f Hz", magic_enum::enum_name(current_state).data(), cycles_per_sec);
 
     ImGui::Separator();
 

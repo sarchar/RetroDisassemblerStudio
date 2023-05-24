@@ -190,7 +190,8 @@ bool CPU::Step()
 
     // check latch opcode
     if((op & CPU_LATCH_OPCODE_mask) == CPU_LATCH_OPCODE) {
-        //cout << "opcode: " << hex << uppercase << setw(2) << setfill('0') << (int)ibus << endl;
+        //cout << "PC: $" << hex << uppercase << setw(4) << setfill('0') << (regs.PC - 1)
+        //     << " opcode: " << hex << uppercase << setw(2) << setfill('0') << (int)ibus << endl;
         state.opcode  = (u8)ibus;
         state.ops     = OpTable[state.opcode];
         state.istep   = 0;

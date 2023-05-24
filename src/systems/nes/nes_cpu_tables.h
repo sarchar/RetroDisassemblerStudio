@@ -429,7 +429,7 @@ ID(Y);
 
 #define A(x) \
     static CPU_INST CpuOp##x##_imm[]  = {                       \
-        CPU_ADDRESS_BUS_PC | CPU_READ                           \
+        CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC               \
             | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_ALU_B_DATA  \
             | CPU_IBUS_ALU | CPU_LATCH_REGA,                    \
         OPCODE_FETCH }; \

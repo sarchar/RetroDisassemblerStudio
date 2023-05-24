@@ -237,6 +237,10 @@ public:
 private:
     std::shared_ptr<System> system;
     std::shared_ptr<MemoryView> cartridge_view;
+
+    // It could be more C++ish by using RAMRegion to request a memory view and redirect
+    // read/writes there, but RAM is so simple I think I'll just embed it directly into SystemView.
+    u8 RAM[0x800];
 };
 
 }

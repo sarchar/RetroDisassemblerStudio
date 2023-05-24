@@ -279,7 +279,10 @@ CartridgeView::~CartridgeView()
 
 u8 CartridgeView::Read(u16 address)
 {
-    if(address < 0xC000) {
+    if(address < 0x8000) {
+        cout << "[CartridgeView::Read] unhandled read to SRAM" << endl;
+        return 0;
+    } else if(address < 0xC000) {
         return cartridge->ReadProgramRom(prg_rom_bank_low, address);
     } else {
         return cartridge->ReadProgramRom(prg_rom_bank_high, address);

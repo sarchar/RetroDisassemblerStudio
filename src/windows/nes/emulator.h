@@ -50,6 +50,10 @@ private:
     bool                         thread_exited = false;
     std::shared_ptr<CPU>         cpu;
     std::shared_ptr<MemoryView>  memory_view;
+
+    u64 last_cycle_count = 0;
+    std::chrono::time_point<std::chrono::steady_clock> last_cycle_time;
+    double cycles_per_sec;
 };
 
 } //namespace Windows

@@ -25,16 +25,17 @@ public:
     void Reset();
     bool Step(); // return true on instruction decode cycle
 
-    inline u64 GetNextUC()   const { auto ptr = state.ops; if(!ptr) return (u64)-1; else return *ptr; }
-    inline u16 GetOpcode()   const { return state.opcode; }
-    inline u16 GetOpcodePC() const { return state.inst_pc; }
-    inline int GetIStep()    const { return state.istep; }
-    inline u16 GetPC()       const { return regs.PC; }
-    inline u8  GetP()        const { return regs.P; }
-    inline u8  GetA()        const { return regs.A; }
-    inline u8  GetX()        const { return regs.X; }
-    inline u8  GetY()        const { return regs.Y; }
-    inline u16 GetS()        const { return regs.S + 0x100; }
+    inline u64 GetNextUC()     const { auto ptr = state.ops; if(!ptr) return (u64)-1; else return *ptr; }
+    inline u16 GetOpcode()     const { return state.opcode; }
+    inline u16 GetOpcodePC()   const { return state.inst_pc; }
+    inline int GetIStep()      const { return state.istep; }
+    inline u16 GetPC()         const { return regs.PC; }
+    inline u8  GetP()          const { return regs.P; }
+    inline u8  GetA()          const { return regs.A; }
+    inline u8  GetX()          const { return regs.X; }
+    inline u8  GetY()          const { return regs.Y; }
+    inline u16 GetS()          const { return regs.S + 0x100; }
+    inline u64 GetCycleCount() const { return cycle_count; }
 
 private:
     struct {
