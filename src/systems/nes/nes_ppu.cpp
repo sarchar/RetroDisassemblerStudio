@@ -117,15 +117,24 @@ shared_ptr<MemoryView> PPU::CreateMemoryView()
 
 void PPU::Step()
 {
+    int phase = cycle % 8;
+
     // perform current scanline/cycle
 
     if(scanline < 240 || scanline == 261) {
-        if(cycle == 0) {
-        } else if(cycle < 257) {
-            vblank = 0; // doesn't hurt to set this every non-vblank cycle, but the first time it'll matter is (scanline=261,cycle=1)
-        } else if(cycle < 321) {
-        } else if(cycle < 337) {
-        } else /* cycle < 341 */ {
+        if(cycle != 0) {
+            if(cycle < 257) {   // cycles 1..256
+                vblank = 0; // doesn't hurt to set this every cycle, but the first time it'll matter is (scanline=261,cycle=1) when it should first be cleared
+            } else if(cycle < 321) {   // cycles 257..320
+                // two unused vram fetches (phases 1..4)
+            } else if(cycle < 337) {   // cycles 321..336
+                // first two tiles of the next line
+            } else /* cycle < 341 */ { // cycles 337..341
+                // two unused vram fetches (phases 1..4)
+            }
+            // all cycles except 0 perform internal logic, but output is disabled in hblank
+            // TODO huh maybe not? hblank cycles don't seem to read attribute/lsbits/msbits, only NT
+            InternalStep(phase);
         }
     } else if(scanline == 241) {
         if(cycle == 1) {
@@ -140,6 +149,41 @@ void PPU::Step()
             scanline = 0;
         }
         cycle = 0;
+    }
+}
+
+void PPU::InternalStep(int phase)
+{
+    // Output pixel before reading from the bus, as cycle 0 needs the shift register fully emptied
+    OutputPixel();
+
+    switch(phase) {
+    case 1:
+        // setup NT address
+        break;
+    case 2:
+        // latch NT byte
+        break;
+    case 3:
+        // setup attribute address
+        break;
+    case 4:
+        // latch attribute byte
+        break;
+    case 5:
+        // setup lsbits tile address
+        break;
+    case 6:
+        // latch lsbits tile byte
+        break;
+    case 7:
+        // setup msbits tile address
+        break;
+    case 0:
+        // latch msbits tile byte
+        //
+        // fill latch registers high bytes
+        break;
     }
 }
 

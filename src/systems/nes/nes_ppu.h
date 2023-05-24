@@ -23,6 +23,9 @@ public:
 
     std::shared_ptr<MemoryView> CreateMemoryView();
 private:
+    void InternalStep(int);
+    void OutputPixel();
+
     union {
         u8 ppucont;
         struct {
