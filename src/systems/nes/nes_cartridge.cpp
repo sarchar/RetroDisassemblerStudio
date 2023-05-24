@@ -295,4 +295,13 @@ void CartridgeView::Write(u16 address, u8 value)
          << " to $" << setw(4) << address << endl;
 }
 
+u8 CartridgeView::ReadPPU(u16 address)
+{
+    return 0;
+}
+
+void CartridgeView::WritePPU(u16 address, u8 value)
+{
+}
+
 }

@@ -425,6 +425,11 @@ class MemoryView {
 public:
     virtual u8 Read(u16) = 0;
     virtual void Write(u16, u8) = 0;
+
+    // NES has essentially two buses, the normal CPU bus and one private to the PPU
+    // the PPU memory can be mapped to cartridges, but is normally backed by internal RAM
+    virtual u8 ReadPPU(u16) = 0;
+    virtual void WritePPU(u16, u8) = 0;
 };
 
 }

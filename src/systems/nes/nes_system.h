@@ -234,6 +234,9 @@ public:
     u8 Read(u16) override;
     void Write(u16, u8) override;
 
+    u8 ReadPPU(u16) override;
+    void WritePPU(u16, u8) override;
+
 private:
     std::shared_ptr<System> system;
     std::shared_ptr<MemoryView> ppu_view;
@@ -242,6 +245,9 @@ private:
     // It could be more C++ish by using RAMRegion to request a memory view and redirect
     // read/writes there, but RAM is so simple I think I'll just embed it directly into SystemView.
     u8 RAM[0x800];
+
+    // same for VRAM
+    u8 VRAM[0x4000];
 };
 
 }

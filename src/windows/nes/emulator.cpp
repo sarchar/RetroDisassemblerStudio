@@ -49,9 +49,19 @@ Emulator::Emulator()
     if(auto system = MyApp::Instance()->GetProject()->GetSystem<System>()) {
         current_system = system;
 
+        auto& mv = memory_view;
         ppu = make_shared<PPU>([this]() {
-            cpu->Nmi();
-        });
+                cpu->Nmi();
+            },
+
+            // capturing the reference means the pointer can change after this initialization
+            [this, &mv](u16 address)->u8 {
+                return memory_view->ReadPPU(address);
+            },
+            [this, &mv](u16 address, u8 value)->void {
+                memory_view->WritePPU(address, value);
+            }
+        );
 
         memory_view = system->CreateMemoryView(ppu->CreateMemoryView());
 

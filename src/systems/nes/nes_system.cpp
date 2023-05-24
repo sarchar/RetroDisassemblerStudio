@@ -1106,4 +1106,18 @@ void SystemView::Write(u16 address, u8 value)
     }
 }
 
+u8 SystemView::ReadPPU(u16 address)
+{
+    //TODO
+    cout << "[SystemView::ReadPPU] read from $" << hex << address << endl;
+    return VRAM[address & 0x3FFF];
+}
+
+void SystemView::WritePPU(u16 address, u8 value)
+{
+    //TODO
+    cout << "[SystemView::WritePPU] write $" << hex << (int)value << " to $" << address << endl;
+    VRAM[address & 0x3FFF] = value;
+}
+
 }
