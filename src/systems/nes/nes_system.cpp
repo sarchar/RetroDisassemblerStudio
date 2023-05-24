@@ -1081,6 +1081,7 @@ u8 SystemView::Read(u16 address)
 {
     if(address < 0x6000) {
         cout << "[SystemView::Read] unhandled Read($" << hex << setw(4) << setfill('0') << address << ")" << endl;
+        if(address == 0x2002) return 0x80; // always in vblank
         return 0;
     } else {
         return cartridge_view->Read(address);

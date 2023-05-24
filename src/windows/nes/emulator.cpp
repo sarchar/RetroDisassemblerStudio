@@ -2,6 +2,8 @@
 #include <memory>
 #include <thread>
 
+#include "magic_enum.hpp"
+
 #include "main.h"
 #include "util.h"
 
@@ -103,6 +105,9 @@ void Emulator::RenderContent()
         }
     }
 
+    ImGui::SameLine();
+    ImGui::Text("%s", magic_enum::enum_name(current_state).data());
+
     ImGui::Separator();
 
     u64 next_uc = cpu->GetNextUC();
@@ -113,15 +118,29 @@ void Emulator::RenderContent()
     } else {
         string inst = disassembler->GetInstruction(cpu->GetOpcode());
         auto pc = cpu->GetOpcodePC();
-        u8 operands[] = { memory_view->Read(pc), memory_view->Read(pc+1) };
+        u8 operands[] = { memory_view->Read(pc+1), memory_view->Read(pc+2) };
         string operand = disassembler->FormatOperand(cpu->GetOpcode(), operands);
-        ImGui::Text("Current inst: %s %s", inst.c_str(), operand.c_str());
-        ImGui::Text("Next uc: 0x%X", next_uc);
+        ImGui::Text("$%04X: %s %s (istep %d, uc=0x%X)", pc, inst.c_str(), operand.c_str(), cpu->GetIStep(), next_uc);
     }
 
     ImGui::Separator();
 
-    ImGui::Text("PC:$%04X", cpu->GetPC());
+    ImGui::Text("PC:$%04X", cpu->GetPC()); ImGui::SameLine();
+    ImGui::Text("S:$%04X", cpu->GetS()); ImGui::SameLine();
+    ImGui::Text("A:$%02X", cpu->GetA()); ImGui::SameLine();
+    ImGui::Text("X:$%02X", cpu->GetX()); ImGui::SameLine();
+    ImGui::Text("Y:$%02X", cpu->GetY());
+
+    u8 p = cpu->GetP();
+    char flags[] = "P:nvb-dizc";
+    if(p & CPU_FLAG_N) flags[2] = 'N';
+    if(p & CPU_FLAG_V) flags[3] = 'V';
+    if(p & CPU_FLAG_B) flags[4] = 'B';
+    if(p & CPU_FLAG_D) flags[6] = 'D';
+    if(p & CPU_FLAG_I) flags[7] = 'I';
+    if(p & CPU_FLAG_Z) flags[8] = 'Z';
+    if(p & CPU_FLAG_C) flags[9] = 'C';
+    ImGui::Text("%s", flags);
 }
 
 void Emulator::CheckInput()

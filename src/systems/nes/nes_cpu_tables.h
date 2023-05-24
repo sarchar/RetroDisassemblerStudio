@@ -2,102 +2,6 @@
 
 typedef u64 CPU_INST;
 
-#define CPU_FLAG_C (1 << 0)
-#define CPU_FLAG_Z (1 << 1)
-#define CPU_FLAG_I (1 << 2)
-#define CPU_FLAG_D (1 << 3)
-#define CPU_FLAG_B (1 << 4)
-#define CPU_FLAG_V (1 << 6)
-#define CPU_FLAG_N (1 << 7)
-
-//1#define CPU_OP_ASSERT    0x00
-//1#define CPU_OP_NOP       0x01
-//1#define CPU_OP_IFETCH    0x02
-//1#define CPU_OP_READV     0x03
-//1#define CPU_OP_READMEM   0x04
-//1#define CPU_OP_READMEM2  0x05
-//1#define CPU_OP_SETF      0x06
-//1#define CPU_OP_CLEARF    0x07
-//1#define CPU_OP_READA     0x08
-//1#define CPU_OP_READX     0x09
-//1#define CPU_OP_READY     0x0A
-//1#define CPU_OP_READS     0x0B
-//1#define CPU_OP_READP     0x0C
-//1#define CPU_OP_READI     0x0D
-//1#define CPU_OP_INDEXED_X 0x0E
-//1#define CPU_OP_INDEXED_Y 0x0F
-//1#define CPU_OP_CARRYADDR 0x10
-//1#define CPU_OP_STACKR    0x11
-//1#define CPU_OP_GET_SOURCE(x) ((x) & 0xFF)
-//1
-//1#define CPU_OP_GET_VECTOR(x) (((x) >> 24) & 0xFFFF)
-//1
-//1#define CPU_OP_LATCH_NOP     (0x00 << 8)
-//1#define CPU_OP_LATCHPC_LO    (0x01 << 8)
-//1#define CPU_OP_LATCHPC_HI    (0x02 << 8)
-//1#define CPU_OP_LATCHADDR     (0x03 << 8)
-//1#define CPU_OP_LATCHADDR_LO  (0x04 << 8)
-//1#define CPU_OP_LATCHADDR_HI  (0x05 << 8)
-//1#define CPU_OP_LATCHADDR2    (0x06 << 8)
-//1#define CPU_OP_LATCHADDR2_LO (0x07 << 8)
-//1#define CPU_OP_LATCHADDR2_HI (0x08 << 8)
-//1#define CPU_OP_DECODE        (0x09 << 8)
-//1#define CPU_OP_LATCHP        (0x0A << 8)
-//1#define CPU_OP_LATCHA        (0x0B << 8)
-//1#define CPU_OP_LATCHX        (0x0C << 8)
-//1#define CPU_OP_LATCHY        (0x0D << 8)
-//1#define CPU_OP_LATCHS        (0x0E << 8)
-//1#define CPU_OP_LATCHI        (0x0F << 8)
-//1#define CPU_OP_WRITEMEM      (0x10 << 8)
-//1#define CPU_OP_STACKW        (0x11 << 8)
-//1#define CPU_OP_GET_WRITE(x) ((x) & 0xFF00)
-//1
-//1#define CPU_OP_ALU_NOP       (0x00 << 16)
-//1#define CPU_OP_ALU_INC       (0x01 << 16)
-//1#define CPU_OP_ALU_DEC       (0x02 << 16)
-//1#define CPU_OP_ALU_ADC       (0x03 << 16)
-//1#define CPU_OP_ALU_SBC       (0x04 << 16)
-//1#define CPU_OP_ALU_AND       (0x05 << 16)
-//1#define CPU_OP_ALU_EOR       (0x06 << 16)
-//1#define CPU_OP_ALU_ORA       (0x07 << 16)
-//1#define CPU_OP_ALU_ASL       (0x08 << 16)
-//1#define CPU_OP_ALU_LSR       (0x09 << 16)
-//1#define CPU_OP_ALU_ROL       (0x0A << 16)
-//1#define CPU_OP_ALU_ROR       (0x0B << 16)
-//1#define CPU_OP_ALU_CMP       (0x0C << 16)
-//1#define CPU_OP_ALU_CPX       (0x0D << 16)
-//1#define CPU_OP_ALU_CPY       (0x0E << 16)
-//1#define CPU_OP_GET_ALU(x)    ((x) & 0xFF0000)
-//1
-//1// helpers/shorthands
-//1#define CPU_OP_READV_(x)    (               CPU_OP_READV | (x) << 24)
-//1#define CPU_OP_CLEARF_(x)   (CPU_OP_LATCHP | CPU_OP_CLEARF | (x) << 24)
-//1#define CPU_OP_SETF_(x)     (CPU_OP_LATCHP | CPU_OP_SETF | (x) << 24)
-//1#define CPU_OP_GET_FLAG(x)  (((x) >> 24) & 0xFF)
-//1#define CPU_OP_END          (CPU_OP_DECODE | CPU_OP_IFETCH)
-
-//    CPU_OP_NOP, CPU_OP_NOP, CPU_OP_NOP, CPU_OP_NOP, CPU_OP_NOP, CPU_OP_NOP, CPU_OP_NOP, // 7 cycles for reset
-//    CPU_OP_LATCHPC_LO | CPU_OP_READV_(0xFFFC),
-//    CPU_OP_LATCHPC_HI | CPU_OP_READV_(0xFFFD),
-//    CPU_OP_DECODE | CPU_OP_IFETCH
-//};
-
-// I kinda like the idea of specifying more lower level microcode. I'd need to specify:
-// * READ or WRITE signal
-// * Address to put on bus
-// * For READ, data to put on bus
-// * ALU: operation, A input mux, B input mux, C carry source (C, 0, or 1)
-// internal data mux: select READ data bus or ALU data bus, or another?
-// * latch signals for each register
-// in this method, every cycle runs roughly the same code
-//
-// So LDA zeropage,X might look like:
-//
-// LATCH_OPCODE, BUS_DATA, ALUOP(zzz), INCPC, READ(PC)
-// RESET_EADDR_HI, LATCH_EADDR_LO,  BUS_DATA, ALUOP(zzz), INCPC, READ(PC)
-// LATCH_EADDR_LO, BUS_ALU, ALUOP(ADC, a_in=X, b_in=EADDR, carry=0), READ(EADDR)
-// LATCH_A, BUS_DATA, READ(EADDR)
-//      
 #define ON(flag) (1ULL << (flag))
 #define OFF(flag) 0ULL
 
@@ -229,7 +133,6 @@ typedef u64 CPU_INST;
 #define CPU_ALU_OP_LSR    (7ULL << CPU_ALU_OP_shift)
 #define CPU_ALU_OP_ROL    (8ULL << CPU_ALU_OP_shift)
 #define CPU_ALU_OP_ROR    (9ULL << CPU_ALU_OP_shift)
-#define CPU_ALU_OP_BIT    (10ULL << CPU_ALU_OP_shift)
 #define CPU_ALU_OP_CLRBIT (15ULL << CPU_ALU_OP_shift)
 
 // 4 bits: ALU A source
@@ -270,7 +173,7 @@ typedef u64 CPU_INST;
 #define CPU_ALU_C_ONE      (2ULL << CPU_ALU_C_shift)
 
 // 1 bit: REGP latch
-#define CPU_LATCH_REGP_shift (CPU_ALU_B_shift + CPU_ALU_B_bits)
+#define CPU_LATCH_REGP_shift (CPU_ALU_C_shift + CPU_ALU_C_bits)
 #define CPU_LATCH_REGP_bits  1
 #define CPU_LATCH_REGP_mask  (1ULL << CPU_LATCH_REGP_shift)
 #define CPU_LATCH_REGP       ON(CPU_LATCH_REGP_shift)
@@ -305,8 +208,20 @@ typedef u64 CPU_INST;
 #define CPU_LATCH_INTM_mask  (1ULL << CPU_LATCH_INTM_shift)
 #define CPU_LATCH_INTM       ON(CPU_LATCH_INTM_shift)
 
+// 1 bit: set flags when latching intermediate
+#define CPU_LATCH_INTM_FLAGS_shift (CPU_LATCH_INTM_shift + CPU_LATCH_INTM_bits)
+#define CPU_LATCH_INTM_FLAGS_bits  1
+#define CPU_LATCH_INTM_FLAGS_mask  (1ULL << CPU_LATCH_INTM_FLAGS_shift)
+#define CPU_LATCH_INTM_FLAGS       ON(CPU_LATCH_INTM_FLAGS_shift)
+
+// 1 bit: set NV flags from BIT operation when latching intermediate
+#define CPU_LATCH_INTM_BIT_shift   (CPU_LATCH_INTM_FLAGS_shift + CPU_LATCH_INTM_FLAGS_bits)
+#define CPU_LATCH_INTM_BIT_bits    1
+#define CPU_LATCH_INTM_BIT_mask    (1ULL << CPU_LATCH_INTM_BIT_shift)
+#define CPU_LATCH_INTM_BIT         ON(CPU_LATCH_INTM_BIT_shift)
+
 // 3 bits: data bus
-#define CPU_DATA_BUS_shift   (CPU_LATCH_INTM_shift + CPU_LATCH_INTM_bits)
+#define CPU_DATA_BUS_shift   (CPU_LATCH_INTM_BIT_shift + CPU_LATCH_INTM_BIT_bits)
 #define CPU_DATA_BUS_bits    3
 #define CPU_DATA_BUS_mask    (7ULL << CPU_DATA_BUS_shift)
 #define CPU_DATA_BUS_REGA    (0ULL << CPU_DATA_BUS_shift)
@@ -317,17 +232,23 @@ typedef u64 CPU_INST;
 #define CPU_DATA_BUS_PC_LO   (5ULL << CPU_DATA_BUS_shift)
 #define CPU_DATA_BUS_PC_HI   (6ULL << CPU_DATA_BUS_shift)
 
+// 1 bit: latch carry and overflow flags
+#define CPU_LATCH_CV_shift   (CPU_DATA_BUS_shift + CPU_DATA_BUS_bits)
+#define CPU_LATCH_CV_bits    1
+#define CPU_LATCH_CV_mask    (1ULL << CPU_LATCH_CV_shift)
+#define CPU_LATCH_CV         ON(CPU_LATCH_CV_shift)
+
 #define OPCODE_FETCH \
-    CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC | CPU_IBUS_DATA | CPU_LATCH_OPCODE
+    (CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC | CPU_IBUS_DATA | CPU_LATCH_OPCODE)
 
 #define READMEM(x) \
-    CPU_ADDRESS_BUS_EADDR | CPU_READ | CPU_IBUS_DATA | (x)
+    (CPU_ADDRESS_BUS_EADDR | CPU_READ | CPU_IBUS_DATA | (x))
 
 #define WRITEMEM(x) \
-    CPU_ADDRESS_BUS_EADDR | CPU_WRITE | (x)
+    (CPU_ADDRESS_BUS_EADDR | CPU_WRITE | (x))
 
 #define ZP \
-    CPU_ADDRESS_BUS_PC    | CPU_READ | CPU_INCPC | CPU_IBUS_DATA | CPU_LATCH_EADDR
+    (CPU_ADDRESS_BUS_PC    | CPU_READ | CPU_INCPC | CPU_IBUS_DATA | CPU_LATCH_EADDR)
 
 #define ZP_X \
     /* fetch the operand into EADDR */                                               \
@@ -441,7 +362,10 @@ ST(Y);
 
 #undef ST
 #define T(inst, alu_a, latch) \
-    static CPU_INST CpuOp##inst[] = { CPU_ALU_OP_OR | CPU_ALU_A_REG##alu_a | CPU_ALU_B_ZERO | CPU_LATCH_REG##latch, OPCODE_FETCH };
+    static CPU_INST CpuOp##inst[] = {                          \
+        CPU_ALU_OP_OR | CPU_ALU_A_REG##alu_a | CPU_ALU_B_ZERO  \
+            | CPU_IBUS_ALU | CPU_LATCH_REG##latch,             \
+        OPCODE_FETCH };
 
 T(TAX, A, X);
 T(TAY, A, Y);
@@ -500,7 +424,8 @@ ID(Y);
 #undef ID
 
 #define READMEM_ALU \
-    CPU_ADDRESS_BUS_EADDR | CPU_READ | CPU_ALU_B_DATA | CPU_IBUS_ALU
+    CPU_ADDRESS_BUS_EADDR | CPU_READ | CPU_ALU_B_DATA \
+        | CPU_IBUS_ALU
 
 #define A(x) \
     static CPU_INST CpuOp##x##_imm[]  = {                       \
@@ -508,14 +433,14 @@ ID(Y);
             | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_ALU_B_DATA  \
             | CPU_IBUS_ALU | CPU_LATCH_REGA,                    \
         OPCODE_FETCH }; \
-    static CPU_INST CpuOp##x##_zp[]   = { ZP   , READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA, OPCODE_FETCH }; \
-    static CPU_INST CpuOp##x##_zpx[]  = { ZP_X , READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA, OPCODE_FETCH }; \
-    static CPU_INST CpuOp##x##_zpy[]  = { ZP_Y , READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA, OPCODE_FETCH }; \
-    static CPU_INST CpuOp##x##_abs[]  = { ABS  , READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA, OPCODE_FETCH }; \
-    static CPU_INST CpuOp##x##_absx[] = { ABS_X, READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA, OPCODE_FETCH }; \
-    static CPU_INST CpuOp##x##_absy[] = { ABS_Y, READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA, OPCODE_FETCH }; \
-    static CPU_INST CpuOp##x##_indx[] = { IND_X, READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA, OPCODE_FETCH }; \
-    static CPU_INST CpuOp##x##_indy[] = { IND_Y, READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA, OPCODE_FETCH }; 
+    static CPU_INST CpuOp##x##_zp[]   = { ZP   , READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA | CPU_LATCH_CV, OPCODE_FETCH }; \
+    static CPU_INST CpuOp##x##_zpx[]  = { ZP_X , READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA | CPU_LATCH_CV, OPCODE_FETCH }; \
+    static CPU_INST CpuOp##x##_zpy[]  = { ZP_Y , READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA | CPU_LATCH_CV, OPCODE_FETCH }; \
+    static CPU_INST CpuOp##x##_abs[]  = { ABS  , READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA | CPU_LATCH_CV, OPCODE_FETCH }; \
+    static CPU_INST CpuOp##x##_absx[] = { ABS_X, READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA | CPU_LATCH_CV, OPCODE_FETCH }; \
+    static CPU_INST CpuOp##x##_absy[] = { ABS_Y, READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA | CPU_LATCH_CV, OPCODE_FETCH }; \
+    static CPU_INST CpuOp##x##_indx[] = { IND_X, READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA | CPU_LATCH_CV, OPCODE_FETCH }; \
+    static CPU_INST CpuOp##x##_indy[] = { IND_Y, READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA | CPU_LATCH_CV, OPCODE_FETCH }; 
 
 A(ADC);
 A(SBC);
@@ -533,7 +458,7 @@ A(ORA);
         /* write back memory, perform operation */                                 \
         CPU_ADDRESS_BUS_EADDR | CPU_WRITE | CPU_DATA_BUS_INTM                      \
             | CPU_ALU_OP_ADC | CPU_ALU_A_INTM | CPU_ALU_B_ZERO | CPU_ALU_C_ONE     \
-            | CPU_IBUS_ALU | CPU_LATCH_INTM,                                       \
+            | CPU_IBUS_ALU | CPU_LATCH_INTM | CPU_LATCH_INTM_FLAGS,                \
         /* write back memory */                                                    \
         CPU_ADDRESS_BUS_EADDR | CPU_WRITE | CPU_DATA_BUS_INTM,                     \
         OPCODE_FETCH };                                                            \
@@ -544,7 +469,7 @@ A(ORA);
         /* write back memory, perform operation */                                 \
         CPU_ADDRESS_BUS_EADDR | CPU_WRITE | CPU_DATA_BUS_INTM                      \
             | CPU_ALU_OP_SBC | CPU_ALU_A_INTM | CPU_ALU_B_ZERO | CPU_ALU_C_ZERO    \
-            | CPU_IBUS_ALU | CPU_LATCH_INTM,                                       \
+            | CPU_IBUS_ALU | CPU_LATCH_INTM | CPU_LATCH_INTM_FLAGS,                \
         /* write back memory */                                                    \
         CPU_ADDRESS_BUS_EADDR | CPU_WRITE | CPU_DATA_BUS_INTM,                     \
         OPCODE_FETCH };                                                            \
@@ -558,45 +483,52 @@ INCDEC(absx,ABS_X_SLOW);
 
 static CPU_INST CpuOpBIT_zp[]   = { 
     ZP, 
-    READMEM_ALU | CPU_ALU_OP_BIT | CPU_ALU_A_REGA, 
+    READMEM_ALU | CPU_ALU_OP_AND | CPU_ALU_A_REGA
+        | CPU_LATCH_INTM | CPU_LATCH_INTM_BIT,
     OPCODE_FETCH 
 }; 
 
 static CPU_INST CpuOpBIT_abs[]  = { 
     ABS, 
-    READMEM_ALU | CPU_ALU_OP_BIT | CPU_ALU_A_REGA, 
+    READMEM_ALU | CPU_ALU_OP_AND | CPU_ALU_A_REGA
+        | CPU_LATCH_INTM | CPU_LATCH_INTM_BIT,
     OPCODE_FETCH 
 };
 
 #undef READMEM_ALU
 
 #define RMW(x) \
-    static CPU_INST CpuOp##x##_acc[]  = {                                     \
-        CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_IBUS_ALU | CPU_LATCH_REGA, \
-        OPCODE_FETCH };                                                  \
-    static CPU_INST CpuOp##x##_zp[]  = {                    \
-        ZP,                                            \
-        READMEM(CPU_LATCH_INTM),                       \
-        WRITEMEM(CPU_DATA_BUS_INTM)                    \
-            | CPU_ALU_OP_##x | CPU_ALU_A_INTM | CPU_IBUS_ALU | CPU_LATCH_INTM, \
-        WRITEMEM(CPU_DATA_BUS_INTM), OPCODE_FETCH };   \
-    static CPU_INST CpuOp##x##_zpx[]  = {                   \
-        ZP_X,                                          \
-        READMEM(CPU_LATCH_INTM),                       \
-        WRITEMEM(CPU_DATA_BUS_INTM)                    \
-            | CPU_ALU_OP_##x | CPU_ALU_A_INTM | CPU_IBUS_ALU | CPU_LATCH_INTM, \
-        WRITEMEM(CPU_DATA_BUS_INTM), OPCODE_FETCH };   \
-    static CPU_INST CpuOp##x##_abs[]  = {                   \
-        ABS,                                           \
-        READMEM(CPU_LATCH_INTM),                       \
-        WRITEMEM(CPU_DATA_BUS_INTM)                    \
-            | CPU_ALU_OP_##x | CPU_ALU_A_INTM | CPU_IBUS_ALU | CPU_LATCH_INTM, \
-        WRITEMEM(CPU_DATA_BUS_INTM), OPCODE_FETCH };   \
-    static CPU_INST CpuOp##x##_absx[]  = {                  \
-        ABS_X,                                         \
-        READMEM(CPU_LATCH_INTM),                       \
-        WRITEMEM(CPU_DATA_BUS_INTM)                    \
-            | CPU_ALU_OP_##x | CPU_ALU_A_INTM | CPU_IBUS_ALU | CPU_LATCH_INTM, \
+    static CPU_INST CpuOp##x##_acc[]  = {                                      \
+        CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_IBUS_ALU | CPU_LATCH_REGA        \
+            | CPU_LATCH_CV,                                                    \
+        OPCODE_FETCH };                                                        \
+    static CPU_INST CpuOp##x##_zp[]  = {                                       \
+        ZP,                                                                    \
+        READMEM(CPU_LATCH_INTM),                                               \
+        WRITEMEM(CPU_DATA_BUS_INTM)                                            \
+            | CPU_ALU_OP_##x | CPU_ALU_A_INTM | CPU_IBUS_ALU | CPU_LATCH_INTM  \
+            | CPU_LATCH_INTM_FLAGS | CPU_LATCH_CV,                             \
+        WRITEMEM(CPU_DATA_BUS_INTM), OPCODE_FETCH };                           \
+    static CPU_INST CpuOp##x##_zpx[]  = {                                      \
+        ZP_X,                                                                  \
+        READMEM(CPU_LATCH_INTM),                                               \
+        WRITEMEM(CPU_DATA_BUS_INTM)                                            \
+            | CPU_ALU_OP_##x | CPU_ALU_A_INTM | CPU_IBUS_ALU | CPU_LATCH_INTM  \
+            | CPU_LATCH_INTM_FLAGS | CPU_LATCH_CV,                             \
+        WRITEMEM(CPU_DATA_BUS_INTM), OPCODE_FETCH };                           \
+    static CPU_INST CpuOp##x##_abs[]  = {                                      \
+        ABS,                                                                   \
+        READMEM(CPU_LATCH_INTM),                                               \
+        WRITEMEM(CPU_DATA_BUS_INTM)                                            \
+            | CPU_ALU_OP_##x | CPU_ALU_A_INTM | CPU_IBUS_ALU | CPU_LATCH_INTM  \
+            | CPU_LATCH_INTM_FLAGS | CPU_LATCH_CV,                             \
+        WRITEMEM(CPU_DATA_BUS_INTM), OPCODE_FETCH };                           \
+    static CPU_INST CpuOp##x##_absx[]  = {                                     \
+        ABS_X,                                                                 \
+        READMEM(CPU_LATCH_INTM),                                               \
+        WRITEMEM(CPU_DATA_BUS_INTM)                                            \
+            | CPU_ALU_OP_##x | CPU_ALU_A_INTM | CPU_IBUS_ALU | CPU_LATCH_INTM  \
+            | CPU_LATCH_INTM_FLAGS | CPU_LATCH_CV,                             \
         WRITEMEM(CPU_DATA_BUS_INTM), OPCODE_FETCH };
 
 RMW(ASL);
@@ -606,8 +538,10 @@ RMW(ROR);
 
 #undef RMW
 
+// Compare ops get latched into the intermediate so they can set NZ flags
 #define CP_OP \
-    CPU_ADDRESS_BUS_EADDR | CPU_READ | CPU_ALU_OP_SBC | CPU_ALU_B_DATA | CPU_ALU_C_ZERO | CPU_IBUS_ALU
+    CPU_ADDRESS_BUS_EADDR | CPU_READ | CPU_ALU_OP_SBC | CPU_ALU_B_DATA | CPU_ALU_C_ZERO \
+        | CPU_IBUS_ALU | CPU_LATCH_INTM | CPU_LATCH_INTM_FLAGS
 
 #define CP(inst, x) \
     static CPU_INST CpuOp##inst##_imm[]  = {                                                       \

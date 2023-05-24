@@ -4,6 +4,14 @@
 
 #include "util.h"
 
+#define CPU_FLAG_C (1 << 0)
+#define CPU_FLAG_Z (1 << 1)
+#define CPU_FLAG_I (1 << 2)
+#define CPU_FLAG_D (1 << 3)
+#define CPU_FLAG_B (1 << 4)
+#define CPU_FLAG_V (1 << 6)
+#define CPU_FLAG_N (1 << 7)
+
 namespace NES {
 
 class CPU {
@@ -17,10 +25,16 @@ public:
     void Reset();
     bool Step(); // return true on instruction decode cycle
 
-    u64 GetNextUC()   const { auto ptr = state.ops; if(!ptr) return (u64)-1; else return *ptr; }
-    u16 GetOpcode()   const { return state.opcode; }
-    u16 GetOpcodePC() const { return state.inst_pc; }
-    u16 GetPC()       const { return regs.PC; }
+    inline u64 GetNextUC()   const { auto ptr = state.ops; if(!ptr) return (u64)-1; else return *ptr; }
+    inline u16 GetOpcode()   const { return state.opcode; }
+    inline u16 GetOpcodePC() const { return state.inst_pc; }
+    inline int GetIStep()    const { return state.istep; }
+    inline u16 GetPC()       const { return regs.PC; }
+    inline u8  GetP()        const { return regs.P; }
+    inline u8  GetA()        const { return regs.A; }
+    inline u8  GetX()        const { return regs.X; }
+    inline u8  GetY()        const { return regs.Y; }
+    inline u16 GetS()        const { return regs.S + 0x100; }
 
 private:
     struct {

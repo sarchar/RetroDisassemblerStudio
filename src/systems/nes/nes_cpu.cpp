@@ -75,21 +75,27 @@ bool CPU::Step()
     // setup the ALU
     auto alu_op = (op & CPU_ALU_OP_mask);
     u8 alu_out = 0xEE;
-    u8 alu_a, alu_b, alu_c;
+    u8 alu_a, alu_b, alu_c, alu_v, bit_v, bit_n;
 
     // perform the ALU op
     if(alu_op != CPU_ALU_OP_IDLE) { // optimization
+        // select A input
         u8 alu_a_mux[] = { regs.A, regs.X, regs.Y, regs.S, 
             (u8)(regs.PC & 0x00FF), (u8)(regs.PC >> 8), (u8)(state.eaddr >> 8), regs.P,
             state.intermediate };
         alu_a = alu_a_mux[(op & CPU_ALU_A_mask) >> CPU_ALU_A_shift];
 
+        // select B input
         u8 alu_b_mux[] = { 0, (u8)(state.eaddr & 0x00FF), state.intermediate, data, 0, 0, 0, 0, 
             CPU_FLAG_C, CPU_FLAG_D, CPU_FLAG_I, CPU_FLAG_V, CPU_FLAG_Z, CPU_FLAG_N, 0, 0 };
         alu_b = alu_b_mux[(op & CPU_ALU_B_mask) >> CPU_ALU_B_shift];
 
+        // configure carry source
         u8 alu_c_mux[] = { (u8)((regs.P & CPU_FLAG_C) ? 1 : 0), 0, 1 };
         alu_c = alu_c_mux[(op & CPU_ALU_C_mask) >> CPU_ALU_C_shift];
+
+        // initialize V to current V
+        alu_v = (u8)((regs.P & CPU_FLAG_V) ? 1 : 0);
 
         switch(alu_op) {
         case CPU_ALU_OP_ADC:
@@ -97,6 +103,10 @@ bool CPU::Step()
             u16 tmp = (u16)alu_a + (u16)alu_b + (u16)alu_c;
             alu_out = (u8)tmp;
             alu_c = tmp > 0xFF ? 1 : 0;
+            
+            // if original inputs had the same sign, and the result does not, signed overflow is detected
+            alu_v = (((alu_a & 0x80) ^ (alu_b & 0x80)) == 0 
+                     && ((alu_out & 0x80) ^ (alu_a & 0x80)) != 0) ? 1 : 0;
             break;
         }
         case CPU_ALU_OP_SBC:
@@ -104,10 +114,22 @@ bool CPU::Step()
             u16 tmp = (u16)alu_a - (u16)alu_b - (u16)(alu_c ? 0 : 1);
             alu_out = (u8)tmp;
             alu_c = tmp > 0xFF ? 0 : 1;
+
+            // if original inputs had the same sign, and the result does not, signed overflow is detected
+            alu_v = (((alu_a & 0x80) ^ (alu_b & 0x80)) == 0 
+                     && ((alu_out & 0x80) ^ (alu_a & 0x80)) != 0) ? 1 : 0;
             break;
         }
+
+        // specifically do not touch C and V flags in the AND, EOR, and ORA even for internal
+        // operations, as they get latched by arithmetic instructions
         case CPU_ALU_OP_AND:
             alu_out = alu_a & alu_b;
+
+            // bit_v and bit_n only used with BIT via the AND operation
+            bit_v = (alu_b & 0x40) >> 6;
+            bit_n = (alu_b & 0x80) >> 7;
+
             break;
 
         case CPU_ALU_OP_OR:
@@ -162,13 +184,17 @@ bool CPU::Step()
     u8 ibus_mux[] = { data, alu_out };
     u8 ibus = ibus_mux[(op & CPU_IBUS_mask) >> CPU_IBUS_shift];
 
+    // N and Z are always updated from the bus
+    bool ibus_n = (ibus & 0x80);
+    bool ibus_z = ibus == 0;
+
     // check latch opcode
     if((op & CPU_LATCH_OPCODE_mask) == CPU_LATCH_OPCODE) {
         //cout << "opcode: " << hex << uppercase << setw(2) << setfill('0') << (int)ibus << endl;
         state.opcode  = (u8)ibus;
         state.ops     = OpTable[state.opcode];
         state.istep   = 0;
-        state.inst_pc = regs.PC;
+        state.inst_pc = regs.PC - 1; // PC is always incremented on the opcode latch cycle
         ret = true;
     }
 
@@ -239,18 +265,27 @@ bool CPU::Step()
         regs.P = ibus;
     }
 
+    // A, X and Y always set N and Z flags when latched
+#define NZ { \
+        regs.P = (regs.P & ~CPU_FLAG_N) | (ibus_n ? CPU_FLAG_N : 0);  \
+        regs.P = (regs.P & ~CPU_FLAG_Z) | (ibus_z ? CPU_FLAG_Z : 0);  \
+    } 
+
     // check REGA latch
     if((op & CPU_LATCH_REGA_mask) == CPU_LATCH_REGA) {
+        NZ;
         regs.A = ibus;
     }
 
     // check REGX latch
     if((op & CPU_LATCH_REGX_mask) == CPU_LATCH_REGX) {
+        NZ;
         regs.X = ibus;
     }
 
     // check REGY latch
     if((op & CPU_LATCH_REGY_mask) == CPU_LATCH_REGY) {
+        NZ;
         regs.Y = ibus;
     }
 
@@ -261,7 +296,20 @@ bool CPU::Step()
 
     // check INTM latch
     if((op & CPU_LATCH_INTM_mask) == CPU_LATCH_INTM) {
+        if((op & CPU_LATCH_INTM_FLAGS_mask) == CPU_LATCH_INTM_FLAGS) {
+            NZ;
+        } else if((op & CPU_LATCH_INTM_BIT_mask) == CPU_LATCH_INTM_BIT) {
+            regs.P = (regs.P & ~CPU_FLAG_Z) | (ibus_z ? CPU_FLAG_Z : 0);
+            regs.P = (regs.P & ~CPU_FLAG_N) | (bit_n ? CPU_FLAG_N : 0);
+            regs.P = (regs.P & ~CPU_FLAG_V) | (bit_v ? CPU_FLAG_V : 0);
+        }
         state.intermediate = ibus;
+    }
+
+    // set CV flags
+    if((op & CPU_LATCH_CV_mask) == CPU_LATCH_CV) {
+        regs.P = (regs.P & ~CPU_FLAG_C) | (alu_c ? CPU_FLAG_C : 0);
+        regs.P = (regs.P & ~CPU_FLAG_V) | (alu_v ? CPU_FLAG_V : 0);
     }
 
     state.istep++;
