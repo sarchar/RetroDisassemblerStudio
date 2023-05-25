@@ -25,8 +25,9 @@ public:
 
     std::shared_ptr<MemoryView> CreateMemoryView();
 private:
-    int InternalStep();
-    int OutputPixel();
+    int  InternalStep();
+    void Shift();
+    int  DeterminePixel() const;
 
     union {
         u8 ppucont;
@@ -66,6 +67,10 @@ private:
     // NMI wire connected directly to the CP
     nmi_function_t nmi;
 
+    // internal scroll registers
+    u8  scroll_x;
+    u8  scroll_y;
+
     // the PPU bus address to use with Read/Write
     u16 vram_address;
     int vram_address_latch;
@@ -78,6 +83,11 @@ private:
     int scanline;
     int cycle;
     int odd;
+
+    // moving x/y positions for the calculation of nametable and attribute bytes
+    // y_pos includes scroll_y, x_pos does not
+    int x_pos;
+    int y_pos;
 
     // color pipeline, color produced at cycle 2 is generated at cycle 4
     int color_pipeline[2];

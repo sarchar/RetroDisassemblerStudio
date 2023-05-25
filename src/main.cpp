@@ -473,7 +473,7 @@ void MyApp::RenderMainMenuBar()
                     dirent* dirent;
                     while((dirent = readdir(dir)) != nullptr) {
                         string file_path_name = string("roms/") + string(dirent->d_name);
-                        if(ends_with(file_path_name, ".nes")) {
+                        if(ends_with(strlower(file_path_name), ".nes")) {
                             test_roms.push_back(file_path_name);
                         }
                     }

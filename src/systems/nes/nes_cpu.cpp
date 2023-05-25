@@ -1,3 +1,8 @@
+// incredibly useful documentation:
+//
+// http://www.atarihq.com/danb/files/64doc.txt
+// https://www.masswerk.at/6502/6502_instruction_set.html
+//
 #include <iomanip>
 #include <iostream>
 
@@ -26,8 +31,13 @@ void CPU::Reset()
     state.nmi = 0;
     state.ops = CpuReset;
     state.istep = 0;
+    regs.P |= 0x20;
     regs.PC = 0xFFFC;
     cycle_count = 0;
+#if 0 // Uncomment to run the automation nestest.nes program
+    state.ops = &CpuReset[2];
+    regs.PC = 0xC000;
+#endif
 }
 
 bool CPU::Step()
@@ -53,8 +63,8 @@ bool CPU::Step()
 
     if(write) {
         // set up data line
-        u8 data_mux[] = { regs.A, regs.X, regs.Y, regs.P, state.intermediate, 
-            (u8)regs.PC, (u8)(regs.PC >> 8), 0 };
+        u8 data_mux[] = { regs.A, regs.X, regs.Y, regs.P, regs.P | CPU_FLAG_B,
+            state.intermediate, (u8)regs.PC, (u8)(regs.PC >> 8) };
         data = data_mux[(op & CPU_DATA_BUS_mask) >> CPU_DATA_BUS_shift];
         Write(address, data);
     } else {
@@ -67,6 +77,9 @@ bool CPU::Step()
 
     // check inc EADDR
     if((op & CPU_INCEADDR_mask) == CPU_INCEADDR) state.eaddr += 1;
+    else if((op & CPU_INCEADDR_LO_mask) == CPU_INCEADDR_LO) {
+        state.eaddr = (state.eaddr & 0xFF00) | (u16)(u8)((state.eaddr & 0xFF) + 1);
+    }
 
     // check inc INTM
     if((op & CPU_INCINTM_mask) == CPU_INCINTM) state.intermediate += 1;
@@ -101,23 +114,16 @@ bool CPU::Step()
         alu_v = (u8)((regs.P & CPU_FLAG_V) ? 1 : 0);
 
         switch(alu_op) {
+        case CPU_ALU_OP_SBC:
+            // SBC inverts the bits of alu_b, and uses carry as the two's complement 
+            alu_b ^= 0xFF;
+            // fallthru
         case CPU_ALU_OP_ADC:
         {
             u16 tmp = (u16)alu_a + (u16)alu_b + (u16)alu_c;
             alu_out = (u8)tmp;
             alu_c = tmp > 0xFF ? 1 : 0;
             
-            // if original inputs had the same sign, and the result does not, signed overflow is detected
-            alu_v = (((alu_a & 0x80) ^ (alu_b & 0x80)) == 0 
-                     && ((alu_out & 0x80) ^ (alu_a & 0x80)) != 0) ? 1 : 0;
-            break;
-        }
-        case CPU_ALU_OP_SBC:
-        {
-            u16 tmp = (u16)alu_a - (u16)alu_b - (u16)(alu_c ? 0 : 1);
-            alu_out = (u8)tmp;
-            alu_c = tmp > 0xFF ? 0 : 1;
-
             // if original inputs had the same sign, and the result does not, signed overflow is detected
             alu_v = (((alu_a & 0x80) ^ (alu_b & 0x80)) == 0 
                      && ((alu_out & 0x80) ^ (alu_a & 0x80)) != 0) ? 1 : 0;
@@ -253,7 +259,7 @@ bool CPU::Step()
 
     // check EADDR_HI_EXTC latch. bypass IBUS (take data directly)
     // and skip the next instruction if there's no ALU carry
-    if((op & CPU_LATCH_EADDR_HI_EXTC_mask) == CPU_LATCH_EADDR_HI_EXT) {
+    if((op & CPU_LATCH_EADDR_HI_EXTC_mask) == CPU_LATCH_EADDR_HI_EXTC) {
         state.eaddr = (state.eaddr & 0x00FF) | ((u16)data << 8);
         state.intermediate = alu_c;
         if(!alu_c) state.ops++;
@@ -266,9 +272,14 @@ bool CPU::Step()
         state.intermediate = alu_c;
     }
 
+    // set BRK vector
+    if((op & CPU_LATCH_EADDR_BRK_mask) == CPU_LATCH_EADDR_BRK) {
+        state.eaddr = 0xFFFE;
+    }
+
     // check REGP latch
     if((op & CPU_LATCH_REGP_mask) == CPU_LATCH_REGP) {
-        regs.P = ibus;
+        regs.P = ibus | 0x20; // bit 5 is always set
     }
 
     // A, X and Y always set N and Z flags when latched
@@ -304,6 +315,9 @@ bool CPU::Step()
     if((op & CPU_LATCH_INTM_mask) == CPU_LATCH_INTM) {
         if((op & CPU_LATCH_INTM_FLAGS_mask) == CPU_LATCH_INTM_FLAGS) {
             NZ;
+        } else if((op & CPU_LATCH_INTM_CMP_mask) == CPU_LATCH_INTM_CMP) {
+            NZ;
+            regs.P = (regs.P & ~CPU_FLAG_C) | (alu_c ? CPU_FLAG_C : 0);
         } else if((op & CPU_LATCH_INTM_BIT_mask) == CPU_LATCH_INTM_BIT) {
             regs.P = (regs.P & ~CPU_FLAG_Z) | (ibus_z ? CPU_FLAG_Z : 0);
             regs.P = (regs.P & ~CPU_FLAG_N) | (bit_n ? CPU_FLAG_N : 0);

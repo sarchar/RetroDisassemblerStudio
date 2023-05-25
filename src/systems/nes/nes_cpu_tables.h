@@ -33,8 +33,14 @@ typedef u64 CPU_INST;
 #define CPU_INCEADDR_mask  (1ULL << CPU_INCEADDR_shift) 
 #define CPU_INCEADDR       ON(CPU_INCEADDR_shift)
 
+// 1 bit: EADDR_LO increment: same page wrap around
+#define CPU_INCEADDR_LO_shift (CPU_INCEADDR_shift + CPU_INCEADDR_bits) 
+#define CPU_INCEADDR_LO_bits  1
+#define CPU_INCEADDR_LO_mask  (1ULL << CPU_INCEADDR_LO_shift) 
+#define CPU_INCEADDR_LO       ON(CPU_INCEADDR_LO_shift)
+
 // 1 bit: intermediate increment
-#define CPU_INCINTM_shift (CPU_INCEADDR_shift + CPU_INCEADDR_bits) 
+#define CPU_INCINTM_shift (CPU_INCEADDR_LO_shift + CPU_INCEADDR_LO_bits) 
 #define CPU_INCINTM_bits  1
 #define CPU_INCINTM_mask  (1ULL << CPU_INCINTM_shift) 
 #define CPU_INCINTM       ON(CPU_INCINTM_shift)
@@ -130,8 +136,14 @@ typedef u64 CPU_INST;
 #define CPU_LATCH_EADDR_mask  (1ULL << CPU_LATCH_EADDR_shift)
 #define CPU_LATCH_EADDR       ON(CPU_LATCH_EADDR_shift)
 
+// 1 bit: EADDR_BRK latch: set EADDR to 0xFFFE
+#define CPU_LATCH_EADDR_BRK_shift (CPU_LATCH_EADDR_shift + CPU_LATCH_EADDR_bits)
+#define CPU_LATCH_EADDR_BRK_bits  1
+#define CPU_LATCH_EADDR_BRK_mask  (1ULL << CPU_LATCH_EADDR_BRK_shift)
+#define CPU_LATCH_EADDR_BRK       ON(CPU_LATCH_EADDR_BRK_shift)
+
 // 4 bits: ALU op
-#define CPU_ALU_OP_shift  (CPU_LATCH_EADDR_shift + CPU_LATCH_EADDR_bits)
+#define CPU_ALU_OP_shift  (CPU_LATCH_EADDR_BRK_shift + CPU_LATCH_EADDR_BRK_bits)
 #define CPU_ALU_OP_bits   4
 #define CPU_ALU_OP_mask   (0x0FULL << CPU_ALU_OP_shift)
 #define CPU_ALU_OP_IDLE   (0ULL << CPU_ALU_OP_shift)   // not an actual state on the cpu, but an optimization for us
@@ -226,8 +238,14 @@ typedef u64 CPU_INST;
 #define CPU_LATCH_INTM_FLAGS_mask  (1ULL << CPU_LATCH_INTM_FLAGS_shift)
 #define CPU_LATCH_INTM_FLAGS       ON(CPU_LATCH_INTM_FLAGS_shift)
 
+// 1 bit: set CNZ flags from CMP operation when latching intermediate
+#define CPU_LATCH_INTM_CMP_shift   (CPU_LATCH_INTM_FLAGS_shift + CPU_LATCH_INTM_FLAGS_bits)
+#define CPU_LATCH_INTM_CMP_bits    1
+#define CPU_LATCH_INTM_CMP_mask    (1ULL << CPU_LATCH_INTM_CMP_shift)
+#define CPU_LATCH_INTM_CMP         ON(CPU_LATCH_INTM_CMP_shift)
+
 // 1 bit: set NV flags from BIT operation when latching intermediate
-#define CPU_LATCH_INTM_BIT_shift   (CPU_LATCH_INTM_FLAGS_shift + CPU_LATCH_INTM_FLAGS_bits)
+#define CPU_LATCH_INTM_BIT_shift   (CPU_LATCH_INTM_CMP_shift + CPU_LATCH_INTM_CMP_bits)
 #define CPU_LATCH_INTM_BIT_bits    1
 #define CPU_LATCH_INTM_BIT_mask    (1ULL << CPU_LATCH_INTM_BIT_shift)
 #define CPU_LATCH_INTM_BIT         ON(CPU_LATCH_INTM_BIT_shift)
@@ -240,9 +258,10 @@ typedef u64 CPU_INST;
 #define CPU_DATA_BUS_REGX    (1ULL << CPU_DATA_BUS_shift)
 #define CPU_DATA_BUS_REGY    (2ULL << CPU_DATA_BUS_shift)
 #define CPU_DATA_BUS_REGP    (3ULL << CPU_DATA_BUS_shift)
-#define CPU_DATA_BUS_INTM    (4ULL << CPU_DATA_BUS_shift)
-#define CPU_DATA_BUS_PC_LO   (5ULL << CPU_DATA_BUS_shift)
-#define CPU_DATA_BUS_PC_HI   (6ULL << CPU_DATA_BUS_shift)
+#define CPU_DATA_BUS_REGP_B  (4ULL << CPU_DATA_BUS_shift)
+#define CPU_DATA_BUS_INTM    (5ULL << CPU_DATA_BUS_shift)
+#define CPU_DATA_BUS_PC_LO   (6ULL << CPU_DATA_BUS_shift)
+#define CPU_DATA_BUS_PC_HI   (7ULL << CPU_DATA_BUS_shift)
 
 // 1 bit: latch carry and overflow flags
 #define CPU_LATCH_CV_shift   (CPU_DATA_BUS_shift + CPU_DATA_BUS_bits)
@@ -285,9 +304,9 @@ typedef u64 CPU_INST;
     /* at the same time I need the output for the ALU (adding X for indexing). So I have */     \
     /* CPU_LATCH_EADDR_HI_EXT which bypasses the internal bus and also determines if we need */ \
     /* to skip the carry into EADDR_HI in the following instruction */                          \
-    CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC |                 CPU_LATCH_EADDR_HI##c           \
+    CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC                                                   \
        | CPU_ALU_OP_ADC | CPU_ALU_A_REGX | CPU_ALU_B_EADDR_LO | CPU_ALU_C_ZERO                  \
-       | CPU_IBUS_ALU | CPU_LATCH_EADDR_LO,                                                     \
+       | CPU_IBUS_ALU | CPU_LATCH_EADDR_LO | CPU_LATCH_EADDR_HI##c,                             \
     /* Add 1 to the high byte of EADDR. This instruction is skipped if there's no carry */      \
     CPU_ALU_OP_ADC | CPU_ALU_A_EADDR_HI | CPU_ALU_B_INTM | CPU_ALU_C_ZERO                       \
        | CPU_IBUS_ALU | CPU_LATCH_EADDR_HI
@@ -300,9 +319,9 @@ typedef u64 CPU_INST;
 // See ABS_X for notes
 #define ABS_Y_(c) \
     CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC | CPU_IBUS_DATA | CPU_LATCH_EADDR_LO,             \
-    CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC |                 CPU_LATCH_EADDR_HI##c           \
+    CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC                                                   \
        | CPU_ALU_OP_ADC | CPU_ALU_A_REGY | CPU_ALU_B_EADDR_LO | CPU_ALU_C_ZERO                  \
-       | CPU_IBUS_ALU | CPU_LATCH_EADDR_LO,                                                     \
+       | CPU_IBUS_ALU | CPU_LATCH_EADDR_LO | CPU_LATCH_EADDR_HI##c,                             \
     CPU_ALU_OP_ADC | CPU_ALU_A_EADDR_HI | CPU_ALU_B_INTM | CPU_ALU_C_ZERO                       \
        | CPU_IBUS_ALU | CPU_LATCH_EADDR_HI
 
@@ -328,11 +347,11 @@ typedef u64 CPU_INST;
     /* read high byte from (intermediate), and simultaneously add Y to the low byte */  \
     /* we use LATCH_EADDER_HI_EXT* here to bypass the internal bus and read from the */ \
     /* data lines directly. _EXTC will skipp the high byte carry if possible */         \
-    CPU_ADDRESS_BUS_INTM | CPU_READ                           | CPU_LATCH_EADDR_HI##c   \
+    CPU_ADDRESS_BUS_INTM | CPU_READ                                                     \
         | CPU_ALU_OP_ADC | CPU_ALU_A_REGY | CPU_ALU_B_EADDR_LO | CPU_ALU_C_ZERO         \
-        | CPU_IBUS_ALU | CPU_LATCH_EADDR_LO,                                            \
+        | CPU_IBUS_ALU | CPU_LATCH_EADDR_LO | CPU_LATCH_EADDR_HI##c,                    \
     /* fix up high byte of EADDR, which has its offset in intermediate */               \
-    CPU_ADDRESS_BUS_EADDR                                                               \
+    CPU_ADDRESS_BUS_EADDR | CPU_READ                                                    \
         | CPU_ALU_OP_ADC | CPU_ALU_A_EADDR_HI | CPU_ALU_B_INTM | CPU_ALU_C_ZERO         \
         | CPU_IBUS_ALU | CPU_LATCH_EADDR_HI
 
@@ -443,7 +462,7 @@ ID(Y);
     static CPU_INST CpuOp##x##_imm[]  = {                       \
         CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC               \
             | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_ALU_B_DATA  \
-            | CPU_IBUS_ALU | CPU_LATCH_REGA,                    \
+            | CPU_IBUS_ALU | CPU_LATCH_REGA | CPU_LATCH_CV,     \
         OPCODE_FETCH }; \
     static CPU_INST CpuOp##x##_zp[]   = { ZP   , READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA | CPU_LATCH_CV, OPCODE_FETCH }; \
     static CPU_INST CpuOp##x##_zpx[]  = { ZP_X , READMEM_ALU | CPU_ALU_OP_##x | CPU_ALU_A_REGA | CPU_LATCH_REGA | CPU_LATCH_CV, OPCODE_FETCH }; \
@@ -552,13 +571,15 @@ RMW(ROR);
 
 // Compare ops get latched into the intermediate so they can set NZ flags
 #define CP_OP \
-    CPU_ADDRESS_BUS_EADDR | CPU_READ | CPU_ALU_OP_SBC | CPU_ALU_B_DATA | CPU_ALU_C_ZERO \
-        | CPU_IBUS_ALU | CPU_LATCH_INTM | CPU_LATCH_INTM_FLAGS
+    CPU_ADDRESS_BUS_EADDR | CPU_READ                       \
+        | CPU_ALU_OP_SBC | CPU_ALU_B_DATA | CPU_ALU_C_ONE \
+        | CPU_IBUS_ALU | CPU_LATCH_INTM | CPU_LATCH_INTM_CMP
 
 #define CP(inst, x) \
     static CPU_INST CpuOp##inst##_imm[]  = {                                                       \
         CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC                                                  \
-            | CPU_ALU_OP_SBC | CPU_ALU_A_REG##x | CPU_ALU_B_DATA | CPU_ALU_C_ZERO | CPU_IBUS_ALU,  \
+            | CPU_ALU_OP_SBC | CPU_ALU_A_REG##x | CPU_ALU_B_DATA | CPU_ALU_C_ONE                   \
+            | CPU_IBUS_ALU | CPU_LATCH_INTM | CPU_LATCH_INTM_CMP,                                  \
         OPCODE_FETCH };                                                                            \
     static CPU_INST CpuOp##inst##_zp[]   = { ZP   , CP_OP | CPU_ALU_A_REG##x, OPCODE_FETCH };      \
     static CPU_INST CpuOp##inst##_zpx[]  = { ZP_X , CP_OP | CPU_ALU_A_REG##x, OPCODE_FETCH };      \
@@ -616,6 +637,18 @@ static CPU_INST CpuOpJMP_abs[] = {
     OPCODE_FETCH,
 };
 
+static CPU_INST CpuOpJMP_ind[] = {
+    // fetch pointer low byte
+    CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC | CPU_IBUS_DATA | CPU_LATCH_EADDR_LO,
+    // fetch pointer high byte
+    CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC | CPU_IBUS_DATA | CPU_LATCH_EADDR_HI,
+    // read jump destination low byte. INCEADDR_LO forces same-page wrap around
+    CPU_ADDRESS_BUS_EADDR | CPU_READ | CPU_INCEADDR_LO | CPU_IBUS_DATA | CPU_LATCH_INTM,
+    // read destination high byte and latch to PC
+    CPU_ADDRESS_BUS_EADDR | CPU_READ | CPU_IBUS_DATA | CPU_LATCH_PC_JMPI,
+    OPCODE_FETCH,
+};
+
 static CPU_INST CpuOpRTS[] = {
     CPU_ADDRESS_BUS_PC | CPU_READ, // internal operation, no effect
     CPU_ADDRESS_BUS_STACK | CPU_READ | CPU_INCS, // read ignored
@@ -640,6 +673,23 @@ static CPU_INST CpuReset[] = {
     OPCODE_FETCH
 };
 
+static CPU_INST CpuOpBRK[] = {
+    // read and throw away, increment PC
+    CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC,
+
+    // push PC to the stack, set IRQ/BRK vector
+    CPU_ADDRESS_BUS_STACK | CPU_WRITE | CPU_DECS | CPU_DATA_BUS_PC_HI,
+    CPU_ADDRESS_BUS_STACK | CPU_WRITE | CPU_DECS | CPU_DATA_BUS_PC_LO,
+    CPU_ADDRESS_BUS_STACK | CPU_WRITE | CPU_DECS | CPU_DATA_BUS_REGP_B
+        | CPU_LATCH_EADDR_BRK,
+
+    // fetch the vector in EADDR and jump to it
+    CPU_ADDRESS_BUS_EADDR | CPU_READ | CPU_INCEADDR | CPU_IBUS_DATA | CPU_LATCH_INTM,
+    CPU_ADDRESS_BUS_EADDR | CPU_READ                | CPU_IBUS_DATA | CPU_LATCH_PC_JMPI,
+
+    // fetch the next instruction
+    OPCODE_FETCH
+};
 
 // NMI must be 7 cycles
 static CPU_INST CpuNMI[] = {
@@ -679,7 +729,7 @@ static CPU_INST CpuOpRTI[] = {
 }; 
 
 static CPU_INST const* OpTable[256] = {
-    /* 0x00 */ CpuOpUnimpl,         /* 0x01 */ CpuOpORA_indx,       /* 0x02 */ CpuOpUnimpl,         /* 0x03 */ CpuOpUnimpl,
+    /* 0x00 */ CpuOpBRK,            /* 0x01 */ CpuOpORA_indx,       /* 0x02 */ CpuOpUnimpl,         /* 0x03 */ CpuOpUnimpl,
     /* 0x04 */ CpuOpUnimpl,         /* 0x05 */ CpuOpORA_zp,         /* 0x06 */ CpuOpASL_zp,         /* 0x07 */ CpuOpUnimpl,
     /* 0x08 */ CpuOpPHP,            /* 0x09 */ CpuOpORA_imm,        /* 0x0A */ CpuOpASL_acc,        /* 0x0B */ CpuOpUnimpl,
     /* 0x0C */ CpuOpUnimpl,         /* 0x0D */ CpuOpORA_abs,        /* 0x0E */ CpuOpASL_abs,        /* 0x0F */ CpuOpUnimpl,
@@ -699,15 +749,15 @@ static CPU_INST const* OpTable[256] = {
     /* 0x44 */ CpuOpUnimpl,         /* 0x45 */ CpuOpEOR_zp,         /* 0x46 */ CpuOpLSR_zp,         /* 0x47 */ CpuOpUnimpl,
     /* 0x48 */ CpuOpPHA,            /* 0x49 */ CpuOpEOR_imm,        /* 0x4A */ CpuOpLSR_acc,        /* 0x4B */ CpuOpUnimpl,
     /* 0x4C */ CpuOpJMP_abs,        /* 0x4D */ CpuOpEOR_abs,        /* 0x4E */ CpuOpLSR_abs,        /* 0x4F */ CpuOpUnimpl,
-    /* 0x50 */ CpuOpUnimpl,         /* 0x51 */ CpuOpEOR_indy,       /* 0x52 */ CpuOpUnimpl,         /* 0x53 */ CpuOpUnimpl,
+    /* 0x50 */ CpuOpBVC,            /* 0x51 */ CpuOpEOR_indy,       /* 0x52 */ CpuOpUnimpl,         /* 0x53 */ CpuOpUnimpl,
     /* 0x54 */ CpuOpUnimpl,         /* 0x55 */ CpuOpEOR_zpx,        /* 0x56 */ CpuOpLSR_zpx,        /* 0x57 */ CpuOpUnimpl,
     /* 0x58 */ CpuOpCLI,            /* 0x59 */ CpuOpEOR_absy,       /* 0x5A */ CpuOpUnimpl,         /* 0x5B */ CpuOpUnimpl,
     /* 0x5C */ CpuOpUnimpl,         /* 0x5D */ CpuOpEOR_absx,       /* 0x5E */ CpuOpLSR_absx,       /* 0x5F */ CpuOpUnimpl,
     /* 0x60 */ CpuOpRTS,            /* 0x61 */ CpuOpADC_indx,       /* 0x62 */ CpuOpUnimpl,         /* 0x63 */ CpuOpUnimpl,
     /* 0x64 */ CpuOpUnimpl,         /* 0x65 */ CpuOpADC_zp,         /* 0x66 */ CpuOpROR_zp,         /* 0x67 */ CpuOpUnimpl,
     /* 0x68 */ CpuOpPLA,            /* 0x69 */ CpuOpADC_imm,        /* 0x6A */ CpuOpROR_acc,        /* 0x6B */ CpuOpUnimpl,
-    /* 0x6C */ CpuOpUnimpl,         /* 0x6D */ CpuOpADC_abs,        /* 0x6E */ CpuOpROR_abs,        /* 0x6F */ CpuOpUnimpl,
-    /* 0x70 */ CpuOpUnimpl,         /* 0x71 */ CpuOpADC_indy,       /* 0x72 */ CpuOpUnimpl,         /* 0x73 */ CpuOpUnimpl,
+    /* 0x6C */ CpuOpJMP_ind,        /* 0x6D */ CpuOpADC_abs,        /* 0x6E */ CpuOpROR_abs,        /* 0x6F */ CpuOpUnimpl,
+    /* 0x70 */ CpuOpBVS,            /* 0x71 */ CpuOpADC_indy,       /* 0x72 */ CpuOpUnimpl,         /* 0x73 */ CpuOpUnimpl,
     /* 0x74 */ CpuOpUnimpl,         /* 0x75 */ CpuOpADC_zpx,        /* 0x76 */ CpuOpROR_zpx,        /* 0x77 */ CpuOpUnimpl,
     /* 0x78 */ CpuOpSEI,            /* 0x79 */ CpuOpADC_absy,       /* 0x7A */ CpuOpUnimpl,         /* 0x7B */ CpuOpUnimpl,
     /* 0x7C */ CpuOpUnimpl,         /* 0x7D */ CpuOpADC_absx,       /* 0x7E */ CpuOpROR_absx,       /* 0x7F */ CpuOpUnimpl,

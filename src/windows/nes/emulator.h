@@ -45,6 +45,7 @@ private:
     void Reset();
     void UpdateRAMTexture();
     void UpdatePPUTexture();
+    void UpdateNametableTexture();
     bool SingleCycle();
     void StepPPU();
     void EmulationThread();
@@ -58,6 +59,8 @@ private:
     std::shared_ptr<PPU>         ppu;
     std::shared_ptr<MemoryView>  memory_view;
 
+    std::string                  run_to_address_str = "";
+    int                          run_to_address = -1;
     int                          cpu_shift;
 
     u64 last_cycle_count = 0;
@@ -67,9 +70,11 @@ private:
     // Framebuffers are 0xAARRGGBB format (MSB = alpha)
     u32*                         framebuffer;
     u32*                         ram_framebuffer;
+    u32*                         nametable_framebuffer;
 
     void*                        framebuffer_texture;
     void*                        ram_texture;
+    void*                        nametable_texture;
 
     // rasterizer position
     bool                         hblank;

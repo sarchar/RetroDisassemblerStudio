@@ -63,6 +63,13 @@ public:
         case 0x02: // PPUSTAT not writable
             break;
 
+        case 0x05: // PPUSCRL write x2
+            // PPUSCRL uses the address latch -- it affects PPUADDR
+            if(ppu->vram_address_latch) ppu->scroll_x = value;
+            else                        ppu->scroll_y = value;
+            ppu->vram_address_latch ^= 0x08;
+            break;
+
         case 0x06: // PPUADDR write x2
             ppu->vram_address = (u16)((ppu->vram_address & ((u16)0x00FF << (ppu->vram_address_latch ^ 0x08))) | ((u16)value << ppu->vram_address_latch));
             ppu->vram_address_latch ^= 0x08;
@@ -109,6 +116,12 @@ void PPU::Reset()
     scanline = 0;
     cycle = 0;
     odd = 0;
+
+    scroll_x = 0;
+    scroll_y = 0;
+
+    x_pos = 16;
+    y_pos = 0;
 }
 
 shared_ptr<MemoryView> PPU::CreateMemoryView()
@@ -130,13 +143,22 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
             if(cycle < 257) {   // cycles 1..256
                 vblank = 0; // doesn't hurt to set this every cycle, but the first time it'll matter is (scanline=261,cycle=1) when it should first be cleared
                 color = InternalStep();
+                x_pos += 1;
             } else if(cycle < 321) {   // cycles 257..320
                 // two unused vram fetches (phases 1..4)
+                if(cycle == 257) { // restart the next x position
+                    if(scanline == 261) y_pos = scroll_y;
+                    else                y_pos += 1;
+                    x_pos = 0;
+                }
             } else if(cycle < 337) {   // cycles 321..336
                 // first two tiles of the next line
                 color = InternalStep();
+                x_pos += 1;
             } else /* cycle < 341 */ { // cycles 337..341
-                // two unused vram fetches (phases 1..4)
+                // two unused vram fetches (phases 1..4), which latches the second of the first two tiles
+                // but we have to make sure x_pos doesn't increment here
+                InternalStep();
             }
         }
     } else if(scanline == 241) {
@@ -172,25 +194,45 @@ int PPU::InternalStep()
     // if both sprites and bg are disabled, rendering is disabled, and we don't do any memory accesses
     if(!(show_sprites || show_background)) return 0;
 
-    // Output pixel before reading from the bus, as phase 1 needs the shift register fully emptied
-    int color = (cycle >= 2) ? OutputPixel() : 0;
+    // phase 1 needs the shift register fully shifted 8 times
+    // shift registers start shifting at cycle 2, and the first latch of the shift register happens at cycle 9
+    // so we can be sure (at cycles 2, 3, 4, 5, 6, 7, 8, and 9) 8 bits are shifted out before the latch at cycle 9
+    // TODO Shift() is also where things like sprite 0 hit are setup
+    if(cycle >= 2) Shift();
 
     // setup address and latch data depending on the read phase
     int phase = cycle % 8;
     switch(phase) {
     case 1:
-        // fill shift registers. the first such event happens on cycle 9, and then 17, 25, ..
-        nametable_byte = nametable_latch;
-        attribute_byte = attribute_latch;
-        background_lsbits = ((u16)background_lsbits_latch << 8) | (background_lsbits & 0x00FF);
-        // msbits are on the data bus
-        background_msbits = ((u16)Read(vram_address) << 8) | (background_msbits & 0x00F);
-        
-        // setup NT address
+    {
+        if(cycle != 1) {
+            // fill shift registers. the first such event happens on cycle 9, and then 17, 25, ..
+            nametable_byte = nametable_latch;
+            attribute_byte = attribute_latch;
+            background_lsbits = ((u16)background_lsbits_latch << 8) | (background_lsbits & 0x00FF);
+            // msbits are on the data bus
+            background_msbits = ((u16)Read(vram_address) << 8) | (background_msbits & 0x00F);
+        }
+
+        // initialize base address to 0x2000, 0x2400, 0x2800, 0x2C00
+        vram_address = 0x2000 | (base_nametable_address << 10);
+
+        // x_pos/y_pos two tiles ahead (it's set to zero 20 cycles before the new scanline)
+        int x_tile = ((x_pos + (int)scroll_x) >> 3);
+        if(x_tile >= 32) vram_address ^= 0x400; // change nametables horizontally 
+
+        int y_tile = (y_pos >> 3);
+        if(y_tile >= 30) vram_address ^= 0x800; // change vertically vertically
+
+        vram_address |=  (x_tile & 0x1F) + ((y_tile & 0x1F) << 5);
+        //cout << "x=" << dec << x_pos << " y=" << y_pos << " NT addr: $" << hex << vram_address << endl;
         break;
+    }
+
     case 2:
         // latch NT byte
         nametable_latch = Read(vram_address);
+        //cout << "nametable byte = $" << hex << (int)nametable_latch << endl;
         break;
     case 3:
         // setup attribute address
@@ -214,12 +256,24 @@ int PPU::InternalStep()
         break;
     }
 
-    return color;
+    return DeterminePixel();
 }
 
-int PPU::OutputPixel()
+void PPU::Shift()
 {
-    return 0xFF00FF00;
+}
+
+// DeterminePixel has no side effects
+int PPU::DeterminePixel() const
+{
+    //int color = 0xFF000000 + (0x000001 * (cycle & 255)) + (0x000100 * scanline);
+    //int color = (0x0100 * x_pos) + y_pos; //nametable_byte;
+    int color = 0x08 * nametable_byte;
+
+    //if(x_pos >= 16 && x_pos <= 23 && y_pos >= 0 && y_pos <= 7) {
+    //    cout << "x=" << dec << x_pos << "y=" << y_pos << "vram_address=$" << hex << vram_address << " byte=$" << color << endl;
+    //}
+    return 0xFF000000 | color;
 }
 
 }

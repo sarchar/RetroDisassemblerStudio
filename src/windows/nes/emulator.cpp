@@ -5,6 +5,8 @@
 
 #include <GL/gl3w.h>
 
+#include "imgui.h"
+#include "imgui_stdlib.h"
 #include "magic_enum.hpp"
 
 #include "main.h"
@@ -34,6 +36,7 @@ Emulator::Emulator()
     // allocate storage for framebuffers
     framebuffer = (u32*)new u8[4 * 256 * 256];
     ram_framebuffer = (u32*)new u8[4 * 256 * 256];
+    nametable_framebuffer = (u32*)new u8[4 * 256 * 256];
 
     // generate the textures
     GLuint gl_texture;
@@ -51,6 +54,13 @@ Emulator::Emulator()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     ram_texture = (void*)(intptr_t)gl_texture;
+
+    glGenTextures(1, &gl_texture);
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, nametable_framebuffer);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    nametable_texture = (void*)(intptr_t)gl_texture;
 
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -99,8 +109,12 @@ Emulator::~Emulator()
     gl_texture = (GLuint)(intptr_t)ram_texture;
     glDeleteTextures(1, &gl_texture);
 
+    gl_texture = (GLuint)(intptr_t)nametable_texture;
+    glDeleteTextures(1, &gl_texture);
+
     delete [] (u8*)framebuffer;
     delete [] (u8*)ram_framebuffer;
+    delete [] (u8*)nametable_framebuffer;
 }
 
 void Emulator::UpdateContent(double deltaTime)
@@ -121,6 +135,7 @@ void Emulator::UpdateContent(double deltaTime)
 
     UpdateRAMTexture();
     UpdatePPUTexture();
+    UpdateNametableTexture();
 }
 
 void Emulator::UpdateRAMTexture()
@@ -164,6 +179,37 @@ void Emulator::UpdatePPUTexture()
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
+
+void Emulator::UpdateNametableTexture()
+{
+    int cx = 0;
+    int cy = 0;
+    int sz = 5;
+
+    for(int y = 0; y < 30; y++) {
+        for(int x = 0; x < 32; x++) {
+            u8 t = memory_view->ReadPPU(0x2000 + y * 32 + x);
+
+            // render 8x8
+            for(int i = 0; i < 8; i++) {
+                int cy = y * 8 + i;
+                for(int j = 0; j < 8; j++) {
+                    int cx = x * 8 + j;
+                    // cycle between R/G/B colors
+                    nametable_framebuffer[cy * 256 + cx] = 0xFF000000 | ((0x01 << ((t % 3) * 8)) * (u32)t);
+                }
+            }
+
+        }
+    }
+
+    // update the opengl texture
+    GLuint gl_texture = (GLuint)(intptr_t)nametable_texture;
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, nametable_framebuffer);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 
 void Emulator::RenderContent()
 {
@@ -210,6 +256,14 @@ void Emulator::RenderContent()
         }
     }
 
+    ImGui::SameLine();
+    if(ImGui::InputText("Run-to", &run_to_address_str, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+        stringstream ss;
+        ss << hex << run_to_address_str;
+        ss >> run_to_address;
+        current_state = State::RUNNING;
+    }
+
     ImGui::Text("%s :: %f Hz", magic_enum::enum_name(current_state).data(), cycles_per_sec);
 
     ImGui::Separator();
@@ -236,16 +290,17 @@ void Emulator::RenderContent()
     ImGui::Text("Y:$%02X", cpu->GetY());
 
     u8 p = cpu->GetP();
-    char flags[] = "P:nvb-dizc";
+    char flags[] = "P:nv-bdizc";
     if(p & CPU_FLAG_N) flags[2] = 'N';
     if(p & CPU_FLAG_V) flags[3] = 'V';
-    if(p & CPU_FLAG_B) flags[4] = 'B';
+    if(p & CPU_FLAG_B) flags[5] = 'B';
     if(p & CPU_FLAG_D) flags[6] = 'D';
     if(p & CPU_FLAG_I) flags[7] = 'I';
     if(p & CPU_FLAG_Z) flags[8] = 'Z';
     if(p & CPU_FLAG_C) flags[9] = 'C';
     ImGui::Text("%s", flags);
 
+    ImGui::Text("RAM[$00]=$%02X RAM[$02]=$%02X RAM[$03]=$%02X", memory_view->Read(0x00), memory_view->Read(0x02), memory_view->Read(0x03));
     ImGui::EndChild();
 
     ImGui::SameLine();
@@ -255,6 +310,7 @@ void Emulator::RenderContent()
     ImGui::Image(framebuffer_texture, ImVec2(256, 256));
     ImGui::SameLine();
     ImGui::Image(ram_texture, ImVec2(256, 256));
+    ImGui::Image(nametable_texture, ImVec2(256, 256));
 
     ImGui::EndChild();
 }
@@ -344,6 +400,10 @@ void Emulator::EmulationThread()
         case State::RUNNING:
             while(!exit_thread && current_state == State::RUNNING) {
                 SingleCycle();
+                if(run_to_address == cpu->GetOpcodePC()) {
+                    current_state = State::PAUSED;
+                    break;
+                }
             }
             break;
 
