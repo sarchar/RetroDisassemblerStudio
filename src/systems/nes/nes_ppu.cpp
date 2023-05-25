@@ -78,7 +78,7 @@ public:
 
         case 0x07: // PPUDATA
             WritePPU(ppu->vram_address, value);
-            ppu->vram_address += (ppu->vram_increment << 5);
+            ppu->vram_address += (ppu->vram_increment ? 32 : 1);
             break;
 
         default:
@@ -234,9 +234,24 @@ int PPU::InternalStep()
         nametable_latch = Read(vram_address);
         //cout << "nametable byte = $" << hex << (int)nametable_latch << endl;
         break;
+
     case 3:
+    {
         // setup attribute address
+        // take out the nametable base
+        int offset = vram_address & 0x3FF;
+
+        // every 32 * 4 = 0x80 tiles, increment attribute table address by 8 bytes (8 attr per row)
+        int attribute_addr = (offset & 0x380) >> 4;  // equiv: (base >> 7) << 3;
+
+        // and add in one for every 4 tiles in the x direction. 0x20 tiles per row, divided by 4
+        attribute_addr += (offset & 0x1F) >> 2;
+
+        // and then add the base of the attribute table
+        vram_address = (vram_address & 0x2C00) + 0x3C0 + attribute_addr;
+
         break;
+    }
     case 4:
         // latch attribute byte
         attribute_latch = Read(vram_address);
@@ -268,7 +283,7 @@ int PPU::DeterminePixel() const
 {
     //int color = 0xFF000000 + (0x000001 * (cycle & 255)) + (0x000100 * scanline);
     //int color = (0x0100 * x_pos) + y_pos; //nametable_byte;
-    int color = 0x08 * nametable_byte;
+    int color = 0x40 * attribute_byte;
 
     //if(x_pos >= 16 && x_pos <= 23 && y_pos >= 0 && y_pos <= 7) {
     //    cout << "x=" << dec << x_pos << "y=" << y_pos << "vram_address=$" << hex << vram_address << " byte=$" << color << endl;
