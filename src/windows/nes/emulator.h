@@ -44,6 +44,7 @@ protected:
 private:
     void Reset();
     bool SingleCycle();
+    void StepPPU();
     void EmulationThread();
 
     std::weak_ptr<System>        current_system;
@@ -54,6 +55,8 @@ private:
     std::shared_ptr<CPU>         cpu;
     std::shared_ptr<PPU>         ppu;
     std::shared_ptr<MemoryView>  memory_view;
+
+    int                          cpu_shift;
 
     u64 last_cycle_count = 0;
     std::chrono::time_point<std::chrono::steady_clock> last_cycle_time;

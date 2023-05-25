@@ -237,18 +237,49 @@ void Emulator::Reset()
 {
     cpu->Reset();
     ppu->Reset();
+    cpu_shift = 0;
+}
+
+void Emulator::StepPPU()
+{
+    bool hblank, vblank;
+    int color = ppu->Step(hblank, vblank);
+    if(vblank) {
+        // reset frame buffer to new buffer, etc
+    } else if(hblank) {
+        // move scanline down
+    } else {
+        // render color
+    }
 }
 
 bool Emulator::SingleCycle()
 {
-    // TODO: cycle where cpu->Step() gets called every SingleCycle call
-    bool ret = cpu->Step();
+    bool ret;
 
-    // PPU clock is /4 master clock and CPU is /12 master clock
-    ppu->Step();
-    ppu->Step();
-    ppu->Step();
+    // PPU clock is /4 master clock and CPU is /12 master clock, so it steps 3x as often
+    switch(cpu_shift) {
+    case 0:
+        ret = cpu->Step();
+        StepPPU();
+        StepPPU();
+        StepPPU();
+        break;
+    case 1:
+        StepPPU();
+        ret = cpu->Step();
+        StepPPU();
+        StepPPU();
+        break;
+    case 2:
+        StepPPU();
+        StepPPU();
+        ret = cpu->Step();
+        StepPPU();
+        break;
+    }
 
+    cpu_shift = (cpu_shift + 1) % 3;
     return ret;
 }
 

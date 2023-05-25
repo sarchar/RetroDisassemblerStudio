@@ -108,6 +108,7 @@ void PPU::Reset()
     enable_nmi = 0;
     scanline = 0;
     cycle = 0;
+    odd = 0;
 }
 
 shared_ptr<MemoryView> PPU::CreateMemoryView()
@@ -115,26 +116,28 @@ shared_ptr<MemoryView> PPU::CreateMemoryView()
     return make_shared<PPUView>(shared_from_this());
 }
 
-void PPU::Step()
+int PPU::Step(bool& hblank_out, bool& vblank_out)
 {
-    int phase = cycle % 8;
+    int color = 0;
+
+    // external wires for this particular pixel
+    vblank_out = (scanline >= 240);
+    hblank_out = !vblank_out && (cycle < 4 || cycle >= 259); // hblank is delayed because of the color output pipeline
 
     // perform current scanline/cycle
-
     if(scanline < 240 || scanline == 261) {
         if(cycle != 0) {
             if(cycle < 257) {   // cycles 1..256
                 vblank = 0; // doesn't hurt to set this every cycle, but the first time it'll matter is (scanline=261,cycle=1) when it should first be cleared
+                color = InternalStep();
             } else if(cycle < 321) {   // cycles 257..320
                 // two unused vram fetches (phases 1..4)
             } else if(cycle < 337) {   // cycles 321..336
                 // first two tiles of the next line
+                color = InternalStep();
             } else /* cycle < 341 */ { // cycles 337..341
                 // two unused vram fetches (phases 1..4)
             }
-            // all cycles except 0 perform internal logic, but output is disabled in hblank
-            // TODO huh maybe not? hblank cycles don't seem to read attribute/lsbits/msbits, only NT
-            InternalStep(phase);
         }
     } else if(scanline == 241) {
         if(cycle == 1) {
@@ -145,20 +148,36 @@ void PPU::Step()
 
     // end of step, increment cycle
     if(++cycle == 341) {
-        if(++scanline == 262) {
-            scanline = 0;
-        }
         cycle = 0;
+
+        if(++scanline == 262) {
+            odd ^= 1;
+            scanline = 0;
+
+            // odd frames are one clock shorter than normal, they skip the (0,0) cycle
+            if(odd) cycle = 1;
+        }
     }
+
+    // pipeline the color generation
+    int ret_color = color_pipeline[0];
+    color_pipeline[0] = color_pipeline[1];
+    color_pipeline[2] = color;
+
+    return ret_color;
 }
 
-void PPU::InternalStep(int phase)
+int PPU::InternalStep()
 {
-    // Output pixel before reading from the bus, as cycle 0 needs the shift register fully emptied
-    OutputPixel();
+    // Output pixel before reading from the bus, as phase 1 needs the shift register fully emptied
+    int color = (cycle >= 2) ? OutputPixel() : 0;
 
+    // setup address and latch data depending on the read phase
+    int phase = cycle % 8;
     switch(phase) {
     case 1:
+        // fill shift registers. the first such event happens on cycle 9, and then 17, 25, ..
+        //
         // setup NT address
         break;
     case 2:
@@ -181,10 +200,15 @@ void PPU::InternalStep(int phase)
         break;
     case 0:
         // latch msbits tile byte
-        //
-        // fill latch registers high bytes
         break;
     }
+
+    return color;
+}
+
+int PPU::OutputPixel()
+{
+    return 0x00FF00FF;
 }
 
 }

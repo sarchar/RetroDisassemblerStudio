@@ -19,12 +19,14 @@ public:
     ~PPU();
 
     void Reset();
-    void Step();
+
+    // returns color, outputs true for either blanking period
+    int Step(bool& hblank_out, bool& vblank_out);
 
     std::shared_ptr<MemoryView> CreateMemoryView();
 private:
-    void InternalStep(int);
-    void OutputPixel();
+    int InternalStep();
+    int OutputPixel();
 
     union {
         u8 ppucont;
@@ -61,15 +63,24 @@ private:
         };
     };
 
+    // NMI wire connected directly to the CP
     nmi_function_t nmi;
-    int scanline;
-    int cycle;
 
+    // the PPU bus address to use with Read/Write
     u16 vram_address;
     int vram_address_latch;
 
+    // PPU bus (the System module handles the VRAM connection)
     read_func_t Read;
     write_func_t Write;
+
+    // internal counting registers
+    int scanline;
+    int cycle;
+    int odd;
+
+    // color pipeline, color produced at cycle 2 is generated at cycle 4
+    int color_pipeline[2];
 
     friend class PPUView;
 };
