@@ -81,6 +81,17 @@ private:
 
     // color pipeline, color produced at cycle 2 is generated at cycle 4
     int color_pipeline[2];
+    
+    // incoming data latches
+    u8 nametable_latch;
+    u8 attribute_latch;
+    u8 background_lsbits_latch;
+
+    // shift registers for background
+    u8  nametable_byte;
+    u8  attribute_byte;
+    u16 background_lsbits;
+    u16 background_msbits;
 
     friend class PPUView;
 };

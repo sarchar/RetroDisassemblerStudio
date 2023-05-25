@@ -31,20 +31,28 @@ Emulator::Emulator()
 {
     SetTitle("Emulator :: Paused");
 
+    // allocate storage for framebuffers
     framebuffer = (u32*)new u8[4 * 256 * 256];
-    for(u32 i = 0; i < 256 * 256; i++) {
-        framebuffer[i] = 0xFF000000; // 0xAARRGGBB
-    }
+    ram_framebuffer = (u32*)new u8[4 * 256 * 256];
 
-    GLuint _display_texture;
-    glGenTextures(1, &_display_texture);
-    glBindTexture(GL_TEXTURE_2D, _display_texture);
+    // generate the textures
+    GLuint gl_texture;
+
+    glGenTextures(1, &gl_texture);
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    framebuffer_texture = (void*)(intptr_t)gl_texture;
 
-    display_texture = (void*)(intptr_t)_display_texture;
+    glGenTextures(1, &gl_texture);
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, ram_framebuffer);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    ram_texture = (void*)(intptr_t)gl_texture;
+
+    glBindTexture(GL_TEXTURE_2D, 0);
 
     if(auto system = MyApp::Instance()->GetProject()->GetSystem<System>()) {
         current_system = system;
@@ -85,10 +93,14 @@ Emulator::~Emulator()
 	exit_thread = true;
     if(emulation_thread) emulation_thread->join();
 
-    GLuint _display_texture = (GLuint)(intptr_t)display_texture;
-    glDeleteTextures(1, &_display_texture);
+    GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
+    glDeleteTextures(1, &gl_texture);
+
+    gl_texture = (GLuint)(intptr_t)ram_texture;
+    glDeleteTextures(1, &gl_texture);
 
     delete [] (u8*)framebuffer;
+    delete [] (u8*)ram_framebuffer;
 }
 
 void Emulator::UpdateContent(double deltaTime)
@@ -107,28 +119,50 @@ void Emulator::UpdateContent(double deltaTime)
         last_cycle_count = cycle_count;
     }
 
-    static int c = 0;
-    int color = 0xFF000000 | c;
-    c++;
+    UpdateRAMTexture();
+    UpdatePPUTexture();
+}
+
+void Emulator::UpdateRAMTexture()
+{
     int cx = 0;
     int cy = 0;
     int sz = 5;
-    for(int i = 0; i < 0x800; i++) {
+
+    for(int i = 0; i < 0x800; i++) { // iterate over ram
         u8 v = memory_view->Read(i);
-        // render 8x8
+
+        // render sz x sz square of the ram value
         for(int i = 0; i < sz; i++) {
             int y = cy + i;
             for(int j = 0; j < sz; j++) {
                 int x = cx + j;
-                framebuffer[y * 256 + x] = 0xFF000000 | (0x010101 * (u32)v);
+                // cycle between R/G/B colors
+                ram_framebuffer[y * 256 + x] = 0xFF000000 | ((0x01 << ((v % 3) * 8)) * (u32)v);
             }
         }
+
+        // next square
         cx += sz;
         if(cx >= 256) {
             cx = 0;
             cy += sz;
         }
     }
+
+    // update the opengl texture
+    GLuint gl_texture = (GLuint)(intptr_t)ram_texture;
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, ram_framebuffer);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void Emulator::UpdatePPUTexture()
+{
+    GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void Emulator::RenderContent()
@@ -218,13 +252,9 @@ void Emulator::RenderContent()
     ImGui::PushItemWidth(size.x / 2);
     ImGui::BeginChild("PPU view", size);
 
-    // update the opengl texture
-    GLuint _display_texture = (GLuint)(intptr_t)display_texture;
-    glBindTexture(GL_TEXTURE_2D, _display_texture);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    ImGui::Image(display_texture, ImVec2(256, 256));
+    ImGui::Image(framebuffer_texture, ImVec2(256, 256));
+    ImGui::SameLine();
+    ImGui::Image(ram_texture, ImVec2(256, 256));
 
     ImGui::EndChild();
 }
@@ -238,18 +268,26 @@ void Emulator::Reset()
     cpu->Reset();
     ppu->Reset();
     cpu_shift = 0;
+    raster_line = framebuffer;
+    raster_y = 0;
 }
 
 void Emulator::StepPPU()
 {
-    bool hblank, vblank;
-    int color = ppu->Step(hblank, vblank);
-    if(vblank) {
+    bool hblank_new, vblank;
+    int color = ppu->Step(hblank_new, vblank);
+    if(vblank) { // on high vblank
         // reset frame buffer to new buffer, etc
-    } else if(hblank) {
+        raster_line = framebuffer;
+        raster_y = 0;
+    } else if(hblank_new && hblank_new != hblank) { // on rising edge of hblank
         // move scanline down
-    } else {
-        // render color
+        raster_line = &framebuffer[++raster_y * 256];
+        hblank = hblank_new;
+    } else if(!hblank_new) {
+        hblank = false;
+        // display color
+        *raster_line++ = color;
     }
 }
 

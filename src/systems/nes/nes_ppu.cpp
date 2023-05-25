@@ -75,7 +75,7 @@ public:
             break;
 
         default:
-            cout << "[PPUView::Write] write $" << hex << (int)value << " to $" << hex << address << endl;
+            //cout << "[PPUView::Write] write $" << hex << (int)value << " to $" << hex << address << endl;
             break;
         }
     }
@@ -162,13 +162,16 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
     // pipeline the color generation
     int ret_color = color_pipeline[0];
     color_pipeline[0] = color_pipeline[1];
-    color_pipeline[2] = color;
+    color_pipeline[1] = color;
 
     return ret_color;
 }
 
 int PPU::InternalStep()
 {
+    // if both sprites and bg are disabled, rendering is disabled, and we don't do any memory accesses
+    if(!(show_sprites || show_background)) return 0;
+
     // Output pixel before reading from the bus, as phase 1 needs the shift register fully emptied
     int color = (cycle >= 2) ? OutputPixel() : 0;
 
@@ -177,23 +180,31 @@ int PPU::InternalStep()
     switch(phase) {
     case 1:
         // fill shift registers. the first such event happens on cycle 9, and then 17, 25, ..
-        //
+        nametable_byte = nametable_latch;
+        attribute_byte = attribute_latch;
+        background_lsbits = ((u16)background_lsbits_latch << 8) | (background_lsbits & 0x00FF);
+        // msbits are on the data bus
+        background_msbits = ((u16)Read(vram_address) << 8) | (background_msbits & 0x00F);
+        
         // setup NT address
         break;
     case 2:
         // latch NT byte
+        nametable_latch = Read(vram_address);
         break;
     case 3:
         // setup attribute address
         break;
     case 4:
         // latch attribute byte
+        attribute_latch = Read(vram_address);
         break;
     case 5:
         // setup lsbits tile address
         break;
     case 6:
         // latch lsbits tile byte
+        background_lsbits_latch = Read(vram_address);
         break;
     case 7:
         // setup msbits tile address
@@ -208,7 +219,7 @@ int PPU::InternalStep()
 
 int PPU::OutputPixel()
 {
-    return 0x00FF00FF;
+    return 0xFF00FF00;
 }
 
 }

@@ -43,6 +43,8 @@ protected:
 
 private:
     void Reset();
+    void UpdateRAMTexture();
+    void UpdatePPUTexture();
     bool SingleCycle();
     void StepPPU();
     void EmulationThread();
@@ -62,8 +64,17 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> last_cycle_time;
     double cycles_per_sec;
 
+    // Framebuffers are 0xAARRGGBB format (MSB = alpha)
     u32*                         framebuffer;
-    void*                        display_texture;
+    u32*                         ram_framebuffer;
+
+    void*                        framebuffer_texture;
+    void*                        ram_texture;
+
+    // rasterizer position
+    bool                         hblank;
+    u32*                         raster_line;
+    int                          raster_y;
 };
 
 } //namespace Windows
