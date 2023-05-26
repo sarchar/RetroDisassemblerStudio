@@ -45,6 +45,7 @@ public:
     void NoteReferences();
 
     u8 ReadProgramRom(int, u16);
+    u8 ReadCharacterRom(int, u16);
 
     bool Save(std::ostream&, std::string&);
     bool Load(std::istream&, std::string&, std::shared_ptr<System>&);

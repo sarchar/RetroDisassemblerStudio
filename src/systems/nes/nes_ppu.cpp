@@ -27,12 +27,18 @@ public:
             break;
 
         case 0x02: // PPUSTAT
-             ret = ppu->ppustat;
-             ppu->vblank = 0;
+            ret = ppu->ppustat;
+            ppu->vblank = 0;
 
-             // reset the address latch
-             ppu->vram_address_latch = 8;
-             break;
+            // reset the address latch
+            ppu->vram_address_latch = 8;
+            break;
+
+        case 0x07: // PPUDATA
+            ret = ppu->vram_read_buffer;
+            ppu->vram_read_buffer = ReadPPU(ppu->vram_address);
+            ppu->vram_address += (ppu->vram_increment ? 32 : 1);
+            break;
 
         default:
             cout << "[PPUView::Read] read from $" << hex << address << endl;
@@ -184,7 +190,9 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
     // pipeline the color generation
     int ret_color = color_pipeline[0];
     color_pipeline[0] = color_pipeline[1];
-    color_pipeline[1] = color;
+    color_pipeline[1] = color_pipeline[2];
+    color_pipeline[2] = color_pipeline[3];
+    color_pipeline[3] = color;
 
     return ret_color;
 }
@@ -197,8 +205,8 @@ int PPU::InternalStep()
     // phase 1 needs the shift register fully shifted 8 times
     // shift registers start shifting at cycle 2, and the first latch of the shift register happens at cycle 9
     // so we can be sure (at cycles 2, 3, 4, 5, 6, 7, 8, and 9) 8 bits are shifted out before the latch at cycle 9
-    // TODO Shift() is also where things like sprite 0 hit are setup
-    if(cycle >= 2) Shift();
+    // TODO Shift() is also where things like sprite 0 hit are setup. Don't shift in cycles 337..340
+    if(cycle >= 2 && cycle < 337) Shift();
 
     // setup address and latch data depending on the read phase
     int phase = cycle % 8;
@@ -209,9 +217,8 @@ int PPU::InternalStep()
             // fill shift registers. the first such event happens on cycle 9, and then 17, 25, ..
             nametable_byte = nametable_latch;
             attribute_byte = attribute_latch;
-            background_lsbits = ((u16)background_lsbits_latch << 8) | (background_lsbits & 0x00FF);
-            // msbits are on the data bus
-            background_msbits = ((u16)Read(vram_address) << 8) | (background_msbits & 0x00F);
+            background_lsbits = ((u16)background_lsbits_latch) | (background_lsbits & 0xFF00);
+            background_msbits = ((u16)background_msbits_latch) | (background_msbits & 0xFF00);
         }
 
         // initialize base address to 0x2000, 0x2400, 0x2800, 0x2C00
@@ -224,7 +231,7 @@ int PPU::InternalStep()
         int y_tile = (y_pos >> 3);
         if(y_tile >= 30) vram_address ^= 0x800; // change vertically vertically
 
-        vram_address |=  (x_tile & 0x1F) + ((y_tile & 0x1F) << 5);
+        vram_address |= (x_tile & 0x1F) + ((y_tile & 0x1F) << 5);
         //cout << "x=" << dec << x_pos << " y=" << y_pos << " NT addr: $" << hex << vram_address << endl;
         break;
     }
@@ -258,6 +265,7 @@ int PPU::InternalStep()
         break;
     case 5:
         // setup lsbits tile address
+        vram_address = (background_pattern_table_address << 12) + (nametable_latch << 4) + (y_pos & 0x07);
         break;
     case 6:
         // latch lsbits tile byte
@@ -265,9 +273,11 @@ int PPU::InternalStep()
         break;
     case 7:
         // setup msbits tile address
+        vram_address += 8;
         break;
     case 0:
         // latch msbits tile byte
+        background_msbits_latch = Read(vram_address);
         break;
     }
 
@@ -276,14 +286,20 @@ int PPU::InternalStep()
 
 void PPU::Shift()
 {
+    background_lsbits <<= 1;
+    background_msbits <<= 1;
 }
 
 // DeterminePixel has no side effects
 int PPU::DeterminePixel() const
 {
+    int fine_x = scroll_x % 7;
+
     //int color = 0xFF000000 + (0x000001 * (cycle & 255)) + (0x000100 * scanline);
     //int color = (0x0100 * x_pos) + y_pos; //nametable_byte;
-    int color = 0x40 * attribute_byte;
+    u8 bit0 = (u8)(background_lsbits >> (15 - fine_x));
+    u8 bit1 = (u8)(background_lsbits >> (15 - fine_x));
+    int color = 0x40 * ((bit1 << 1) | bit0);
 
     //if(x_pos >= 16 && x_pos <= 23 && y_pos >= 0 && y_pos <= 7) {
     //    cout << "x=" << dec << x_pos << "y=" << y_pos << "vram_address=$" << hex << vram_address << " byte=$" << color << endl;

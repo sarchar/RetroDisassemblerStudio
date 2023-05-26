@@ -1110,14 +1110,23 @@ u8 SystemView::ReadPPU(u16 address)
 {
     //TODO
 //!    cout << "[SystemView::ReadPPU] read from $" << hex << address << endl;
-    return VRAM[address & 0x3FFF];
+    if(address < 0x2000) {
+        // read cartridge CHR-ROM
+        return cartridge_view->ReadPPU(address);
+    } else {
+        return VRAM[address & 0x3FFF];
+    }
 }
 
 void SystemView::WritePPU(u16 address, u8 value)
 {
     //TODO
 //!    cout << "[SystemView::WritePPU] write $" << hex << (int)value << " to $" << address << endl;
-    VRAM[address & 0x3FFF] = value;
+    if(address < 0x2000) {
+        cartridge_view->WritePPU(address, value);
+    } else {
+        VRAM[address & 0x3FFF] = value;
+    }
 }
 
 }

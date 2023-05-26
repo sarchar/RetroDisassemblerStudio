@@ -261,6 +261,12 @@ u8 Cartridge::ReadProgramRom(int bank, u16 address)
     return memory_region->ReadByte(address);
 }
 
+u8 Cartridge::ReadCharacterRom(int bank, u16 address)
+{
+    auto memory_region = character_rom_banks[bank];
+    return memory_region->ReadByte(address);
+}
+
 shared_ptr<MemoryView> Cartridge::CreateMemoryView()
 {
     return make_shared<CartridgeView>(shared_from_this());
@@ -297,7 +303,19 @@ void CartridgeView::Write(u16 address, u8 value)
 
 u8 CartridgeView::ReadPPU(u16 address)
 {
-    return 0;
+    static u8 tile[] = {
+        0x81,
+        0x42,
+        0x24,
+        0x18,
+        0x18,
+        0x24,
+        0x42,
+        0x81
+    };
+    //address &= 0x1FFF;
+    //return tile[address & 7];
+    return cartridge->ReadCharacterRom(0, address);
 }
 
 void CartridgeView::WritePPU(u16 address, u8 value)
