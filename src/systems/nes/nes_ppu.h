@@ -25,9 +25,11 @@ public:
 
     std::shared_ptr<MemoryView> CreateMemoryView();
 private:
-    int  InternalStep();
+    int  InternalStep(bool);
     void Shift();
-    int  DeterminePixel() const;
+    void EvaluateSprites();
+    int  DeterminePixel();
+    int  DetermineBackgroundColor(int&) const;
 
     union {
         u8 ppucont;
@@ -59,8 +61,10 @@ private:
     union {
         u8 ppustat;
         struct {
-            u8 unused0 : 7;
-            u8 vblank  : 1;
+            u8 unused0         : 4;
+            u8 sprite_overflow : 1;
+            u8 sprite0_hit     : 1;
+            u8 vblank          : 1;
         };
     };
 
@@ -104,6 +108,30 @@ private:
     u8  attribute_byte;
     u16 background_lsbits;
     u16 background_msbits;
+
+    // primary and secondary OAM ram
+    u8 primary_oam[256];
+    u8 primary_oam_rw; // 1= write
+    u8 primary_oam_address;         // also the address used in port $2003
+    u8 primary_oam_address_bug;
+    u8 primary_oam_data;
+    u8 secondary_oam[32];
+    u8 secondary_oam_rw; // 1= write
+    u8 secondary_oam_address;
+    u8 secondary_oam_data;
+
+    // the rendering sprite states for the current scanline
+    u8 sprite_lsbits[8];
+    u8 sprite_msbits[8];
+    u8 sprite_attribute[8];
+    u8 sprite_x[8];
+
+    // for tracking sprite 0 hit
+    struct {
+        u8 unused1                : 6;
+        u8 sprite_zero_present    : 1;
+        u8 sprite_zero_hit_buffer : 1;
+    };
 
     // palette RAM, 16 bytes for BG, 16 for OAM
     u8 palette_ram[0x20];

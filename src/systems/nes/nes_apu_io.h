@@ -28,6 +28,9 @@ public:
 
     std::shared_ptr<MemoryView> CreateMemoryView();
 
+    typedef signal<std::function<void(u8)>> oam_dma_callback_t;
+    std::shared_ptr<oam_dma_callback_t> oam_dma_callback;
+
     friend class APU_IO_View;
 
 private:

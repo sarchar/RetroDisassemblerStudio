@@ -23,7 +23,8 @@ public:
     ~CPU();
 
     void Reset();
-    bool Step(); // return true on instruction decode cycle
+    bool Step(); // return true on instruction decode cycle 
+    inline void DmaStep() { cycle_count++; }
     inline void Nmi() { state.nmi = 1; }
 
     inline u64 GetNextUC()     const { auto ptr = state.ops; if(!ptr) return (u64)-1; else return *ptr; }
@@ -37,6 +38,8 @@ public:
     inline u8  GetY()          const { return regs.Y; }
     inline u16 GetS()          const { return regs.S + 0x100; }
     inline u64 GetCycleCount() const { return cycle_count; }
+    // the definition for CPU_READ is in nes_cpu_tables.h, but this inline optimization is worth it
+    inline bool IsReadCycle()  const { return state.ops && ((*state.ops & 0x04) == 0); }
 
 private:
     struct {

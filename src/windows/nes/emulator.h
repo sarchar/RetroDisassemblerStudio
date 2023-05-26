@@ -48,8 +48,10 @@ private:
     void UpdatePPUTexture();
     void UpdateNametableTexture();
     bool SingleCycle();
+    bool StepCPU();
     void StepPPU();
     void EmulationThread();
+    void WriteOAMDMA(u8);
 
     std::weak_ptr<System>        current_system;
     State                        current_state = State::INIT;
@@ -82,6 +84,15 @@ private:
     bool                         hblank;
     u32*                         raster_line;
     int                          raster_y;
+
+    // OAM DMA
+    bool                         oam_dma_enabled = false;
+    u16                          oam_dma_source;
+    u8                           oam_dma_rw;
+    u8                           oam_dma_read_latch;
+    bool                         dma_halt_cycle_done;
+
+    signal_connection            oam_dma_callback_connection;
 };
 
 } //namespace Windows

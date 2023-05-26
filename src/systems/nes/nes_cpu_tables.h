@@ -17,7 +17,7 @@ typedef u64 CPU_INST;
 // 1 bit: R/W. every cycle produces a read or write. the 65C816 has VDA/VPA pins that would let us avoid that
 #define CPU_RW_shift (CPU_ADDRESS_shift + CPU_ADDRESS_bits)
 #define CPU_RW_bits  1
-#define CPU_RW_mask  (1ULL << 2)
+#define CPU_RW_mask  (1ULL << CPU_RW_shift)
 #define CPU_READ     OFF(CPU_RW_shift)
 #define CPU_WRITE    ON(CPU_RW_shift)
 

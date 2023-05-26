@@ -10,6 +10,7 @@ namespace NES {
 
 APU_IO::APU_IO()
 {
+    oam_dma_callback = make_shared<oam_dma_callback_t>();
 }
 
 APU_IO::~APU_IO()
@@ -63,7 +64,7 @@ u8 APU_IO_View::Read(u16 address)
         break;
 
     default:
-        cout << "[APU_IO_View::Read] unhandled read from $" << hex << address << endl;
+        //cout << "[APU_IO_View::Read] unhandled read from $" << hex << address << endl;
         break;
     }
 
@@ -73,6 +74,10 @@ u8 APU_IO_View::Read(u16 address)
 void APU_IO_View::Write(u16 address, u8 value)
 {
     switch(address) {
+    case 0x14: // OAMDMA
+        apu_io->oam_dma_callback->emit(value);
+        break;
+
     case 0x16:
         if(value & 1) joy1_probe = 1;
         else if(!(value & 1) && joy1_probe) {
@@ -90,7 +95,7 @@ void APU_IO_View::Write(u16 address, u8 value)
         break;
 
     default:
-        cout << "[APU_IO_View::Write] unhandled write to $" << hex << address << " value $" << (int)value << endl;
+        //cout << "[APU_IO_View::Write] unhandled write to $" << hex << address << " value $" << (int)value << endl;
         break;
     }
 }

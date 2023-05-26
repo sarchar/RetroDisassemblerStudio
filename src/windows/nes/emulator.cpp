@@ -87,6 +87,7 @@ Emulator::Emulator()
         );
 
         apu_io = make_shared<APU_IO>();
+        oam_dma_callback_connection = apu_io->oam_dma_callback->connect(std::bind(&Emulator::WriteOAMDMA, this, placeholders::_1));
 
         memory_view = system->CreateMemoryView(ppu->CreateMemoryView(), apu_io->CreateMemoryView());
 
@@ -344,6 +345,37 @@ void Emulator::Reset()
     raster_y = 0;
 }
 
+bool Emulator::StepCPU()
+{
+    // TODO DMC DMA has priority over OAM DMA
+    if(oam_dma_enabled && cpu->IsReadCycle()) { // CPU can only be halted on a read cycle
+        // simulate a "halt" cycle
+        if(!dma_halt_cycle_done) {
+            dma_halt_cycle_done = true;
+            return cpu->Step();
+        }
+
+        // technically we need a random alignment cycle, but we just emulate perfect alignment so our DMA will always 
+        // take 513 cycles, never 514
+
+        // and technically DMA is part of the CPU but alas...it's happening here
+        if(!oam_dma_rw) { // read
+            oam_dma_read_latch = memory_view->Read(oam_dma_source);
+            oam_dma_rw ^= 1;
+        } else {
+            memory_view->Write(0x2004, oam_dma_read_latch);
+            oam_dma_rw ^= 1;
+            oam_dma_source += 1;
+            if((oam_dma_source & 0xFF) == 0) oam_dma_enabled = 0;
+        }
+
+        cpu->DmaStep();
+        return false;
+    } else {
+        return cpu->Step();
+    }
+}
+
 void Emulator::StepPPU()
 {
     bool hblank_new, vblank;
@@ -370,21 +402,21 @@ bool Emulator::SingleCycle()
     // PPU clock is /4 master clock and CPU is /12 master clock, so it steps 3x as often
     switch(cpu_shift) {
     case 0:
-        ret = cpu->Step();
+        ret = StepCPU();
         StepPPU();
         StepPPU();
         StepPPU();
         break;
     case 1:
         StepPPU();
-        ret = cpu->Step();
+        ret = StepCPU();
         StepPPU();
         StepPPU();
         break;
     case 2:
         StepPPU();
         StepPPU();
-        ret = cpu->Step();
+        ret = StepCPU();
         StepPPU();
         break;
     }
@@ -432,6 +464,14 @@ void Emulator::EmulationThread()
     }
 
     thread_exited = true;
+}
+
+void Emulator::WriteOAMDMA(u8 page)
+{
+    oam_dma_enabled = true;
+    oam_dma_source = (page << 8);
+    oam_dma_rw = 0;
+    dma_halt_cycle_done = false;
 }
 
 }
