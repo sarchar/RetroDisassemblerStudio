@@ -38,6 +38,9 @@ Emulator::Emulator()
     ram_framebuffer = (u32*)new u8[4 * 256 * 256];
     nametable_framebuffer = (u32*)new u8[4 * 256 * 256];
 
+    // fill the framebuffer with fully transparent pixels (0), so the bottom 16 rows aren't visible
+    memset(framebuffer, 0, 4 * 256 * 256);
+
     // generate the textures
     GLuint gl_texture;
 

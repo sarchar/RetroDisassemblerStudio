@@ -248,7 +248,7 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
                 // first two tiles of the next line
                 color = InternalStep();
                 x_pos += 1;
-            } else /* cycle < 341 */ { // cycles 337..341
+            } else /* cycle < 341 */ { // cycles 337..340
                 // two unused vram fetches (phases 1..4), which latches the second of the first two tiles
                 // but we have to make sure x_pos doesn't increment here
                 InternalStep();
@@ -274,12 +274,11 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
         }
     }
 
-    // pipeline the color generation
+    // pipeline the color generation for 4 cycles
     int ret_color = color_pipeline[0];
     color_pipeline[0] = color_pipeline[1];
     color_pipeline[1] = color_pipeline[2];
-    color_pipeline[2] = color_pipeline[3];
-    color_pipeline[3] = color;
+    color_pipeline[2] = color;
 
     return ret_color;
 }
@@ -293,7 +292,7 @@ int PPU::InternalStep()
     // shift registers start shifting at cycle 2, and the first latch of the shift register happens at cycle 9
     // so we can be sure (at cycles 2, 3, 4, 5, 6, 7, 8, and 9) 8 bits are shifted out before the latch at cycle 9
     // TODO Shift() is also where things like sprite 0 hit are setup. Don't shift in cycles 337..340
-    if(cycle >= 2 && cycle < 337) Shift();
+    if(cycle >= 2 && cycle <= 337) Shift();
 
     // setup address and latch data depending on the read phase
     int phase = cycle % 8;
@@ -302,10 +301,11 @@ int PPU::InternalStep()
     {
         if(cycle != 1) {
             // fill shift registers. the first such event happens on cycle 9, and then 17, 25, ..
+            // for the first two tiles, this latch occurs at cycles 329 and 337
             attribute_byte = attribute_next_byte;
             attribute_next_byte = attribute_latch;
-            background_lsbits = ((u16)background_lsbits_latch) | (background_lsbits & 0xFF00);
-            background_msbits = ((u16)background_msbits_latch) | (background_msbits & 0xFF00);
+            background_lsbits = (u16)background_lsbits_latch | (background_lsbits & 0xFF00);
+            background_msbits = (u16)background_msbits_latch | (background_msbits & 0xFF00);
         }
 
         // initialize base address to 0x2000, 0x2400, 0x2800, 0x2C00

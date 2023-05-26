@@ -91,7 +91,7 @@ private:
     int y_pos;
 
     // color pipeline, color produced at cycle 2 is generated at cycle 4
-    int color_pipeline[4];
+    int color_pipeline[3];
     
     // incoming data latches
     u8 nametable_latch;
