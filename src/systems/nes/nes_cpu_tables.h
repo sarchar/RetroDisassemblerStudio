@@ -285,13 +285,13 @@ typedef u64 CPU_INST;
     /* fetch the operand into EADDR */                                               \
     CPU_ADDRESS_BUS_PC    | CPU_READ | CPU_INCPC | CPU_IBUS_DATA | CPU_LATCH_EADDR,  \
     /* 8-bit add X to the operand */                                                 \
-    CPU_ALU_OP_ADC | CPU_ALU_A_REGX | CPU_ALU_B_EADDR_LO | CPU_ALU_C_ZERO | CPU_IBUS_DATA | CPU_LATCH_EADDR
+    CPU_ALU_OP_ADC | CPU_ALU_A_REGX | CPU_ALU_B_EADDR_LO | CPU_ALU_C_ZERO | CPU_IBUS_ALU | CPU_LATCH_EADDR
 
 #define ZP_Y \
     /* fetch the operand into EADDR */                                               \
     CPU_ADDRESS_BUS_PC    | CPU_READ | CPU_INCPC | CPU_IBUS_DATA | CPU_LATCH_EADDR,  \
     /* 8-bit add Y to the operand */                                                 \
-    CPU_ALU_OP_ADC | CPU_ALU_A_REGY | CPU_ALU_B_EADDR_LO | CPU_ALU_C_ZERO | CPU_IBUS_DATA | CPU_LATCH_EADDR
+    CPU_ALU_OP_ADC | CPU_ALU_A_REGY | CPU_ALU_B_EADDR_LO | CPU_ALU_C_ZERO | CPU_IBUS_ALU | CPU_LATCH_EADDR
 
 #define ABS \
     CPU_ADDRESS_BUS_PC | CPU_READ | CPU_INCPC | CPU_IBUS_DATA | CPU_LATCH_EADDR_LO,  \
