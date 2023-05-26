@@ -1061,13 +1061,13 @@ void System::NoteReferences()
     cartridge->NoteReferences();
 }
 
-shared_ptr<MemoryView> System::CreateMemoryView(std::shared_ptr<MemoryView> const& ppu_view)
+shared_ptr<MemoryView> System::CreateMemoryView(shared_ptr<MemoryView> const& ppu_view, shared_ptr<MemoryView> const& apu_io_view)
 {
-    return make_shared<SystemView>(shared_from_this(), ppu_view);
+    return make_shared<SystemView>(shared_from_this(), ppu_view, apu_io_view);
 }
 
-SystemView::SystemView(shared_ptr<BaseSystem> const& _system, std::shared_ptr<MemoryView> const& _ppu_view)
-    : ppu_view(_ppu_view)
+SystemView::SystemView(shared_ptr<BaseSystem> const& _system, shared_ptr<MemoryView> const& _ppu_view, shared_ptr<MemoryView> const& _apu_io_view)
+    : ppu_view(_ppu_view), apu_io_view(_apu_io_view)
 {
     system = dynamic_pointer_cast<System>(_system);
 
@@ -1085,9 +1085,7 @@ u8 SystemView::Read(u16 address)
     } else if(address < 0x4000) {
         return ppu_view->Read(address & 0x1FFF);
     } else if(address < 0x6000) {
-//        cout << "[SystemView::Read] unhandled Read($" << hex << setw(4) << setfill('0') << address << ")" << endl;
-        if(address == 0x2002) return 0x80; // always in vblank
-        return 0;
+        return apu_io_view->Read(address & 0x1FFF);
     } else {
         return cartridge_view->Read(address);
     }
@@ -1098,9 +1096,9 @@ void SystemView::Write(u16 address, u8 value)
     if(address < 0x2000) {
         RAM[address & 0x7FF] = value;
     } else if(address < 0x4000) {
-        ppu_view->Write(address, value & 0x1FFF);
+        ppu_view->Write(address & 0x1FFF, value);
     } else if(address < 0x6000) {
-//        cout << "[SystemView::Write] unhandled Write($" << hex << setw(4) << setfill('0') << address << ", $" << setw(2) << (int)value << ")" << endl;
+        apu_io_view->Write(address & 0x1FFF, value);
     } else {
         cartridge_view->Write(address, value);
     }

@@ -100,7 +100,7 @@ void BaseWindow::RenderGUI()
     ImGui::SetNextWindowSizeConstraints(ImVec2(250, 100),  ImVec2(1200, 800));
 
     ImGuiWindowFlags window_flags = 0;
-    if(!enable_nav) window_flags |= ImGuiWindowFlags_NoNav;
+    if(!enable_nav) window_flags |= ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoNavInputs;
     if(no_scrollbar) window_flags |= ImGuiWindowFlags_NoScrollbar;
 
     bool is_open = ImGui::Begin(window_title.c_str(), &local_open, window_flags);

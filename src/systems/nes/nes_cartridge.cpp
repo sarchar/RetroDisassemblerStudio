@@ -289,9 +289,10 @@ u8 CartridgeView::Read(u16 address)
         cout << "[CartridgeView::Read] unhandled read to SRAM" << endl;
         return 0;
     } else if(address < 0xC000) {
-        return cartridge->ReadProgramRom(prg_rom_bank_low, address);
+        if(cartridge->header.num_prg_rom_banks == 1) address |= 0x4000; // mirror the one 16KiB bank here
+        return cartridge->ReadProgramRom(prg_rom_bank_low, address | 0x8000);
     } else {
-        return cartridge->ReadProgramRom(prg_rom_bank_high, address);
+        return cartridge->ReadProgramRom(prg_rom_bank_high, address | 0x8000);
     }
 }
 
@@ -303,23 +304,13 @@ void CartridgeView::Write(u16 address, u8 value)
 
 u8 CartridgeView::ReadPPU(u16 address)
 {
-    static u8 tile[] = {
-        0x81,
-        0x42,
-        0x24,
-        0x18,
-        0x18,
-        0x24,
-        0x42,
-        0x81
-    };
-    //address &= 0x1FFF;
-    //return tile[address & 7];
+    // TODO CHR-ROM banking
     return cartridge->ReadCharacterRom(0, address);
 }
 
 void CartridgeView::WritePPU(u16 address, u8 value)
 {
+    // TODO CHR-RAM
 }
 
 }

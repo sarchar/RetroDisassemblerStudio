@@ -11,6 +11,7 @@
 
 namespace NES {
 
+class APU_IO;
 class GlobalMemoryLocation;
 class PPU;
 
@@ -57,6 +58,7 @@ private:
     bool                         thread_exited = false;
     std::shared_ptr<CPU>         cpu;
     std::shared_ptr<PPU>         ppu;
+    std::shared_ptr<APU_IO>      apu_io;
     std::shared_ptr<MemoryView>  memory_view;
 
     std::string                  run_to_address_str = "";

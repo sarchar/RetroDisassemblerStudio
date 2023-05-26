@@ -105,7 +105,7 @@ public:
         return ret;
     }
 
-    std::shared_ptr<MemoryView> CreateMemoryView(std::shared_ptr<MemoryView> const& ppu_view);
+    std::shared_ptr<MemoryView> CreateMemoryView(std::shared_ptr<MemoryView> const& ppu_view, std::shared_ptr<MemoryView> const& apu_io_view);
 
     // Listings
     void GetListingItems(GlobalMemoryLocation const&, std::vector<std::shared_ptr<NES::ListingItem>>& out);
@@ -228,8 +228,9 @@ private:
 
 class SystemView : public MemoryView {
 public:
-    SystemView(std::shared_ptr<BaseSystem> const&, std::shared_ptr<MemoryView> const& _ppu_view);
-    ~SystemView();
+    SystemView(std::shared_ptr<BaseSystem> const&, 
+            std::shared_ptr<MemoryView> const& _ppu_view, std::shared_ptr<MemoryView> const& _apu_io_view);
+    virtual ~SystemView();
 
     u8 Read(u16) override;
     void Write(u16, u8) override;
@@ -240,6 +241,7 @@ public:
 private:
     std::shared_ptr<System> system;
     std::shared_ptr<MemoryView> ppu_view;
+    std::shared_ptr<MemoryView> apu_io_view;
     std::shared_ptr<MemoryView> cartridge_view;
 
     // It could be more C++ish by using RAMRegion to request a memory view and redirect

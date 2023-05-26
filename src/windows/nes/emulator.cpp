@@ -12,6 +12,7 @@
 #include "main.h"
 #include "util.h"
 
+#include "systems/nes/nes_apu_io.h"
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_ppu.h"
@@ -32,6 +33,7 @@ Emulator::Emulator()
     : BaseWindow("NES::Emulator")
 {
     SetTitle("Emulator :: Paused");
+    SetNav(false);
 
     // allocate storage for framebuffers
     framebuffer = (u32*)new u8[4 * 256 * 256];
@@ -84,7 +86,9 @@ Emulator::Emulator()
             }
         );
 
-        memory_view = system->CreateMemoryView(ppu->CreateMemoryView());
+        apu_io = make_shared<APU_IO>();
+
+        memory_view = system->CreateMemoryView(ppu->CreateMemoryView(), apu_io->CreateMemoryView());
 
         cpu = make_shared<CPU>(
             std::bind(&MemoryView::Read, memory_view, placeholders::_1),
@@ -223,7 +227,7 @@ void Emulator::RenderContent()
     auto size = ImGui::GetWindowSize();
     size.x /= 2;
     ImGui::PushItemWidth(size.x / 2);
-    ImGui::BeginChild("CPU view", size);
+    ImGui::BeginChild("CPU view", size, false, ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoNavInputs);
 
     if(ImGui::Button("Step Cycle")) {
         if(current_state == State::PAUSED) {
@@ -320,6 +324,15 @@ void Emulator::RenderContent()
 
 void Emulator::CheckInput()
 {
+    // update all buttons on the joypad every frame
+    apu_io->SetJoy1Pressed(NES_BUTTON_UP    , ImGui::IsKeyDown(ImGuiKey_W));
+    apu_io->SetJoy1Pressed(NES_BUTTON_DOWN  , ImGui::IsKeyDown(ImGuiKey_S));
+    apu_io->SetJoy1Pressed(NES_BUTTON_LEFT  , ImGui::IsKeyDown(ImGuiKey_A));
+    apu_io->SetJoy1Pressed(NES_BUTTON_RIGHT , ImGui::IsKeyDown(ImGuiKey_D));
+    apu_io->SetJoy1Pressed(NES_BUTTON_SELECT, ImGui::IsKeyDown(ImGuiKey_Tab));
+    apu_io->SetJoy1Pressed(NES_BUTTON_START , ImGui::IsKeyDown(ImGuiKey_Enter));
+    apu_io->SetJoy1Pressed(NES_BUTTON_B     , ImGui::IsKeyDown(ImGuiKey_Z));
+    apu_io->SetJoy1Pressed(NES_BUTTON_A     , ImGui::IsKeyDown(ImGuiKey_X));
 }
 
 void Emulator::Reset()

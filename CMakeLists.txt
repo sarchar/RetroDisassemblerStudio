@@ -29,6 +29,7 @@ add_executable(${PROJECT_NAME}
                src/system_clock.cpp
 
                src/systems/system.cpp
+               src/systems/nes/nes_apu_io.cpp
                src/systems/nes/nes_cartridge.cpp
                src/systems/nes/nes_cpu.cpp
                src/systems/nes/nes_defines.cpp
