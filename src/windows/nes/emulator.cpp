@@ -343,7 +343,7 @@ void Emulator::StepPPU()
     } else if(!hblank_new) {
         hblank = false;
         // display color
-        *raster_line++ = color;
+        *raster_line++ = (0xFF000000 | color);
     }
 }
 

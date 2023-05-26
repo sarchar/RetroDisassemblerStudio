@@ -1126,6 +1126,8 @@ void SystemView::WritePPU(u16 address, u8 value)
         cartridge_view->WritePPU(address, value);
     } else {
         VRAM[address & 0x3FFF] = value;
+        // assume vertical mirroring for now. TODO
+        VRAM[(address ^ 0x800) & 0x3FFF] = value;
     }
 }
 

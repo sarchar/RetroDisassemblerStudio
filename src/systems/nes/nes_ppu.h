@@ -100,10 +100,13 @@ private:
     u8 background_msbits_latch;
 
     // shift registers for background
-    u8  nametable_byte;
+    u8  attribute_next_byte;
     u8  attribute_byte;
     u16 background_lsbits;
     u16 background_msbits;
+
+    // palette RAM, 16 bytes for BG, 16 for OAM
+    u8 palette_ram[0x20];
 
     friend class PPUView;
 };

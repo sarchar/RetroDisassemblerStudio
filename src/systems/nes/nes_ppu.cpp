@@ -9,6 +9,74 @@ using namespace std;
 
 namespace NES {
 
+#define RGB(r,g,b) (((u32)(b) << 16) | ((u32)(g) << 8) | (u32)(r))
+static int const rgb_palette_map[] = {
+    RGB(82, 82, 82),
+    RGB(1, 26, 81),
+    RGB(15, 15, 101),
+    RGB(35, 6, 99),
+    RGB(54, 3, 75),
+    RGB(64, 4, 38),
+    RGB(63, 9, 4),
+    RGB(50, 19, 0),
+    RGB(31, 32, 0),
+    RGB(11, 42, 0),
+    RGB(0, 47, 0),
+    RGB(0, 46, 10),
+    RGB(0, 38, 45),
+    RGB(0, 0, 0),
+    RGB(0, 0, 0),
+    RGB(0, 0, 0),
+    RGB(160, 160, 160),
+    RGB(30, 74, 157),
+    RGB(56, 55, 188),
+    RGB(88, 40, 184),
+    RGB(117, 33, 148),
+    RGB(132, 35, 92),
+    RGB(130, 46, 36),
+    RGB(111, 63, 0),
+    RGB(81, 82, 0),
+    RGB(49, 99, 0),
+    RGB(26, 107, 5),
+    RGB(14, 105, 46),
+    RGB(16, 92, 104),
+    RGB(0, 0, 0),
+    RGB(0, 0, 0),
+    RGB(0, 0, 0),
+    RGB(254, 255, 255),
+    RGB(105, 158, 252),
+    RGB(137, 135, 255),
+    RGB(174, 118, 255),
+    RGB(206, 109, 241),
+    RGB(224, 112, 178),
+    RGB(222, 124, 112),
+    RGB(200, 145, 62),
+    RGB(166, 167, 37),
+    RGB(129, 186, 40),
+    RGB(99, 196, 70),
+    RGB(84, 193, 125),
+    RGB(86, 179, 192),
+    RGB(60, 60, 60),
+    RGB(0, 0, 0),
+    RGB(0, 0, 0),
+    RGB(254, 255, 255),
+    RGB(190, 214, 253),
+    RGB(204, 204, 255),
+    RGB(221, 196, 255),
+    RGB(234, 192, 249),
+    RGB(242, 193, 223),
+    RGB(241, 199, 194),
+    RGB(232, 208, 170),
+    RGB(217, 218, 157),
+    RGB(201, 226, 158),
+    RGB(188, 230, 174),
+    RGB(180, 229, 199),
+    RGB(181, 223, 228),
+    RGB(169, 169, 169),
+    RGB(0, 0, 0),
+    RGB(0, 0, 0)
+};
+
 // Weird PPU latch system means all writes and reads set the latch, but some registers like
 // PPUCONT aren't readable and return the latched value instead
 class PPUView : public MemoryView {
@@ -95,11 +163,30 @@ public:
 
     // map these to the PPU bus
     u8 ReadPPU(u16 address) override {
-        return ppu->Read(address);
+        address &= 0x3FFF;
+        
+        // internal to the PPU is palette ram
+        if((address & 0x3F00) == 0x3F00) {
+            return ppu->palette_ram[address & 0x1F];
+        } else {
+            return ppu->Read(address);
+        }
     };
 
     void WritePPU(u16 address, u8 value) override {
-        ppu->Write(address, value);
+        address &= 0x3FFF;
+
+        if((address & 0x3F00) == 0x3F00) {
+            int palette_index = address & 0x1F;
+            if((palette_index & 0x03) == 0) {
+                // Mirror 0x10, 0x14, 0x18, 0x1C -> 0x00, 0x04, 0x08, 0x0C
+                ppu->palette_ram[palette_index | 0x10] = value;
+                palette_index &= ~0x10;
+            }
+            ppu->palette_ram[palette_index] = value;
+        } else {
+            ppu->Write(address, value);
+        }
     };
 
 private:
@@ -215,8 +302,8 @@ int PPU::InternalStep()
     {
         if(cycle != 1) {
             // fill shift registers. the first such event happens on cycle 9, and then 17, 25, ..
-            nametable_byte = nametable_latch;
-            attribute_byte = attribute_latch;
+            attribute_byte = attribute_next_byte;
+            attribute_next_byte = attribute_latch;
             background_lsbits = ((u16)background_lsbits_latch) | (background_lsbits & 0xFF00);
             background_msbits = ((u16)background_msbits_latch) | (background_msbits & 0xFF00);
         }
@@ -239,7 +326,6 @@ int PPU::InternalStep()
     case 2:
         // latch NT byte
         nametable_latch = Read(vram_address);
-        //cout << "nametable byte = $" << hex << (int)nametable_latch << endl;
         break;
 
     case 3:
@@ -248,15 +334,16 @@ int PPU::InternalStep()
         // take out the nametable base
         int offset = vram_address & 0x3FF;
 
-        // every 32 * 4 = 0x80 tiles, increment attribute table address by 8 bytes (8 attr per row)
-        int attribute_addr = (offset & 0x380) >> 4;  // equiv: (base >> 7) << 3;
+        // 32 tiles per row, 4 x-tiles represented per attribute byte
+        // every 32 * 4 y-tiles = 0x80 tiles, increment attribute table address by 8 bytes 
+        // (8 attribute bytes per 0x80 tiles)
+        int attribute_addr = (offset & 0x380) >> 4;  // equiv: (offset >> 7) << 3;
 
         // and add in one for every 4 tiles in the x direction. 0x20 tiles per row, divided by 4
         attribute_addr += (offset & 0x1F) >> 2;
 
         // and then add the base of the attribute table
-        vram_address = (vram_address & 0x2C00) + 0x3C0 + attribute_addr;
-
+        vram_address = (vram_address & 0x2C00) | 0x3C0 | attribute_addr;
         break;
     }
     case 4:
@@ -291,20 +378,35 @@ void PPU::Shift()
 }
 
 // DeterminePixel has no side effects
+// Rendering a pixel seems so easy when all the hard work of determining addresses and shifts
+// is done beforehand
 int PPU::DeterminePixel() const
 {
-    int fine_x = scroll_x % 7;
+    // determine tile color (2 bit)
+    int fine_x = scroll_x & 7;
+    u8 bit0 = (u8)((background_lsbits >> (15 - fine_x)) & 0x01);
+    u8 bit1 = (u8)((background_msbits >> (15 - fine_x)) & 0x01);
+    int tile_color = ((bit1 << 1) | bit0);
 
-    //int color = 0xFF000000 + (0x000001 * (cycle & 255)) + (0x000100 * scanline);
-    //int color = (0x0100 * x_pos) + y_pos; //nametable_byte;
-    u8 bit0 = (u8)(background_lsbits >> (15 - fine_x));
-    u8 bit1 = (u8)(background_lsbits >> (15 - fine_x));
-    int color = 0x40 * ((bit1 << 1) | bit0);
+    // determine attribute bits (palette index), 2 bits
+    // left/right nibble switches on y_pos every 16 rows
+    int y_shift = (y_pos & 0x10) >> 2; // y_shift = 0 or 4
+    int attribute_half = (attribute_byte >> y_shift) & 0x0F;
 
-    //if(x_pos >= 16 && x_pos <= 23 && y_pos >= 0 && y_pos <= 7) {
-    //    cout << "x=" << dec << x_pos << "y=" << y_pos << "vram_address=$" << hex << vram_address << " byte=$" << color << endl;
-    //}
-    return 0xFF000000 | color;
+    // left/right byte of said nibble switches on x_pos every 16 pixels
+    // (x_pos is always two tiles = 16 pixels ahead)
+    int x_shift = ((x_pos + scroll_x - 16) & 0x10) >> 3; // x_shift is 0 or 2
+    int attr = (attribute_half >> x_shift) & 0x03;
+
+    // NES palette lookup is 4 bits/16 colors
+    u8  nes_palette_index = ((attr << 2) | tile_color);
+
+    // translate palette + tile_color into RGB
+    int nes_color = palette_ram[tile_color == 0 ? 0 : nes_palette_index];
+
+    int color = rgb_palette_map[nes_color & 0x3F];
+
+    return color;
 }
 
 }

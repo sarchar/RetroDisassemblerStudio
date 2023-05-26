@@ -67,7 +67,7 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> last_cycle_time;
     double cycles_per_sec;
 
-    // Framebuffers are 0xAARRGGBB format (MSB = alpha)
+    // Framebuffers are 0xAABBGGRR format (MSB = alpha)
     u32*                         framebuffer;
     u32*                         ram_framebuffer;
     u32*                         nametable_framebuffer;
