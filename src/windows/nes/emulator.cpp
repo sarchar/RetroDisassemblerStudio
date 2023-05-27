@@ -407,7 +407,6 @@ bool Emulator::SingleCycle()
         ret = StepCPU();
         StepPPU();
         StepPPU();
-        StepPPU();
         break;
     case 1:
         StepPPU();
@@ -417,8 +416,9 @@ bool Emulator::SingleCycle()
         break;
     case 2:
         StepPPU();
-        StepPPU();
         ret = StepCPU();
+        StepPPU();
+        StepPPU();
         StepPPU();
         break;
     }

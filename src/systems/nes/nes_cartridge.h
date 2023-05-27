@@ -44,8 +44,8 @@ public:
 
     void NoteReferences();
 
-    u8 ReadProgramRom(int, u16);
-    u8 ReadCharacterRom(int, u16);
+    u8 ReadProgramRomRelative(int, u16);
+    u8 ReadCharacterRomRelative(int, u16);
 
     bool Save(std::ostream&, std::string&);
     bool Load(std::istream&, std::string&, std::shared_ptr<System>&);
@@ -63,6 +63,8 @@ public:
     CartridgeView(std::shared_ptr<Cartridge> const&);
     ~CartridgeView();
 
+    MIRRORING GetNametableMirroring();
+
     u8 Read(u16) override;
     void Write(u16, u8) override;
 
@@ -73,9 +75,23 @@ public:
 
 private:
     std::shared_ptr<Cartridge> cartridge;
-    int prg_rom_bank_low;
-    int prg_rom_bank_high;
 
+    u8 reset_vector_bank;
+
+    union {
+        struct {
+            u8 shift_register;
+            u8 shift_register_count;
+            u8 chr_rom_bank;
+            u8 chr_rom_bank_high;
+            u8 prg_rom_bank;
+            u8 prg_rom_bank_mode;
+            u8 chr_rom_bank_mode;
+            MIRRORING mirroring;
+        } mmc1;
+    };
+
+    u8  sram[0x2000];
     u8  chr_ram[0x2000];
 };
 

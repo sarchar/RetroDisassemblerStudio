@@ -257,7 +257,6 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
             // sprite 0 hit is cleared on the first pixel of the prerender line
             if(scanline == 261) {
                 sprite0_hit = 0;
-                sprite_zero_present = 0;
                 sprite_zero_hit_buffer = 0;
             }
 
@@ -268,6 +267,7 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
             } else if(cycle < 321) {   // cycles 257..320 (hblank up until bg tile prefetch)
                 if(cycle == 257) { 
                     // start of hblank
+                    sprite_zero_present = 0;
                     y_pos += 1;
                     x_pos = 0;
                 } else if(cycle < 280) {
@@ -341,6 +341,9 @@ int PPU::InternalStep(bool sprite_fetch)
             attribute_next_byte = attribute_latch;
             background_lsbits = (u16)background_lsbits_latch | (background_lsbits & 0xFF00);
             background_msbits = (u16)background_msbits_latch | (background_msbits & 0xFF00);
+
+            nametable_byte = nametable_next_byte;
+            nametable_next_byte = nametable_latch;
         }
 
         if(!sprite_fetch) {
@@ -642,10 +645,13 @@ int PPU::DeterminePixel()
     int mux_color = background_color;
     if(sprite_tile_color != 0) {
         if((sprite_priority == 0) || (tile_color == 0)) {
-            // sprite0 hit flag when a non-zero pixel of sprite 0 covers a nonzero pixel of the background
-            if(sprite_zero_present && sprite == 0 && tile_color != 0) sprite_zero_hit_buffer = 1;
-
             mux_color = sprite_color;
+        }
+
+        // sprite0 hit flag when a non-zero pixel of sprite 0 covers a nonzero pixel of the background
+        // sprite0 hit flag doesn't mean the sprite color is used, just when the two colors appear at the same time
+        if(sprite_zero_present && (sprite == 0) && (tile_color != 0)) {
+            sprite_zero_hit_buffer = 1;
         }
     } 
 
@@ -663,14 +669,22 @@ int PPU::DetermineBackgroundColor(int& tile_color) const
     u8 bit1 = (u8)((background_msbits >> (15 - fine_x)) & 0x01);
     tile_color = ((bit1 << 1) | bit0);
 
+    // if fine_x puts us into the next tile, change the attribute byte to the next and possibly adjust which 2 bits to use
+    int actual_attribute_byte = attribute_byte;
+    int attr_x = ((x_pos - 16) + (int)scroll_x) & 0x1F; // the actual 2 bits to use is determined by the x coordinate in the
+                                                        // 0..31 pixel block
+    // if the current x position (-16) plus fine_x puts us into rendering the next tile (which is in the shift buffer)
+    // then we also need to use the next attribute byte
+    if((((x_pos - 16) & 7) + fine_x) >= 8) actual_attribute_byte = attribute_next_byte;
+
     // determine attribute bits (palette index), 2 bits
     // left/right nibble switches on y_pos every 16 rows
     int y_shift = (y_pos & 0x10) >> 2; // y_shift = 0 or 4
-    int attribute_half = (attribute_byte >> y_shift) & 0x0F;
+    int attribute_half = (actual_attribute_byte >> y_shift) & 0x0F;
 
     // left/right byte of said nibble switches on x_pos every 16 pixels
     // (x_pos is always two tiles = 16 pixels ahead)
-    int x_shift = ((x_pos + scroll_x - 16) & 0x10) >> 3; // x_shift is 0 or 2
+    int x_shift = (attr_x & 0x10) ? 2 : 0; // x_shift is 0 or 2
     int attr = (attribute_half >> x_shift) & 0x03;
 
     // NES palette lookup is 4 bits/16 colors
@@ -679,9 +693,7 @@ int PPU::DetermineBackgroundColor(int& tile_color) const
     // translate palette + tile_color into RGB
     int nes_color = palette_ram[tile_color == 0 ? 0 : nes_palette_index];
 
-//    int color = rgb_palette_map[nes_color & 0x3F];
-
-    return nes_color & 0x3F; //color;
+    return nes_color & 0x3F;
 }
 
 }

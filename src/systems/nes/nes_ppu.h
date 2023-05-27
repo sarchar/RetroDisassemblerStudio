@@ -61,7 +61,7 @@ private:
     union {
         u8 ppustat;
         struct {
-            u8 unused0         : 4;
+            u8 unused0         : 5;
             u8 sprite_overflow : 1;
             u8 sprite0_hit     : 1;
             u8 vblank          : 1;
@@ -103,6 +103,10 @@ private:
     u8 attribute_latch;
     u8 background_lsbits_latch;
     u8 background_msbits_latch;
+
+    // TODO temp
+    u8 nametable_byte;
+    u8 nametable_next_byte;
 
     // shift registers for background
     u8  attribute_next_byte;

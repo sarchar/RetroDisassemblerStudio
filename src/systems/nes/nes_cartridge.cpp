@@ -83,6 +83,7 @@ void Cartridge::CreateMemoryRegions()
         program_rom_banks.push_back(bank);
     }
 
+    u8 chr_bank_index = 0;
     for(u32 i = 0; i < header.num_chr_rom_banks; i++) {
         CHARACTER_ROM_BANK_LOAD load_address;
         CHARACTER_ROM_BANK_SIZE bank_size;
@@ -96,15 +97,10 @@ void Cartridge::CreateMemoryRegions()
         }
 
         case 1: { // MMC1
-            // TODO MMC1 also supports 4K CHR banks that can be loaded into *either* low or high
-            // will have to support memory regions that can change their base? or at least, leave 
-            // it unset until the user specifies the base_address. but for now, we assume they're 
-            // swapped at 8K and always in the full memory. In fact it's probably not important
-            // what their base is, since they don't have address references contained within in the bank
-            // we could assume they all start at 0
+            // MMC1 CHR banks can be swapped into high or low, so we make 4K banks and set them low always
             cout << "[NES::Cartridge::Prepare] warning: MMC1 cartridge has CHR ROM banks that aren't handled well" << endl;
             load_address = CHARACTER_ROM_BANK_LOAD_LOW;
-            bank_size    = CHARACTER_ROM_BANK_SIZE_8K;
+            bank_size    = CHARACTER_ROM_BANK_SIZE_4K;
             break;
         }
 
@@ -119,9 +115,16 @@ void Cartridge::CreateMemoryRegions()
         }
 
         stringstream ss;
-        ss << "CHRROM$" << hex << setfill('0') << setw(2) << uppercase << i;
-        auto bank = make_shared<CharacterRomBank>(system, i, ss.str(), load_address, bank_size);
+        ss << "CHRROM$" << hex << setfill('0') << setw(2) << uppercase << chr_bank_index;
+        auto bank = make_shared<CharacterRomBank>(system, chr_bank_index++, ss.str(), load_address, bank_size);
         character_rom_banks.push_back(bank);
+
+        if(bank_size == CHARACTER_ROM_BANK_SIZE_4K) { // make a second 4K bank
+            stringstream ss;
+            ss << "CHRROM$" << hex << setfill('0') << setw(2) << uppercase << chr_bank_index;
+            auto bank = make_shared<CharacterRomBank>(system, chr_bank_index++, ss.str(), load_address, bank_size);
+            character_rom_banks.push_back(bank);
+        }
     }
 }
 
@@ -255,16 +258,17 @@ void Cartridge::NoteReferences()
     }
 }
 
-u8 Cartridge::ReadProgramRom(int bank, u16 address)
+// relative_address is 0-0x3FFF
+u8 Cartridge::ReadProgramRomRelative(int bank, u16 relative_address)
 {
     auto memory_region = program_rom_banks[bank];
-    return memory_region->ReadByte(address);
+    return memory_region->ReadByte(relative_address + memory_region->GetBaseAddress());
 }
 
-u8 Cartridge::ReadCharacterRom(int bank, u16 address)
+u8 Cartridge::ReadCharacterRomRelative(int bank, u16 relative_address)
 {
     auto memory_region = character_rom_banks[bank];
-    return memory_region->ReadByte(address);
+    return memory_region->ReadByte(relative_address + memory_region->GetBaseAddress());
 }
 
 shared_ptr<MemoryView> Cartridge::CreateMemoryView()
@@ -275,38 +279,186 @@ shared_ptr<MemoryView> Cartridge::CreateMemoryView()
 CartridgeView::CartridgeView(std::shared_ptr<Cartridge> const& _cartridge)
     : cartridge(_cartridge)
 {
-    prg_rom_bank_low = 0;
-    prg_rom_bank_high = cartridge->GetResetVectorBank();
+    reset_vector_bank = cartridge->GetResetVectorBank();
+
+    switch(cartridge->header.mapper) {
+    case 0:
+        break;
+
+    case 1:
+        mmc1.shift_register_count = 0;
+        mmc1.prg_rom_bank         = 0;
+        mmc1.prg_rom_bank_mode    = 3;
+        mmc1.chr_rom_bank         = 0;
+        mmc1.chr_rom_bank_mode    = 0;
+        mmc1.mirroring = cartridge->header.mirroring;
+        break;
+    }
 }
 
 CartridgeView::~CartridgeView()
 {
 }
 
+MIRRORING CartridgeView::GetNametableMirroring()
+{
+    switch(cartridge->header.mapper) {
+    case 0:
+        return cartridge->header.mirroring;
+
+    case 1:
+        return mmc1.mirroring;
+
+    default:
+        // unhandled
+        assert(false);
+        return MIRRORING_HORIZONTAL;
+    }
+}
+
 u8 CartridgeView::Read(u16 address)
 {
     if(address < 0x8000) {
-        cout << "[CartridgeView::Read] unhandled read to SRAM" << endl;
+        if(cartridge->header.has_sram) return sram[(address - 0x6000) & 0x1FFF];
         return 0;
-    } else if(address < 0xC000) {
-        if(cartridge->header.num_prg_rom_banks == 1) address |= 0x4000; // mirror the one 16KiB bank here
-        return cartridge->ReadProgramRom(prg_rom_bank_low, address | 0x8000);
-    } else {
-        return cartridge->ReadProgramRom(prg_rom_bank_high, address | 0x8000);
+    } 
+
+    switch(cartridge->header.mapper) {
+    case 0:
+        if(!(address & 0x4000) || (cartridge->header.num_prg_rom_banks == 1)) {
+            return cartridge->ReadProgramRomRelative(0, address & 0x3FFF);
+        } else {
+            return cartridge->ReadProgramRomRelative((address & 0x4000) >> 14, address & 0x3FFF);
+        }
+        break;
+
+    case 1:
+        switch(mmc1.prg_rom_bank_mode) {
+        case 0: // 32KiB banks selected at $8000
+        case 1:
+            assert(false);
+            return 0;
+
+        case 2: // $8000 fixed, $C000 swappable
+            if(address & 0x4000) {
+                return cartridge->ReadProgramRomRelative(mmc1.prg_rom_bank, address & 0x3FFF);
+            } else {
+                return cartridge->ReadProgramRomRelative(0, address & 0x3FFF);
+            }
+            break;
+
+        case 3: // $8000 swappable, $C000 fixed
+            if(address & 0x4000) {
+                return cartridge->ReadProgramRomRelative(reset_vector_bank, address & 0x3FFF);
+            } else {
+                return cartridge->ReadProgramRomRelative(mmc1.prg_rom_bank, address & 0x3FFF);
+            }
+            break;
+        }
+        break;
+
+    default:
+        // don't know how to read this mapper yet
+        assert(false);
+        break;
     }
+
+    return 0;
 }
 
 void CartridgeView::Write(u16 address, u8 value)
 {
-    cout << "[CartridgeView::Write] unhandled write $" << hex << uppercase << setw(2) << setfill('0') << (int)value
-         << " to $" << setw(4) << address << endl;
+    if(address < 0x8000) {
+        if(cartridge->header.has_sram) sram[(address - 0x6000) & 0x1FFF] = value;
+    } else {
+        switch(cartridge->header.mapper) {
+        case 0: // No mapper
+            // ignore
+            break;
+
+        case 1: // MMC1
+            // MMC1 uses a common shift register for all addresses, and writing a 1 in bit 7 clears the shift register to its initial state
+            // TODO MMC1 also ignores consecutive-cycle writes, which will be a royal PITA to implement. Somehow we have to know that a 
+            // read anywhere or write somewhere else occurred...
+            if(value & 0x80) {
+                mmc1.shift_register_count = 0;
+                mmc1.prg_rom_bank_mode    = 3;
+            } else {
+                mmc1.shift_register = ((mmc1.shift_register >> 1) | ((value & 1) << 4)) & 0x1F;
+                if(++mmc1.shift_register_count == 5) {
+                    mmc1.shift_register_count = 0;
+
+                    switch((address & 0xE000)) {
+                    case 0x8000: // Control
+                        switch(mmc1.shift_register & 0x03) {
+                        case 0: mmc1.mirroring = MIRRORING_FOUR_SCREEN; break; //TODO
+                        case 1: mmc1.mirroring = MIRRORING_FOUR_SCREEN; break; //TODO
+                        case 2: mmc1.mirroring = MIRRORING_VERTICAL   ; break;
+                        case 3: mmc1.mirroring = MIRRORING_HORIZONTAL ; break;
+                        }
+
+                        mmc1.prg_rom_bank_mode = (mmc1.shift_register >> 2) & 0x03;
+                        mmc1.chr_rom_bank_mode = (mmc1.shift_register >> 4) & 0x01;
+                        break;
+
+                    case 0xA000: // CHR bank 0
+                        mmc1.chr_rom_bank = mmc1.shift_register;
+                        break;
+
+                    case 0xC000: // CHR bank 1
+                        mmc1.chr_rom_bank_high = mmc1.shift_register;
+                        break;
+
+                    case 0xE000: // PRG bank
+                        mmc1.prg_rom_bank = mmc1.shift_register & 0x0F;
+                        break;
+                    }
+                }
+            }
+            break;
+
+        default:
+            cout << "[CartridgeView::Write] unhandled write $" << hex << uppercase << setw(2) << setfill('0') << (int)value
+                 << " to $" << setw(4) << address << endl;
+            assert(false);
+            break;
+        }
+    }
 }
 
 u8 CartridgeView::ReadPPU(u16 address)
 {
-    // TODO CHR-ROM banking
+    // no CHR ROM? check if we have CHR-RAM
     if(cartridge->header.num_chr_rom_banks == 0) return chr_ram[address & 0x1FFF];
-    return cartridge->ReadCharacterRom(0, address);
+    
+    // check CHR-ROM banking
+    switch(cartridge->header.mapper) {
+    case 0:
+        // One 8KiB bank at $0000-$1FFF
+        return cartridge->ReadCharacterRomRelative(0, address & 0x1FFF);
+
+    case 1:
+        if(mmc1.chr_rom_bank_mode) { // switch two separate 4KiB banks
+            if(address & 0x2000) { // high bank
+                return cartridge->ReadCharacterRomRelative(mmc1.chr_rom_bank_high, address & 0x0FFF);
+            } else { // low bank
+                return cartridge->ReadCharacterRomRelative(mmc1.chr_rom_bank, address & 0x0FFF);
+            }
+        } else { // switch one 8KiB bank
+            if(address & 0x2000) {
+                return cartridge->ReadCharacterRomRelative(mmc1.chr_rom_bank + 1, address & 0x0FFF);
+            } else {
+                return cartridge->ReadCharacterRomRelative(mmc1.chr_rom_bank, address & 0x0FFF);
+            }
+        }
+        break;
+
+    default:
+        assert(false);
+        break;
+    }
+
+    return 0;
 }
 
 void CartridgeView::WritePPU(u16 address, u8 value)

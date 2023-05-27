@@ -133,19 +133,20 @@ bool Project::CreateNewProjectFromFile(string const& file_path_name)
         ss << "Loading CHR ROM bank " << i;
         create_new_project_progress->emit(selfptr, false, num_steps, ++current_step, ss.str());
 
+        // Get the CHR bank
+        auto chr_bank = cartridge->GetCharacterRomBank(i); // Bank should be empty with no content
+
         // Read in the CHR rom data
-        unsigned char data[8 * 1024]; // TODO read 4K banks with other mappers (check chr_bank first!)
-        rom_stream.read(reinterpret_cast<char *>(data), sizeof(data));
+        unsigned char data[8 * 1024]; // max bank size is 8K but we may read 4K banks
+        assert(chr_bank->GetRegionSize() <= 8*1024);
+        rom_stream.read(reinterpret_cast<char *>(data), chr_bank->GetRegionSize());
         if(!rom_stream) {
             create_new_project_progress->emit(selfptr, true, num_steps, current_step, "Error: file too short when reading CHR-ROM");
             return false;
         }
 
-        // Get the CHR bank
-        auto chr_bank = cartridge->GetCharacterRomBank(i); // Bank should be empty with no content
-
         // Initialize the entire bank as just a series of bytes
-        chr_bank->InitializeFromData(reinterpret_cast<u8*>(data), sizeof(data)); // Mark content starting at offset 0 as data
+        chr_bank->InitializeFromData(reinterpret_cast<u8*>(data), chr_bank->GetRegionSize()); // Mark content starting at offset 0 as data
     }
 
     // create labels for reset and the registers, etc

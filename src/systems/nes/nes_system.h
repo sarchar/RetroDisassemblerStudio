@@ -16,6 +16,7 @@ class BaseExpressionNode;
 namespace NES {
 
 class Cartridge;
+class CartridgeView;
 class Define;
 class Disassembler;
 class Expression;
@@ -242,14 +243,12 @@ private:
     std::shared_ptr<System> system;
     std::shared_ptr<MemoryView> ppu_view;
     std::shared_ptr<MemoryView> apu_io_view;
-    std::shared_ptr<MemoryView> cartridge_view;
+    std::shared_ptr<CartridgeView> cartridge_view;
 
     // It could be more C++ish by using RAMRegion to request a memory view and redirect
     // read/writes there, but RAM is so simple I think I'll just embed it directly into SystemView.
     u8 RAM[0x800];
-
-    // same for VRAM
-    u8 VRAM[0x4000];
+    u8 VRAM[0x2000];
 };
 
 }

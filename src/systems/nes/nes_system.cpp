@@ -1071,7 +1071,7 @@ SystemView::SystemView(shared_ptr<BaseSystem> const& _system, shared_ptr<MemoryV
 {
     system = dynamic_pointer_cast<System>(_system);
 
-    cartridge_view = system->cartridge->CreateMemoryView();
+    cartridge_view = dynamic_pointer_cast<CartridgeView>(system->cartridge->CreateMemoryView());
 }
 
 SystemView::~SystemView()
@@ -1106,26 +1106,27 @@ void SystemView::Write(u16 address, u8 value)
 
 u8 SystemView::ReadPPU(u16 address)
 {
-    //TODO
-//!    cout << "[SystemView::ReadPPU] read from $" << hex << address << endl;
+    //cout << "[SystemView::ReadPPU] read from $" << hex << address << endl;
     if(address < 0x2000) {
-        // read cartridge CHR-ROM
+        // read cartridge CHR-ROM/RAM
         return cartridge_view->ReadPPU(address);
     } else {
-        return VRAM[address & 0x3FFF];
+        return VRAM[address & 0x1FFF];
     }
 }
 
 void SystemView::WritePPU(u16 address, u8 value)
 {
-    //TODO
-//!    cout << "[SystemView::WritePPU] write $" << hex << (int)value << " to $" << address << endl;
+    //cout << "[SystemView::WritePPU] write $" << hex << (int)value << " to $" << address << endl;
     if(address < 0x2000) {
+        // write to cartridge CHR-RAM
         cartridge_view->WritePPU(address, value);
     } else {
-        VRAM[address & 0x3FFF] = value;
-        // assume vertical mirroring for now. TODO
-        VRAM[(address ^ 0x800) & 0x3FFF] = value;
+        VRAM[address & 0x1FFF] = value;
+
+        // basic mirroring for now
+        if(system->cartridge->header.mirroring == MIRRORING_VERTICAL)        VRAM[(address ^ 0x800) & 0x1FFF] = value;
+        else if(system->cartridge->header.mirroring == MIRRORING_HORIZONTAL) VRAM[(address ^ 0x400) & 0x1FFF] = value;
     }
 }
 
