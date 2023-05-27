@@ -150,6 +150,7 @@ public:
             if((ppu->show_background || ppu->show_sprites) && ppu->scanline < 240 && ppu->cycle < 257) {
                 cout << "[PPUView::Write] warning: write to OAMDATA during rendering" << endl;
             }
+            //cout << "OAMDATA write $" << hex << (int)value << endl;
             ppu->primary_oam[ppu->primary_oam_address] = value;
             ppu->primary_oam_address += 1;
             break;
@@ -232,6 +233,9 @@ void PPU::Reset()
 
     x_pos = 16;
     y_pos = 0;
+
+    primary_oam_rw = 0;
+    secondary_oam_rw = 0;
 }
 
 shared_ptr<MemoryView> PPU::CreateMemoryView()
@@ -251,22 +255,31 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
     if(scanline < 240 || scanline == 261) {
         if(cycle != 0) {
             // sprite 0 hit is cleared on the first pixel of the prerender line
-            if(scanline == 261 && cycle == 1) sprite0_hit = 0;
+            if(scanline == 261) {
+                sprite0_hit = 0;
+                sprite_zero_present = 0;
+                sprite_zero_hit_buffer = 0;
+            }
 
             if(cycle < 257) {   // cycles 1..256
                 vblank = 0; // doesn't hurt to set this every cycle, but the first time it'll matter is (scanline=261,cycle=1) when it should first be cleared
                 color = InternalStep(false);
                 x_pos += 1;
-            } else if(cycle < 321) {   // cycles 257..320
-                if(cycle == 257) { // restart the next x position
-                    if(scanline == 261) y_pos = scroll_y;
-                    else                y_pos += 1;
+            } else if(cycle < 321) {   // cycles 257..320 (hblank up until bg tile prefetch)
+                if(cycle == 257) { 
+                    // start of hblank
+                    y_pos += 1;
                     x_pos = 0;
+                } else if(cycle < 280) {
+                    // idle
+                } else if(cycle < 305) {
+                    // latch scroll_y here on the prerender line
+                    if(scanline == 261) y_pos = scroll_y;
                 }
                 InternalStep(true);
             } else if(cycle < 337) {   // cycles 321..336
                 // first two tiles of the next line
-                color = InternalStep(false);
+                InternalStep(false);
                 x_pos += 1;
             } else /* cycle < 341 */ { // cycles 337..340
                 // two unused vram fetches (phases 1..4), which latches the second of the first two tiles
@@ -289,8 +302,8 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
             odd ^= 1;
             scanline = 0;
 
-            // odd frames are one clock shorter than normal, they skip the (0,0) cycle
-            if(odd) cycle = 1;
+            // odd frames are one clock shorter than normal, they skip the (0,0) cycle but only if rendering is enabled
+            if(odd && (show_background || show_sprites)) cycle = 1;
         }
     }
 
@@ -392,8 +405,6 @@ int PPU::InternalStep(bool sprite_fetch)
     case 7:
         // setup msbits tile address
         vram_address += 8;
-        if(sprite_fetch && sprite_size) {
-        }
         break;
     case 0:
         // latch msbits tile byte
@@ -458,9 +469,6 @@ void PPU::EvaluateSprites()
         if(odd_cycle) {
             secondary_oam_address = (secondary_oam_address + 1) & 0x1F; // need to support wrapping, as we rely on this being 5 bits
         }
-
-        sprite_zero_present = 0;
-        sprite_zero_hit_buffer = 0;
     } else if(cycle <= 256) { // Sprite evaluation
         int sprite_phase = (primary_oam_address - primary_oam_address_bug) & 3;
         switch(sprite_phase) { // depending on which byte of the OAM sprite we have read
@@ -537,33 +545,33 @@ void PPU::EvaluateSprites()
         int sprite = (secondary_oam_address >> 2);
         switch(cycle & 7) {
         case 1:
-            // latch delta Y coordinate into vram_address, since it's used to select which row of the tile
-            // we want to read
+            // latch delta Y coordinate into vram_address, since it's used to select which row of the tile we want to read
             // InternalStep() won't overwrite vram_address in hblank
             vram_address = scanline - secondary_oam_data;
             if(vram_address >= 8) { // only happens when sprite_size is 8x16
-                // second half of tile is 16 bytes away, but 8 bytes are accounted for in the Y position
+                // bottom half of tile is 16 bytes away, but 8 bytes are accounted for in the Y position
                 vram_address += 0x08;
             }
+            // increment address to read the tile index
             secondary_oam_address++;
             break;
         case 2:
             // set vram_address to point at the tile data
             if(sprite_size) {
-                // low bit picks bank $0000 or $1000
+                // low bit of tile number picks bank $0000 or $1000
                 int base = (secondary_oam_data & 1) << 12;
                 // and tiles are 32 bytes long
-                vram_address |= base | ((secondary_oam_data & 0xFE) << 5);
+                vram_address |= base | ((secondary_oam_data & 0xFE) << 4);
             } else {
                 // add tile * 16 to vram_address
                 vram_address |= (sprite_pattern_table_address << 12) | (secondary_oam_data << 4);
             }
+            // increment address to read sprite attribute byte
             secondary_oam_address++;
             break;
         case 3:
             // latch attribute
             sprite_attribute[sprite] = secondary_oam_data;
-            secondary_oam_address++;
 
             // when sprites are flipped vertically, we have to change the row of pixels we fetch
             if(sprite_attribute[sprite] & 0x80) {
@@ -571,17 +579,20 @@ void PPU::EvaluateSprites()
                     // TODO this is probably not right..
                     int new_y = (vram_address & 0x07) + (vram_address & 0x10) ? 8 : 0;
                     new_y = 15 - new_y;
-                    vram_address = (vram_address & ~0x1F) | (new_y & 0x07);
-                    if(new_y > 7) vram_address |= 0x10;
+                    vram_address = (vram_address & ~0x1F) | (new_y & 0x07) | ((new_y & 0x08) << 1);
                 } else {
-                    int new_y = 7 - (vram_address & 0x07);
-                    vram_address = (vram_address & ~0x07) | new_y;
+                    vram_address = (vram_address & ~0x07) | (~(vram_address & 0x07) & 0x07);
                 }
             }
+
+            // increment address to fetch sprite x coordinate
+            secondary_oam_address++;
             break;
         case 4:
             // latch x coordinate. empty OAM slots have X coordinate at 0xFF
             sprite_x[sprite] = secondary_oam_data;
+
+            // increment address to point to next sprite's Y coordinate
             secondary_oam_address++;
             break;
         default:
@@ -594,7 +605,7 @@ void PPU::EvaluateSprites()
         primary_oam_address = 0;
         primary_oam_address_bug = 0;
     } else if(cycle <= 340) {
-        // read the first byte of secondary OAM
+        // setup address to read the first byte of secondary OAM
         secondary_oam_rw = 0;
         secondary_oam_address = 0;
     }

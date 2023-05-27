@@ -305,12 +305,13 @@ void CartridgeView::Write(u16 address, u8 value)
 u8 CartridgeView::ReadPPU(u16 address)
 {
     // TODO CHR-ROM banking
+    if(cartridge->header.num_chr_rom_banks == 0) return chr_ram[address & 0x1FFF];
     return cartridge->ReadCharacterRom(0, address);
 }
 
 void CartridgeView::WritePPU(u16 address, u8 value)
 {
-    // TODO CHR-RAM
+    if(cartridge->header.num_chr_rom_banks == 0) chr_ram[address & 0x1FFF] = value;
 }
 
 }

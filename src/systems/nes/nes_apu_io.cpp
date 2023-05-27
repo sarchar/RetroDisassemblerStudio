@@ -64,7 +64,7 @@ u8 APU_IO_View::Read(u16 address)
         break;
 
     default:
-        //cout << "[APU_IO_View::Read] unhandled read from $" << hex << address << endl;
+        cout << "[APU_IO_View::Read] unhandled read from $" << hex << address << endl;
         break;
     }
 
@@ -95,7 +95,7 @@ void APU_IO_View::Write(u16 address, u8 value)
         break;
 
     default:
-        //cout << "[APU_IO_View::Write] unhandled write to $" << hex << address << " value $" << (int)value << endl;
+        cout << "[APU_IO_View::Write] unhandled write to $" << hex << address << " value $" << (int)value << endl;
         break;
     }
 }

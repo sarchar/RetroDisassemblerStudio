@@ -75,6 +75,8 @@ private:
     std::shared_ptr<Cartridge> cartridge;
     int prg_rom_bank_low;
     int prg_rom_bank_high;
+
+    u8  chr_ram[0x2000];
 };
 
 }

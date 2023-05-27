@@ -315,9 +315,10 @@ void Emulator::RenderContent()
     ImGui::PushItemWidth(size.x / 2);
     ImGui::BeginChild("PPU view", size);
 
-    ImGui::Image(framebuffer_texture, ImVec2(256, 256));
-    ImGui::SameLine();
+    ImGui::Image(framebuffer_texture, ImVec2(512, 512));
+
     ImGui::Image(ram_texture, ImVec2(256, 256));
+    ImGui::SameLine();
     ImGui::Image(nametable_texture, ImVec2(256, 256));
 
     ImGui::EndChild();
@@ -343,6 +344,7 @@ void Emulator::Reset()
     cpu_shift = 0;
     raster_line = framebuffer;
     raster_y = 0;
+    oam_dma_enabled = false;
 }
 
 bool Emulator::StepCPU()

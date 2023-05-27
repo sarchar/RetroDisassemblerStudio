@@ -74,6 +74,7 @@ private:
     // internal scroll registers
     u8  scroll_x;
     u8  scroll_y;
+    u8  scroll_y_latch;
 
     // the PPU bus address to use with Read/Write
     u16 vram_address;
