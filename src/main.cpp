@@ -40,7 +40,7 @@
 using namespace std;
 
 MyApp::MyApp(int, char*[])
-    : Application("Retro Disassembler Studio", 1600, 1000),
+    : Application("Retro Disassembler Studio", 1800, 1200),
       request_exit(false), show_imgui_demo(false)
 {
     BaseProject::RegisterProjectInformation(NES::Project::GetInformationStatic());

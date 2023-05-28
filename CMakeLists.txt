@@ -1,9 +1,26 @@
-
 cmake_minimum_required(VERSION 3.20)
 
 find_package(OpenGL REQUIRED)
 
 project(RetroDisassemblerStudio VERSION 0.0.2)
+
+if(CMAKE_CONFIGURATION_TYPES)
+    list(APPEND CMAKE_CONFIGURATION_TYPES DebugOptEmulation)
+    list(REMOVE_DUPLICATES CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING "Add DebugOptEmulation" FORCE)
+    get_directory_property(_vars VARIABLES)
+
+    foreach(_var IN LISTS _vars)
+        if (_var MATCHES "_DEBUG$")
+            string(REPLACE "_DEBUG" "_DEBUGOPTEMULATION" _var_new "${_var}")
+            set(${_var_new} "${${_var}}")
+        endif()
+    endforeach()
+
+    # Remove /RTC1 from flags and add them to the executable
+    STRING(REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_C_FLAGS_DEBUGOPTEMULATION "${CMAKE_C_FLAGS_DEBUGOPTEMULATION}")
+    STRING(REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_CXX_FLAGS_DEBUGOPTEMULATION "${CMAKE_CXX_FLAGS_DEBUGOPTEMULATION}") 
+endif()
 
 configure_file(src/config.h.in "${PROJECT_BINARY_DIR}/config.h")
 
@@ -52,7 +69,22 @@ add_executable(${PROJECT_NAME}
                src/windows/nes/listing.cpp
                src/windows/nes/references.cpp
                src/windows/nes/regions.cpp
-               )
+)
+
+# from https://stackoverflow.com/questions/74426638/how-to-remove-rtc1-from-specific-target-or-file-in-cmake
+# Re-enable /RTC1 for all of DebugOptEmulation, but put the flag in COMPILE_OPTIONS for each source
+add_compile_options("$<$<CONFIG:DebugOptEmulation>:/RTC1>")
+
+# Optimize certain files
+list(APPEND OPT_SOURCES src/systems/nes/nes_cpu.cpp src/systems/nes/nes_ppu.cpp)
+foreach(optfile IN LISTS OPT_SOURCES)
+    # remove /RTC1 on *this* file
+    get_property(_var SOURCE ${optfile} PROPERTY COMPILE_OPTIONS)
+    STRING(REGEX REPLACE "/RTC(su|[1su])" "" _var "${_var}")
+    set_property(SOURCE ${optfile} PROPERTY COMPILE_OPTIONS "${_var}")
+    # Add /O2 (speed opt) and /Ob2 (enable inlining)
+    set_source_files_properties(${optfile} PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:DebugOptEmulation>:/O2 /Ob2>")
+endforeach()
 
 target_include_directories(${PROJECT_NAME} PRIVATE "src/")
 target_include_directories(${PROJECT_NAME} PRIVATE "${PROJECT_BINARY_DIR}")
