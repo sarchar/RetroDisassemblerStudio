@@ -3,10 +3,11 @@
 #include "util.h"
 
 #include "systems/nes/nes_apu_io.h"
+#include "systems/nes/nes_system.h"
 
 using namespace std;
 
-namespace NES {
+namespace Systems::NES {
 
 APU_IO::APU_IO()
 {

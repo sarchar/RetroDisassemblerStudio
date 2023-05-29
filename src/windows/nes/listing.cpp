@@ -24,9 +24,7 @@
 
 using namespace std;
 
-namespace NES {
-
-namespace Windows {
+namespace Windows::NES {
 
 shared_ptr<Listing> Listing::CreateWindow()
 {
@@ -42,7 +40,7 @@ Listing::Listing()
     
     // create internal signals
 
-    if(auto system = (MyApp::Instance()->GetProject()->GetSystem<System>())) {
+    if(auto system = GetSystem()) {
         // grab a weak_ptr so we don't have to continually use dynamic_pointer_cast
         current_system = system;
 
@@ -81,7 +79,7 @@ void Listing::Follow()
                 // look for a label
                 bool found = false;
                 memory_object->operand_expression->Explore([this, &found](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
-                    if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
+                    if(auto label_node = dynamic_pointer_cast<Systems::NES::ExpressionNodes::Label>(node)) {
                         // first label found, go to it
                         GoToAddress(label_node->GetTarget());
                         found = true;
@@ -172,7 +170,7 @@ void Listing::GoToAddress(u32 address)
     }
 }
 
-void Listing::UpdateContent(double deltaTime) 
+void Listing::Update(double deltaTime) 
 {
 }
 
@@ -362,8 +360,8 @@ void Listing::CheckInput()
 
                     // now apply a OperandAddressOrLabel to the data on this memory object
                     auto default_operand_format = memory_object->FormatOperandField(); // will format the data $xxxx
-                    auto expr = make_shared<Expression>();
-                    auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
+                    auto expr = make_shared<Systems::NES::Expression>();
+                    auto nc = dynamic_pointer_cast<Systems::NES::ExpressionNodeCreator>(expr->GetNodeCreator());
                     auto root = nc->CreateLabel(label_address, label->GetIndex(), default_operand_format);
 
                     // if offset is nonzero, create an add offset expression
@@ -392,10 +390,10 @@ void Listing::CheckInput()
    
 }
 
-void Listing::RenderContent() 
+void Listing::Render() 
 {
     // postponed actions (things that change the listing display that cannot happen while rendering)
-    ListingItem::postponed_changes changes;
+    Systems::NES::ListingItem::postponed_changes changes;
 
     // All access goes through the system
     auto system = current_system.lock();
@@ -587,7 +585,7 @@ void Listing::RenderPopups()
     if(!system) return;
 
     if(popups.create_label.show 
-            && (ret = MyApp::Instance()->InputNamePopup(popups.create_label.title, "Label", &popups.create_label.buf)) != 0) {
+            && (ret = GetMainWindow()->InputNamePopup(popups.create_label.title, "Label", &popups.create_label.buf)) != 0) {
         if(ret > 0) {
             if(popups.create_label.buf.size() > 0) {
                 //TODO verify valid label (no spaces, etc)
@@ -599,7 +597,7 @@ void Listing::RenderPopups()
     }
 
     if(popups.disassembly.show
-            && (ret = MyApp::Instance()->WaitPopup(popups.disassembly.title, "Disassembling...", !system->IsDisassembling())) != 0) {
+            && (ret = GetMainWindow()->WaitPopup(popups.disassembly.title, "Disassembling...", !system->IsDisassembling())) != 0) {
         if(popups.disassembly.thread) {
             popups.disassembly.thread->join();
             popups.disassembly.thread = nullptr;
@@ -609,7 +607,7 @@ void Listing::RenderPopups()
     }
 
     if(popups.edit_comment.show 
-            && (ret = MyApp::Instance()->InputMultilinePopup(popups.edit_comment.title, "Comment", &popups.edit_comment.buf)) != 0) {
+            && (ret = GetMainWindow()->InputMultilinePopup(popups.edit_comment.title, "Comment", &popups.edit_comment.buf)) != 0) {
         if(ret > 0) {
             if(popups.edit_comment.buf.size() > 0) {
                 system->SetComment(popups.edit_comment.where, popups.edit_comment.type, popups.edit_comment.buf);
@@ -621,7 +619,7 @@ void Listing::RenderPopups()
     }
 
     if(popups.goto_address.show 
-            && (ret = MyApp::Instance()->InputHexPopup(popups.goto_address.title, "Address (hex)", &popups.goto_address.buf)) != 0) {
+            && (ret = GetMainWindow()->InputHexPopup(popups.goto_address.title, "Address (hex)", &popups.goto_address.buf)) != 0) {
         if(ret > 0) {
             if(popups.goto_address.buf.size() > 0) {
                 // parse the address given (TODO verify it's valid?)
@@ -650,5 +648,5 @@ void Listing::DisassemblyStopped(GlobalMemoryLocation const& start_location)
     jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
 }
 
-} // namespace Windows
-} // namespace NES
+} // namespace Windows::NES
+

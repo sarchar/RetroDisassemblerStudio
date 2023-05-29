@@ -1,6 +1,6 @@
 #pragma once
 
-namespace NES {
+namespace Systems::NES {
 
 enum ADDRESSING_MODE {
     AM_ACCUM,
@@ -57,4 +57,5 @@ enum CHARACTER_ROM_BANK_SIZE {
     CHARACTER_ROM_BANK_SIZE_8K
 };
 
-}
+} // namespace Systems::NES
+

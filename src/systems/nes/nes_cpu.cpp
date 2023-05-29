@@ -13,7 +13,7 @@
 
 using namespace std;
 
-namespace NES {
+namespace Systems::NES {
 
 #include "systems/nes/nes_cpu_tables.h"
 
@@ -54,7 +54,7 @@ bool CPU::Step()
     auto op = *state.ops++;
 
     // set up address line. regs.PC should always be mux item 0
-    u16 address_mux[] = { regs.PC, state.eaddr, (u16)state.intermediate, (u16)0x100 + (u16)regs.S };
+    u16 address_mux[] = { regs.PC, state.eaddr, (u16)state.intermediate, (u16)((u16)regs.S + 0x100) };
     u16 address = address_mux[(op & CPU_ADDRESS_mask) >> CPU_ADDRESS_shift];
 
     // set up read/write
@@ -63,7 +63,7 @@ bool CPU::Step()
 
     if(write) {
         // set up data line
-        u8 data_mux[] = { regs.A, regs.X, regs.Y, regs.P, regs.P | CPU_FLAG_B,
+        u8 data_mux[] = { regs.A, regs.X, regs.Y, regs.P, (u8)(regs.P | CPU_FLAG_B),
             state.intermediate, (u8)regs.PC, (u8)(regs.PC >> 8) };
         data = data_mux[(op & CPU_DATA_BUS_mask) >> CPU_DATA_BUS_shift];
         Write(address, data);

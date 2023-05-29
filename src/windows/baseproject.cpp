@@ -1,9 +1,13 @@
 #include <iostream>
 #include <memory>
 
+#include "../main.h"
 #include "windows/baseproject.h"
+#include "windows/main.h"
 
 using namespace std;
+
+namespace Windows {
 
 std::vector<BaseProject::Information const*> BaseProject::project_informations;
 
@@ -39,12 +43,12 @@ BaseProject::BaseProject(std::string const& title)
     create_new_project_progress = make_shared<create_new_project_progress_t>();
 
     // connect signals
-    auto app = MyApp::Instance();
+    auto main_window = MyApp::Instance()->GetMainWindow();
     window_added_connection = 
-        app->window_added->connect(std::bind(&BaseProject::_WindowAdded, this, placeholders::_1));
+        main_window->child_window_added->connect(std::bind(&BaseProject::_WindowAdded, this, placeholders::_1));
 
     window_removed_connection = 
-        app->window_removed->connect(std::bind(&BaseProject::_WindowRemoved, this, placeholders::_1));
+        main_window->child_window_removed->connect(std::bind(&BaseProject::_WindowRemoved, this, placeholders::_1));
 }
 
 BaseProject::~BaseProject()
@@ -95,3 +99,4 @@ shared_ptr<BaseProject> BaseProject::StartLoadProject(std::istream& is, std::str
     return info->create_project();
 }
 
+} // namespace Windows

@@ -21,7 +21,7 @@
 
 using namespace std;
 
-namespace NES {
+namespace Systems::NES {
 
 System::System()
     : ::BaseSystem(), disassembling(false)

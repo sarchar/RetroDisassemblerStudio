@@ -12,7 +12,7 @@
 #define CPU_FLAG_V (1 << 6)
 #define CPU_FLAG_N (1 << 7)
 
-namespace NES {
+namespace Systems::NES {
 
 class CPU {
 public:

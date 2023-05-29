@@ -10,7 +10,7 @@
 
 using namespace std;
 
-namespace NES {
+namespace Systems::NES {
 
 namespace ExpressionNodes {
 int Define::base_expression_node_id = 0;
@@ -43,7 +43,7 @@ shared_ptr<Define> Define::Load(istream& is, string& errmsg, shared_ptr<BaseExpr
         return nullptr;
     }
 
-    auto system = MyApp::Instance()->GetProject()->GetSystem<System>();
+    auto system = GetSystem();
     assert(system);
     auto define = system->FindDefine(name);
     assert(define);
@@ -75,7 +75,7 @@ void Label::RemoveReference(GlobalMemoryLocation const& where) {
 bool Label::Update()
 {
     // look up the labels at the saved address and use the nth one
-    if(auto system = MyApp::Instance()->GetProject()->GetSystem<System>()) {
+    if(auto system = GetSystem()) {
         if(auto memory_object = system->GetMemoryObject(where, &offset)) {
             if(memory_object->labels.size()) {
                 // found a label, so cache that

@@ -5,3 +5,4 @@ roms/*.lst
 *.nes
 *.rdsproj
 ext/*.ttf
+*~

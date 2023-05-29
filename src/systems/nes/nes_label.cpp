@@ -2,7 +2,7 @@
 
 using namespace std;
 
-namespace NES {
+namespace Systems::NES {
 
 Label::Label(GlobalMemoryLocation const& where, std::string const& label_str)
     : memory_location(where), label(label_str)
@@ -32,4 +32,4 @@ shared_ptr<Label> Label::Load(std::istream& is, std::string& errmsg)
     return make_shared<Label>(m, label_str);
 }
 
-}
+} // namespace Systems::NES

@@ -18,9 +18,7 @@
 
 using namespace std;
 
-namespace NES {
-
-namespace Windows {
+namespace Windows::NES {
 
 shared_ptr<References> References::CreateWindow(reference_type const& reference_to)
 {
@@ -34,14 +32,14 @@ References::References(reference_type const& _reference_to)
    
     // create internal signals
 
-    if(auto system = (MyApp::Instance()->GetProject()->GetSystem<System>())) {
+    if(auto system = GetSystem()) {
         // grab a weak_ptr so we don't have to continually use dynamic_pointer_cast
         current_system = system;
 
         stringstream ss;
         ss << "References: ";
 
-        if(auto label = get_if<shared_ptr<NES::Label>>(&reference_to)) {
+        if(auto label = get_if<shared_ptr<Label>>(&reference_to)) {
             ss << (*label)->GetString();
             changed_connection = (*label)->reverse_references_changed->connect([this]() {
                 force_repopulate = true;
@@ -53,7 +51,7 @@ References::References(reference_type const& _reference_to)
                     CloseWindow();
                 }
             });
-        } else if(auto define = get_if<shared_ptr<NES::Define>>(&reference_to)) {
+        } else if(auto define = get_if<shared_ptr<Define>>(&reference_to)) {
             ss << (*define)->GetString();
             changed_connection = (*define)->reverse_references_changed->connect([this]() {
                 force_repopulate = true;
@@ -72,7 +70,7 @@ References::~References()
 {
 }
 
-void References::UpdateContent(double deltaTime) 
+void References::Update(double deltaTime) 
 {
     if(force_repopulate) {
         PopulateLocations();
@@ -81,7 +79,7 @@ void References::UpdateContent(double deltaTime)
     }
 }
 
-void References::RenderContent() 
+void References::Render() 
 {
     // All access goes through the system
     auto system = current_system.lock();
@@ -145,7 +143,7 @@ void References::RenderContent()
                 (*memory).FormatAddress(ss, false, false);
 
                 go = [memory]() {
-                    if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Listing>()) {
+                    if(auto wnd = GetMainWindow()->FindMostRecentChildWindow<Listing>()) {
                         wnd->GoToAddress(*memory);
                     }
                 };
@@ -153,7 +151,7 @@ void References::RenderContent()
                 ss << "Define: " << (*define)->GetString();
 
                 go = [&define]() {
-                    if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Windows::Defines>()) {
+                    if(auto wnd = GetMainWindow()->FindMostRecentChildWindow<Windows::NES::Defines>()) {
                         auto deref = *define;
                         wnd->Highlight(deref);
                     }
@@ -185,9 +183,9 @@ void References::RenderContent()
 void References::PopulateLocations()
 {
     locations.clear();
-    if(auto label = get_if<shared_ptr<NES::Label>>(&reference_to)) {
+    if(auto label = get_if<shared_ptr<Label>>(&reference_to)) {
         PopulateLabelLocations(*label);
-    } else if(auto define = get_if<shared_ptr<NES::Define>>(&reference_to)) {
+    } else if(auto define = get_if<shared_ptr<Define>>(&reference_to)) {
         PopulateDefineLocations(*define);
     }
 }
@@ -222,6 +220,5 @@ void References::PopulateLabelLocations(shared_ptr<Label>& label)
 }
 
 
-} //namespace Windows
-} //namespace NES
+} //namespace Windows::NES
 

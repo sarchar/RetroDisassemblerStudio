@@ -13,6 +13,7 @@
 #include "imgui_impl_opengl3.h"
 
 #include "application.h"
+#include "windows/basewindow.h"
 
 using namespace std::literals;
 
@@ -37,7 +38,7 @@ std::function<RetType(ParamTypes...)> GLFW3Callback<RetType(ParamTypes...)>::cal
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 Application::Application(std::string const& _window_title, int _window_width, int _window_height)
-    : enable_toolbar(false), enable_statusbar(false), has_dock_builder(false)
+    : _glfw_window(0)
 {
     window_title = _window_title;
     window_width = _window_width;
@@ -51,12 +52,14 @@ Application::~Application()
 int Application::Run()
 {
     int err;
-    if((err = CreateWindow()) < 0) return err;
+    if((err = CreatePlatformWindow()) < 0) return err;
+    if(!OnPlatformReady()) return -1;
 
-    if(!OnWindowCreated()) return -1;
+    main_window = CreateMainWindow();
 
     auto previousTime = std::chrono::steady_clock::now();
 
+    GLFWwindow* glfw_window = (GLFWwindow*)_glfw_window;
     while (!glfwWindowShouldClose(glfw_window)) {
         // Poll and handle events (inputs, window resize, etc.)
         // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
@@ -73,18 +76,20 @@ int Application::Run()
         // Update the app
         if(!Update(deltaTime)) break;
 
+        // Update the main window
+        if(main_window) main_window->InternalUpdate(deltaTime);
+
         // Render the GUI layer
         ImGui_ImplOpenGL3_NewFrame();     // Start the Dear ImGui frame
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        RenderGUI();
-        _RenderMainStatusBar();
+        if(main_window) main_window->InternalRender();
 
         // Clear screen and allow the implementation to render opengl if it wants to
         int display_w, display_h;
         glfwGetFramebufferSize(glfw_window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
-        glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
+        glClearColor(clear_color[0] * clear_color[3], clear_color[1] * clear_color[3], clear_color[2] * clear_color[3], clear_color[3]);
         glClear(GL_COLOR_BUFFER_BIT);
         RenderGL();
 
@@ -107,13 +112,13 @@ int Application::Run()
         glfwSwapBuffers(glfw_window);
     }
 
-    DestroyWindow();
-    OnWindowDestroyed();
+    DestroyPlatformWindow();
+    OnPlatformClosed();
 
     return 0;
 }
 
-int Application::CreateWindow()
+int Application::CreatePlatformWindow()
 {
     // Setup window
     //glfwSetErrorCallback(glfw_error_callback);
@@ -133,17 +138,18 @@ int Application::CreateWindow()
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
     // Create window with graphics context
-    glfw_window = glfwCreateWindow(window_width, window_height, window_title.c_str(), NULL, NULL);
+    GLFWwindow* glfw_window = glfwCreateWindow(window_width, window_height, window_title.c_str(), NULL, NULL);
     if (glfw_window == NULL) return -2;
+    _glfw_window = (uintptr_t)glfw_window;
 
     // move the window
     glfwDefaultWindowHints(); // required for moving the window?
     SetWindowPos(monitor_x + (video_mode->width - window_width) / 2, monitor_y + (video_mode->height - window_height) / 2); 
     glfwShowWindow(glfw_window);
 
-    int xpos, ypos;
-    glfwGetWindowPos(glfw_window, &xpos, &ypos);
-    std::cout << "window at " << xpos << ", " << ypos << std::endl;
+    //int xpos, ypos;
+    //glfwGetWindowPos(glfw_window, &xpos, &ypos);
+    //std::cout << "window at " << xpos << ", " << ypos << std::endl;
 
     // Bind the keypress handler
     // static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -203,137 +209,73 @@ int Application::CreateWindow()
     return 0;
 }
  
-void Application::DestroyWindow()
+void Application::DestroyPlatformWindow()
 {
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    glfwDestroyWindow(glfw_window);
+    glfwDestroyWindow((GLFWwindow*)_glfw_window);
     glfwTerminate();
 }
 
-void Application::ShowDockSpace(bool dockSpaceHasBackground)
-{
-    // code from https://gist.github.com/PossiblyAShrub/0aea9511b84c34e191eaa90dd7225969
-    static ImGuiDockNodeFlags dockspace_flags = 0;
-    if (!dockSpaceHasBackground) dockspace_flags |= ImGuiDockNodeFlags_PassthruCentralNode;
-    
-    // We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not dockable into,
-    // because it would be confusing to have two docking targets within each others.
-    ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-
-    // Adjust for the status bar, if shown
-    float status_bar_height = 0;
-    if(enable_statusbar) {
-        status_bar_height = ImGui::GetFrameHeight();
-    }
-     
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->Pos);
-    ImVec2 dockspace_size = viewport->Size;
-    dockspace_size.y -= status_bar_height;
-    ImGui::SetNextWindowSize(dockspace_size);
-    ImGui::SetNextWindowViewport(viewport->ID);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-    window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-    
-   
-    // When using ImGuiDockNodeFlags_PassthruCentralNode, DockSpace() will render our background and 
-    // handle the pass-thru hole, so we ask Begin() to not render a background.
-    if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode) window_flags |= ImGuiWindowFlags_NoBackground;
-    
-    // Important: note that we proceed even if Begin() returns false (aka window is collapsed).
-    // This is because we want to keep our DockSpace() active. If a DockSpace() is inactive, 
-    // all active windows docked into it will lose their parent and become undocked.
-    // We cannot preserve the docking relationship between an active window and an inactive docking, otherwise 
-    // any change of dockspace/settings would lead to windows being stuck in limbo and never being visible.
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::Begin("DockSpace", nullptr, window_flags);
-    ImGui::PopStyleVar();
-    ImGui::PopStyleVar(2);
-    
-    // DockSpace
-    ImGuiIO& io = ImGui::GetIO();
-    if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
-
-        imgui_dockspace_id = ImGui::GetID(DOCKSPACE_NAME);
-        ImGui::DockSpace(imgui_dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
-
-        if (!has_dock_builder)
-        {
-            ImGui::DockBuilderRemoveNode(imgui_dockspace_id); // clear any previous layout
-
-            // Create the root node, which we can use to dock windows
-            imgui_dock_builder_root_id = ImGui::DockBuilderAddNode(imgui_dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
-
-            // And make it take the entire viewport
-            ImGui::DockBuilderSetNodeSize(imgui_dockspace_id, viewport->Size);
-
-            // split the dockspace into left and right, with the right side a temporary ID
-            ImGuiID right_id;
-            imgui_dock_builder_left_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_root_id, ImGuiDir_Left, 0.3f, nullptr, &right_id);
-
-            // split the right area, creating a temporary top/bottom
-            ImGuiID top_id;
-            imgui_dock_builder_bottom_id = ImGui::DockBuilderSplitNode(right_id, ImGuiDir_Down, 0.5f, nullptr, &top_id);
-
-            // now split the top area into a middle and right
-            imgui_dock_builder_right_id = ImGui::DockBuilderSplitNode(top_id, ImGuiDir_Right, 0.5f, nullptr, nullptr);
-
-            ImGui::DockBuilderFinish(imgui_dockspace_id);
-
-            // do this last for race conditions
-            has_dock_builder = true;
-        }
-    }
-
-    RenderMainMenuBar();
-    _RenderMainToolBar();
-    ImGui::End();
-}
-
-// Render a tool/status bars in the application window
-// see https://github.com/ocornut/imgui/issues/3518#issuecomment-807398290
-void Application::_RenderMainToolBar()
-{
-    if(!enable_toolbar) return;
-
-    ImGuiViewportP* viewport = (ImGuiViewportP*)(void*)ImGui::GetMainViewport();
-    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-    float height = ImGui::GetFrameHeight();
-
-    if (ImGui::BeginViewportSideBar("##SecondaryMenuBar", viewport, ImGuiDir_Up, height, window_flags)) {
-        if (ImGui::BeginMenuBar()) {
-            RenderMainToolBar();
-            ImGui::EndMenuBar();
-        }
-        ImGui::End();
-    }
-}
-
-void Application::_RenderMainStatusBar()
-{
-    if(!enable_statusbar) return;
-
-    ImGuiViewportP* viewport = (ImGuiViewportP*)(void*)ImGui::GetMainViewport();
-    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-    float height = ImGui::GetFrameHeight();
-
-    if (ImGui::BeginViewportSideBar("##MainStatusBar", viewport, ImGuiDir_Down, height, window_flags)) {
-        if(ImGui::BeginMenuBar()) {
-            RenderMainStatusBar();
-            ImGui::EndMenuBar();
-        }
-        ImGui::End();
-    }
-}
+//!void Application::ShowDockSpace(bool dockSpaceHasBackground)
+//!{
+//!    ImGui::PopStyleVar(2);
+//
+//!    window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+//!    window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+//!    
+//!    // Important: note that we proceed even if Begin() returns false (aka window is collapsed).
+//!    // This is because we want to keep our DockSpace() active. If a DockSpace() is inactive, 
+//!    // all active windows docked into it will lose their parent and become undocked.
+//!    // We cannot preserve the docking relationship between an active window and an inactive docking, otherwise 
+//!    // any change of dockspace/settings would lead to windows being stuck in limbo and never being visible.
+//!    ImGui::Begin("DockSpace", nullptr, window_flags);
+//!    
+//!    // DockSpace
+//!    ImGuiIO& io = ImGui::GetIO();
+//!    if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
+//!
+//!        imgui_dockspace_id = ImGui::GetID(DOCKSPACE_NAME);
+//!        ImGui::DockSpace(imgui_dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
+//!
+//!        if (!has_dock_builder)
+//!        {
+//!            ImGui::DockBuilderRemoveNode(imgui_dockspace_id); // clear any previous layout
+//!
+//!            // Create the root node, which we can use to dock windows
+//!            imgui_dock_builder_root_id = ImGui::DockBuilderAddNode(imgui_dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
+//!
+//!            // And make it take the entire viewport
+//!            ImGui::DockBuilderSetNodeSize(imgui_dockspace_id, viewport->Size);
+//!
+//!            // split the dockspace into left and right, with the right side a temporary ID
+//!            ImGuiID right_id;
+//!            imgui_dock_builder_left_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_root_id, ImGuiDir_Left, 0.3f, nullptr, &right_id);
+//!
+//!            // split the right area, creating a temporary top/bottom
+//!            ImGuiID top_id;
+//!            imgui_dock_builder_bottom_id = ImGui::DockBuilderSplitNode(right_id, ImGuiDir_Down, 0.5f, nullptr, &top_id);
+//!
+//!            // now split the top area into a middle and right
+//!            imgui_dock_builder_right_id = ImGui::DockBuilderSplitNode(top_id, ImGuiDir_Right, 0.5f, nullptr, nullptr);
+//!
+//!            ImGui::DockBuilderFinish(imgui_dockspace_id);
+//!
+//!            // do this last for race conditions
+//!            has_dock_builder = true;
+//!        }
+//!    }
+//!
+//!    RenderMainMenuBar();
+//!    _RenderMainToolBar();
+//!    ImGui::End();
+//!}
 
 void Application::KeyPressHandler(GLFWwindow* _window, int key, int scancode, int action, int mods)
 {
-    if(_window != glfw_window) return;
+    if(_window != (GLFWwindow*)_glfw_window) return;
 
     // only dispatch the event if ImGui says it's OK
     ImGuiIO& io = ImGui::GetIO();
@@ -349,27 +291,18 @@ void Application::WindowPosHandler(GLFWwindow* _window, int x, int y)
 
 void Application::SetWindowPos(int x, int y)
 {
-    glfwSetWindowPos(glfw_window, x, y);
+    glfwSetWindowPos((GLFWwindow*)_glfw_window, x, y);
 }
 
 bool Application::Update(double deltaTime) { return true; }
 
 void Application::RenderGL() { }
 
-void Application::RenderGUI() { }
-
-void Application::RenderMainMenuBar() { }
-
-void Application::RenderMainStatusBar() { }
-
-void Application::RenderMainToolBar() { } 
-
 void Application::OnKeyPress(int glfw_key, int scancode, int action, int mods) { }
 
 void Application::OnWindowMoved(int, int) { }
 
-void Application::OnWindowDestroyed() { }
+bool Application::OnPlatformReady() { return true; }
 
-bool Application::OnWindowCreated() { return true; }
-
+void Application::OnPlatformClosed() { }
 

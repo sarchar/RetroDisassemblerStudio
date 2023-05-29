@@ -6,17 +6,20 @@
 #include <stack>
 
 #include "signals.h"
-#include "systems/nes/nes_system.h"
 #include "windows/basewindow.h"
 
-namespace NES {
+namespace Systems::NES {
+    class GlobalMemoryLocation;
+    class System;
+}
 
-class GlobalMemoryLocation;
-
-namespace Windows {
+namespace Windows::NES {
 
 class MemoryRegions : public BaseWindow {
 public:
+    using GlobalMemoryLocation = Systems::NES::GlobalMemoryLocation;
+    using System               = Systems::NES::System;
+
     MemoryRegions();
     virtual ~MemoryRegions();
 
@@ -26,8 +29,8 @@ public:
     // signals
 
 protected:
-    void UpdateContent(double deltaTime) override;
-    void RenderContent() override;
+    void Update(double deltaTime) override;
+    void Render() override;
 
 private:
     std::weak_ptr<System>            current_system;
@@ -37,6 +40,5 @@ public:
     static std::shared_ptr<MemoryRegions> CreateWindow();
 };
 
-} //namespace Windows
+} //namespace Windows::NES
 
-} //namespace NES

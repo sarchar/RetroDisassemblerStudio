@@ -7,7 +7,7 @@
 
 using namespace std;
 
-namespace NES {
+namespace Systems::NES {
 
 #define RGB(r,g,b) (((u32)(b) << 16) | ((u32)(g) << 8) | (u32)(r))
 static int const rgb_palette_map[] = {

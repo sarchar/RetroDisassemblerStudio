@@ -9,7 +9,7 @@
 
 #include "systems/nes/nes_defs.h"
 
-namespace NES {
+namespace Systems::NES {
 
 class Disassembler;
 class Expression;
@@ -432,15 +432,15 @@ public:
     virtual void WritePPU(u16, u8) = 0;
 };
 
-}
+} // namespace Systems::NES
 
 // Utility to make it easier to use c++ std types
 template <>
-struct std::hash<NES::GlobalMemoryLocation> : public NES::GlobalMemoryLocation::HashFunction {};
+struct std::hash<Systems::NES::GlobalMemoryLocation> : public Systems::NES::GlobalMemoryLocation::HashFunction {};
 
 template <>
-struct std::equal_to<NES::GlobalMemoryLocation> {
-    bool operator()(NES::GlobalMemoryLocation const& a, NES::GlobalMemoryLocation const& b) const {
+struct std::equal_to<Systems::NES::GlobalMemoryLocation> {
+    bool operator()(Systems::NES::GlobalMemoryLocation const& a, Systems::NES::GlobalMemoryLocation const& b) const {
         return a == b;
     }
 };

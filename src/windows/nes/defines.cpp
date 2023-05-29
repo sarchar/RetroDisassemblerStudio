@@ -15,9 +15,7 @@
 
 using namespace std;
 
-namespace NES {
-
-namespace Windows {
+namespace Windows::NES {
 
 shared_ptr<Defines> Defines::CreateWindow()
 {
@@ -31,7 +29,7 @@ Defines::Defines()
     
     // create internal signals
 
-    if(auto system = (MyApp::Instance()->GetProject()->GetSystem<System>())) {
+    if(auto system = GetSystem()) {
         // grab a weak_ptr so we don't have to continually use dynamic_pointer_cast
         current_system = system;
 
@@ -55,11 +53,11 @@ void Defines::Highlight(std::shared_ptr<Define>& target)
     highlight = nullptr;
 }
 
-void Defines::UpdateContent(double deltaTime) 
+void Defines::Update(double deltaTime) 
 {
 }
 
-void Defines::RenderContent() 
+void Defines::Render() 
 {
     // All access goes through the system
     auto system = current_system.lock();
@@ -221,7 +219,8 @@ void Defines::RenderContent()
         if(ImGui::Selectable("View References")) {
             auto wnd = References::CreateWindow(defines[context_row].lock());
             wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
-            MyApp::Instance()->AddWindow(wnd);
+            cout << WindowPrefix() << "TODO GetSystemWindow()->AddChildWindow(wnd);" << endl;
+            GetMainWindow()->AddChildWindow(wnd);
         }
         ImGui::EndPopup();
     }
@@ -234,6 +233,5 @@ void Defines::DefineCreated(shared_ptr<Define> const& define)
     force_resort = true;
 }
 
-} //namespace Windows
-} //namespace NES
+} //namespace Windows::NES
 

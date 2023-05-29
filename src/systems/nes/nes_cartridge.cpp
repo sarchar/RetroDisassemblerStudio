@@ -9,7 +9,7 @@
 
 using namespace std;
 
-namespace NES {
+namespace Systems::NES {
 
 Cartridge::Cartridge(shared_ptr<System>& system) 
 {

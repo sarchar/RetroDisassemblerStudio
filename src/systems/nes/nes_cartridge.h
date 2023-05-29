@@ -5,7 +5,7 @@
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
 
-namespace NES {
+namespace Systems::NES {
 
 class CartridgeView;
 class System;
@@ -95,5 +95,5 @@ private:
     u8  chr_ram[0x2000];
 };
 
-}
+} // namespace Systems::NES
 

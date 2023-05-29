@@ -13,6 +13,7 @@
 #include "util.h"
 
 #include "systems/nes/nes_apu_io.h"
+#include "systems/nes/nes_cpu.h"
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_ppu.h"
@@ -21,132 +22,166 @@
 
 using namespace std;
 
-namespace NES {
-namespace Windows {
+namespace Windows::NES {
 
-std::shared_ptr<Emulator> Emulator::CreateWindow()
+int System::next_system_id = 1;
+
+std::shared_ptr<System> System::CreateWindow()
 {
-    return make_shared<Emulator>();
+    return make_shared<System>();
 }
 
-Emulator::Emulator()
-    : BaseWindow("NES::Emulator")
+System::System()
+    : BaseWindow("NES::System")
 {
-    SetTitle("Emulator :: Paused");
+    system_id = next_system_id++;
     SetNav(false);
 
-    // allocate storage for framebuffers
-    framebuffer = (u32*)new u8[4 * 256 * 256];
-    ram_framebuffer = (u32*)new u8[4 * 256 * 256];
-    nametable_framebuffer = (u32*)new u8[4 * 256 * 256];
+//!    // allocate storage for framebuffers
+//!    framebuffer = (u32*)new u8[4 * 256 * 256];
+//!    ram_framebuffer = (u32*)new u8[4 * 256 * 256];
+//!    nametable_framebuffer = (u32*)new u8[4 * 256 * 256];
+//!
+//!    // fill the framebuffer with fully transparent pixels (0), so the bottom 16 rows aren't visible
+//!    memset(framebuffer, 0, 4 * 256 * 256);
+//!
+//!    // generate the textures
+//!    GLuint gl_texture;
+//!
+//!    glGenTextures(1, &gl_texture);
+//!    glBindTexture(GL_TEXTURE_2D, gl_texture);
+//!    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
+//!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+//!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+//!    framebuffer_texture = (void*)(intptr_t)gl_texture;
+//!
+//!    glGenTextures(1, &gl_texture);
+//!    glBindTexture(GL_TEXTURE_2D, gl_texture);
+//!    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, ram_framebuffer);
+//!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+//!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+//!    ram_texture = (void*)(intptr_t)gl_texture;
+//!
+//!    glGenTextures(1, &gl_texture);
+//!    glBindTexture(GL_TEXTURE_2D, gl_texture);
+//!    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, nametable_framebuffer);
+//!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+//!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+//!    nametable_texture = (void*)(intptr_t)gl_texture;
+//!
+//!    glBindTexture(GL_TEXTURE_2D, 0);
+//!
+   if(auto system = GetSystem()) {
+       current_system = system;
+//!
+//!        auto& mv = memory_view;
+//!        ppu = make_shared<PPU>([this]() {
+//!                cpu->Nmi();
+//!            },
+//!
+//!            // capturing the reference means the pointer can change after this initialization
+//!            [this, &mv](u16 address)->u8 {
+//!                return memory_view->ReadPPU(address);
+//!            },
+//!            [this, &mv](u16 address, u8 value)->void {
+//!                memory_view->WritePPU(address, value);
+//!            }
+//!        );
+//!
+//!        apu_io = make_shared<APU_IO>();
+//!        oam_dma_callback_connection = apu_io->oam_dma_callback->connect(std::bind(&System::WriteOAMDMA, this, placeholders::_1));
+//!
+//!        memory_view = system->CreateMemoryView(ppu->CreateMemoryView(), apu_io->CreateMemoryView());
+//!
+//!        cpu = make_shared<CPU>(
+//!            std::bind(&MemoryView::Read, memory_view, placeholders::_1),
+//!            std::bind(&MemoryView::Write, memory_view, placeholders::_1, placeholders::_2)
+//!        );
+//!
+//!
+//!        // start the emulation thread
+//!        emulation_thread = make_shared<thread>(std::bind(&System::EmulationThread, this));
+//!
+       current_state = State::PAUSED;
+   }
 
-    // fill the framebuffer with fully transparent pixels (0), so the bottom 16 rows aren't visible
-    memset(framebuffer, 0, 4 * 256 * 256);
-
-    // generate the textures
-    GLuint gl_texture;
-
-    glGenTextures(1, &gl_texture);
-    glBindTexture(GL_TEXTURE_2D, gl_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    framebuffer_texture = (void*)(intptr_t)gl_texture;
-
-    glGenTextures(1, &gl_texture);
-    glBindTexture(GL_TEXTURE_2D, gl_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, ram_framebuffer);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    ram_texture = (void*)(intptr_t)gl_texture;
-
-    glGenTextures(1, &gl_texture);
-    glBindTexture(GL_TEXTURE_2D, gl_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, nametable_framebuffer);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    nametable_texture = (void*)(intptr_t)gl_texture;
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    if(auto system = MyApp::Instance()->GetProject()->GetSystem<System>()) {
-        current_system = system;
-
-        auto& mv = memory_view;
-        ppu = make_shared<PPU>([this]() {
-                cpu->Nmi();
-            },
-
-            // capturing the reference means the pointer can change after this initialization
-            [this, &mv](u16 address)->u8 {
-                return memory_view->ReadPPU(address);
-            },
-            [this, &mv](u16 address, u8 value)->void {
-                memory_view->WritePPU(address, value);
-            }
-        );
-
-        apu_io = make_shared<APU_IO>();
-        oam_dma_callback_connection = apu_io->oam_dma_callback->connect(std::bind(&Emulator::WriteOAMDMA, this, placeholders::_1));
-
-        memory_view = system->CreateMemoryView(ppu->CreateMemoryView(), apu_io->CreateMemoryView());
-
-        cpu = make_shared<CPU>(
-            std::bind(&MemoryView::Read, memory_view, placeholders::_1),
-            std::bind(&MemoryView::Write, memory_view, placeholders::_1, placeholders::_2)
-        );
-
-
-        // start the emulation thread
-        emulation_thread = make_shared<thread>(std::bind(&Emulator::EmulationThread, this));
-
-        current_state = State::PAUSED;
-    }
-
-    Reset();
+   Reset();
 }
 
-Emulator::~Emulator()
+System::~System()
 {
-	exit_thread = true;
-    if(emulation_thread) emulation_thread->join();
-
-    GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
-    glDeleteTextures(1, &gl_texture);
-
-    gl_texture = (GLuint)(intptr_t)ram_texture;
-    glDeleteTextures(1, &gl_texture);
-
-    gl_texture = (GLuint)(intptr_t)nametable_texture;
-    glDeleteTextures(1, &gl_texture);
-
-    delete [] (u8*)framebuffer;
-    delete [] (u8*)ram_framebuffer;
-    delete [] (u8*)nametable_framebuffer;
+//!	exit_thread = true;
+//!    if(emulation_thread) emulation_thread->join();
+//!
+//!    GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
+//!    glDeleteTextures(1, &gl_texture);
+//!
+//!    gl_texture = (GLuint)(intptr_t)ram_texture;
+//!    glDeleteTextures(1, &gl_texture);
+//!
+//!    gl_texture = (GLuint)(intptr_t)nametable_texture;
+//!    glDeleteTextures(1, &gl_texture);
+//!
+//!    delete [] (u8*)framebuffer;
+//!    delete [] (u8*)ram_framebuffer;
+//!    delete [] (u8*)nametable_framebuffer;
 }
 
-void Emulator::UpdateContent(double deltaTime)
+void System::CreateDefaultWorkspace()
 {
-    if(thread_exited) {
-        cout << "uh oh thread exited" << endl;
-    }
-
-    u64 cycle_count = cpu->GetCycleCount();
-    auto current_time = chrono::steady_clock::now();
-    u64 delta = cycle_count - last_cycle_count;
-    double delta_time = (current_time - last_cycle_time) / 1.0s;
-    if(delta_time >= 1.0) {
-        cycles_per_sec = delta / delta_time;
-        last_cycle_time = current_time;
-        last_cycle_count = cycle_count;
-    }
-
-    UpdateRAMTexture();
-    UpdatePPUTexture();
-    UpdateNametableTexture();
+//!    shared_ptr<BaseWindow> wnd = Windows::Labels::CreateWindow();
+//!    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+//!    app->AddWindow(wnd);
+//!
+//!    wnd = Windows::Defines::CreateWindow();
+//!    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+//!    app->AddWindow(wnd);
+//!
+//!    wnd = Windows::MemoryRegions::CreateWindow();
+//!    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+//!    app->AddWindow(wnd);
+//!
+//!    wnd = Windows::Listing::CreateWindow();
+//!    wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
+//!    app->AddWindow(wnd);
+//!
+//!    wnd = Windows::System::CreateWindow();
+//!    wnd->SetInitialDock(BaseWindow::DOCK_BOTTOM);
+//!    app->AddWindow(wnd);
 }
 
-void Emulator::UpdateRAMTexture()
+void System::UpdateTitle()
+{
+    stringstream ss;
+    ss << "System_" << system_id << " :: " << magic_enum::enum_name(current_state);
+    system_title = ss.str();
+    SetTitle(system_title.c_str());
+}
+
+void System::Update(double deltaTime)
+{
+    UpdateTitle();
+
+//!    if(thread_exited) {
+//!        cout << "uh oh thread exited" << endl;
+//!    }
+//!
+//!    u64 cycle_count = cpu->GetCycleCount();
+//!    auto current_time = chrono::steady_clock::now();
+//!    u64 delta = cycle_count - last_cycle_count;
+//!    double delta_time = (current_time - last_cycle_time) / 1.0s;
+//!    if(delta_time >= 1.0) {
+//!        cycles_per_sec = delta / delta_time;
+//!        last_cycle_time = current_time;
+//!        last_cycle_count = cycle_count;
+//!    }
+//!
+//!    UpdateRAMTexture();
+//!    UpdatePPUTexture();
+//!    UpdateNametableTexture();
+}
+
+void System::UpdateRAMTexture()
 {
     int cx = 0;
     int cy = 0;
@@ -180,7 +215,7 @@ void Emulator::UpdateRAMTexture()
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void Emulator::UpdatePPUTexture()
+void System::UpdatePPUTexture()
 {
     GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
     glBindTexture(GL_TEXTURE_2D, gl_texture);
@@ -188,7 +223,7 @@ void Emulator::UpdatePPUTexture()
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void Emulator::UpdateNametableTexture()
+void System::UpdateNametableTexture()
 {
     int cx = 0;
     int cy = 0;
@@ -219,135 +254,144 @@ void Emulator::UpdateNametableTexture()
 }
 
 
-void Emulator::RenderContent()
+void System::Render()
 {
     auto system = current_system.lock();
     if(!system) return;
-    auto disassembler = system->GetDisassembler();
 
-    auto size = ImGui::GetWindowSize();
-    size.x /= 2;
-    ImGui::PushItemWidth(size.x / 2);
-    ImGui::BeginChild("CPU view", size, false, ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoNavInputs);
+    // The only thing this window renders is a subdock!
+    auto dockspace_id = ImGui::GetID("system_dockspace");
+    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), 0);
 
-    if(ImGui::Button("Step Cycle")) {
-        if(current_state == State::PAUSED) {
-            current_state = State::STEP_CYCLE;
-        }
-    }
-
-    ImGui::SameLine();
-    if(ImGui::Button("Step Inst")) {
-        if(current_state == State::PAUSED) {
-            current_state = State::STEP_INSTRUCTION;
-        }
-    }
-
-    ImGui::SameLine();
-    if(ImGui::Button("Run")) {
-        if(current_state == State::PAUSED) {
-            current_state = State::RUNNING;
-        }
-    }
-
-    ImGui::SameLine();
-    if(ImGui::Button("Pause")) {
-        if(current_state == State::RUNNING) {
-            current_state = State::PAUSED;
-        }
-    }
-
-    ImGui::SameLine();
-    if(ImGui::Button("Reset")) {
-        if(current_state == State::PAUSED) {
-            Reset();
-        }
-    }
-
-    ImGui::SameLine();
-    if(ImGui::InputText("Run-to", &run_to_address_str, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-        stringstream ss;
-        ss << hex << run_to_address_str;
-        ss >> run_to_address;
-        current_state = State::RUNNING;
-    }
-
-    ImGui::Text("%s :: %f Hz", magic_enum::enum_name(current_state).data(), cycles_per_sec);
-
-    ImGui::Separator();
-
-    u64 next_uc = cpu->GetNextUC();
-    // stop the system clock on invalid opcodes
-    if(next_uc == (u64)-1) {
-        current_state = State::PAUSED;
-        ImGui::Text("Invalid opcode $%02X at $%04X", cpu->GetOpcode(), cpu->GetOpcodePC()-1);
-    } else {
-        string inst = disassembler->GetInstruction(cpu->GetOpcode());
-        auto pc = cpu->GetOpcodePC();
-        u8 operands[] = { memory_view->Read(pc+1), memory_view->Read(pc+2) };
-        string operand = disassembler->FormatOperand(cpu->GetOpcode(), operands);
-        ImGui::Text("$%04X: %s %s (istep %d, uc=0x%X)", pc, inst.c_str(), operand.c_str(), cpu->GetIStep(), next_uc);
-    }
-
-    ImGui::Separator();
-
-    ImGui::Text("PC:$%04X", cpu->GetPC()); ImGui::SameLine();
-    ImGui::Text("S:$%04X", cpu->GetS()); ImGui::SameLine();
-    ImGui::Text("A:$%02X", cpu->GetA()); ImGui::SameLine();
-    ImGui::Text("X:$%02X", cpu->GetX()); ImGui::SameLine();
-    ImGui::Text("Y:$%02X", cpu->GetY());
-
-    u8 p = cpu->GetP();
-    char flags[] = "P:nv-bdizc";
-    if(p & CPU_FLAG_N) flags[2] = 'N';
-    if(p & CPU_FLAG_V) flags[3] = 'V';
-    if(p & CPU_FLAG_B) flags[5] = 'B';
-    if(p & CPU_FLAG_D) flags[6] = 'D';
-    if(p & CPU_FLAG_I) flags[7] = 'I';
-    if(p & CPU_FLAG_Z) flags[8] = 'Z';
-    if(p & CPU_FLAG_C) flags[9] = 'C';
-    ImGui::Text("%s", flags);
-
-    ImGui::Text("RAM[$00]=$%02X RAM[$02]=$%02X RAM[$03]=$%02X", memory_view->Read(0x00), memory_view->Read(0x02), memory_view->Read(0x03));
-    ImGui::EndChild();
-
-    ImGui::SameLine();
-    ImGui::PushItemWidth(size.x / 2);
-    ImGui::BeginChild("PPU view", size);
-
-    ImGui::Image(framebuffer_texture, ImVec2(512, 512));
-
-    ImGui::Image(ram_texture, ImVec2(256, 256));
-    ImGui::SameLine();
-    ImGui::Image(nametable_texture, ImVec2(256, 256));
-
-    ImGui::EndChild();
+//!    auto disassembler = system->GetDisassembler();
+//!
+//!    auto size = ImGui::GetWindowSize();
+//!    size.x /= 2;
+//!    ImGui::PushItemWidth(size.x / 2);
+//!    ImGui::BeginChild("CPU view", size, false, ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoNavInputs);
+//!
+//!    if(ImGui::Button("Step Cycle")) {
+//!        if(current_state == State::PAUSED) {
+//!            current_state = State::STEP_CYCLE;
+//!        }
+//!    }
+//!
+//!    ImGui::SameLine();
+//!    if(ImGui::Button("Step Inst")) {
+//!        if(current_state == State::PAUSED) {
+//!            current_state = State::STEP_INSTRUCTION;
+//!        }
+//!    }
+//!
+//!    ImGui::SameLine();
+//!    if(ImGui::Button("Run")) {
+//!        if(current_state == State::PAUSED) {
+//!            current_state = State::RUNNING;
+//!        }
+//!    }
+//!
+//!    ImGui::SameLine();
+//!    if(ImGui::Button("Pause")) {
+//!        if(current_state == State::RUNNING) {
+//!            current_state = State::PAUSED;
+//!        }
+//!    }
+//!
+//!    ImGui::SameLine();
+//!    if(ImGui::Button("Reset")) {
+//!        if(current_state == State::PAUSED) {
+//!            Reset();
+//!        }
+//!    }
+//!
+//!    ImGui::SameLine();
+//!    if(ImGui::InputText("Run-to", &run_to_address_str, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+//!        stringstream ss;
+//!        ss << hex << run_to_address_str;
+//!        ss >> run_to_address;
+//!        current_state = State::RUNNING;
+//!    }
+//!
+//!    ImGui::Text("%s :: %f Hz", magic_enum::enum_name(current_state).data(), cycles_per_sec);
+//!
+//!    ImGui::Separator();
+//!
+//!    u64 next_uc = cpu->GetNextUC();
+//!    // stop the system clock on invalid opcodes
+//!    if(next_uc == (u64)-1) {
+//!        current_state = State::PAUSED;
+//!        ImGui::Text("Invalid opcode $%02X at $%04X", cpu->GetOpcode(), cpu->GetOpcodePC()-1);
+//!    } else {
+//!        string inst = disassembler->GetInstruction(cpu->GetOpcode());
+//!        auto pc = cpu->GetOpcodePC();
+//!        u8 operands[] = { memory_view->Read(pc+1), memory_view->Read(pc+2) };
+//!        string operand = disassembler->FormatOperand(cpu->GetOpcode(), operands);
+//!        ImGui::Text("$%04X: %s %s (istep %d, uc=0x%X)", pc, inst.c_str(), operand.c_str(), cpu->GetIStep(), next_uc);
+//!    }
+//!
+//!    ImGui::Separator();
+//!
+//!    ImGui::Text("PC:$%04X", cpu->GetPC()); ImGui::SameLine();
+//!    ImGui::Text("S:$%04X", cpu->GetS()); ImGui::SameLine();
+//!    ImGui::Text("A:$%02X", cpu->GetA()); ImGui::SameLine();
+//!    ImGui::Text("X:$%02X", cpu->GetX()); ImGui::SameLine();
+//!    ImGui::Text("Y:$%02X", cpu->GetY());
+//!
+//!    u8 p = cpu->GetP();
+//!    char flags[] = "P:nv-bdizc";
+//!    if(p & CPU_FLAG_N) flags[2] = 'N';
+//!    if(p & CPU_FLAG_V) flags[3] = 'V';
+//!    if(p & CPU_FLAG_B) flags[5] = 'B';
+//!    if(p & CPU_FLAG_D) flags[6] = 'D';
+//!    if(p & CPU_FLAG_I) flags[7] = 'I';
+//!    if(p & CPU_FLAG_Z) flags[8] = 'Z';
+//!    if(p & CPU_FLAG_C) flags[9] = 'C';
+//!    ImGui::Text("%s", flags);
+//!
+//!    ImGui::Text("RAM[$00]=$%02X RAM[$02]=$%02X RAM[$03]=$%02X", memory_view->Read(0x00), memory_view->Read(0x02), memory_view->Read(0x03));
+//!
+//!    {
+//!    }
+//!
+//!    ImGui::EndChild();
+//!
+//!    ImGui::SameLine();
+//!    ImGui::PushItemWidth(size.x / 2);
+//!    ImGui::BeginChild("PPU view", size);
+//!
+//!    ImGui::Image(framebuffer_texture, ImVec2(512, 512));
+//!
+//!    ImGui::Image(ram_texture, ImVec2(256, 256));
+//!    ImGui::SameLine();
+//!    ImGui::Image(nametable_texture, ImVec2(256, 256));
+//!
+//!    ImGui::EndChild();
 }
 
-void Emulator::CheckInput()
+void System::CheckInput()
 {
-    // update all buttons on the joypad every frame
-    apu_io->SetJoy1Pressed(NES_BUTTON_UP    , ImGui::IsKeyDown(ImGuiKey_W));
-    apu_io->SetJoy1Pressed(NES_BUTTON_DOWN  , ImGui::IsKeyDown(ImGuiKey_S));
-    apu_io->SetJoy1Pressed(NES_BUTTON_LEFT  , ImGui::IsKeyDown(ImGuiKey_A));
-    apu_io->SetJoy1Pressed(NES_BUTTON_RIGHT , ImGui::IsKeyDown(ImGuiKey_D));
-    apu_io->SetJoy1Pressed(NES_BUTTON_SELECT, ImGui::IsKeyDown(ImGuiKey_Tab));
-    apu_io->SetJoy1Pressed(NES_BUTTON_START , ImGui::IsKeyDown(ImGuiKey_Enter));
-    apu_io->SetJoy1Pressed(NES_BUTTON_B     , ImGui::IsKeyDown(ImGuiKey_Period));
-    apu_io->SetJoy1Pressed(NES_BUTTON_A     , ImGui::IsKeyDown(ImGuiKey_Slash));
+//!    // update all buttons on the joypad every frame
+//!    apu_io->SetJoy1Pressed(NES_BUTTON_UP    , ImGui::IsKeyDown(ImGuiKey_W));
+//!    apu_io->SetJoy1Pressed(NES_BUTTON_DOWN  , ImGui::IsKeyDown(ImGuiKey_S));
+//!    apu_io->SetJoy1Pressed(NES_BUTTON_LEFT  , ImGui::IsKeyDown(ImGuiKey_A));
+//!    apu_io->SetJoy1Pressed(NES_BUTTON_RIGHT , ImGui::IsKeyDown(ImGuiKey_D));
+//!    apu_io->SetJoy1Pressed(NES_BUTTON_SELECT, ImGui::IsKeyDown(ImGuiKey_Tab));
+//!    apu_io->SetJoy1Pressed(NES_BUTTON_START , ImGui::IsKeyDown(ImGuiKey_Enter));
+//!    apu_io->SetJoy1Pressed(NES_BUTTON_B     , ImGui::IsKeyDown(ImGuiKey_Period));
+//!    apu_io->SetJoy1Pressed(NES_BUTTON_A     , ImGui::IsKeyDown(ImGuiKey_Slash));
 }
 
-void Emulator::Reset()
+void System::Reset()
 {
-    cpu->Reset();
-    ppu->Reset();
-    cpu_shift = 0;
-    raster_line = framebuffer;
-    raster_y = 0;
-    oam_dma_enabled = false;
+//!    cpu->Reset();
+//!    ppu->Reset();
+//!    cpu_shift = 0;
+//!    raster_line = framebuffer;
+//!    raster_y = 0;
+//!    oam_dma_enabled = false;
 }
 
-bool Emulator::StepCPU()
+bool System::StepCPU()
 {
     // TODO DMC DMA has priority over OAM DMA
     if(oam_dma_enabled && cpu->IsReadCycle()) { // CPU can only be halted on a read cycle
@@ -378,7 +422,7 @@ bool Emulator::StepCPU()
     }
 }
 
-void Emulator::StepPPU()
+void System::StepPPU()
 {
     bool hblank_new, vblank;
     int color = ppu->Step(hblank_new, vblank);
@@ -397,7 +441,7 @@ void Emulator::StepPPU()
     }
 }
 
-bool Emulator::SingleCycle()
+bool System::SingleCycle()
 {
     bool ret;
 
@@ -427,7 +471,7 @@ bool Emulator::SingleCycle()
     return ret;
 }
 
-void Emulator::EmulationThread()
+void System::EmulationThread()
 {
     while(!exit_thread) {
         switch(current_state) {
@@ -468,7 +512,7 @@ void Emulator::EmulationThread()
     thread_exited = true;
 }
 
-void Emulator::WriteOAMDMA(u8 page)
+void System::WriteOAMDMA(u8 page)
 {
     oam_dma_enabled = true;
     oam_dma_source = (page << 8);
@@ -476,6 +520,5 @@ void Emulator::WriteOAMDMA(u8 page)
     dma_halt_cycle_done = false;
 }
 
-}
-}
+} // namespace Windows::NES
 

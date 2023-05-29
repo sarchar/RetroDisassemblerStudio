@@ -1,9 +1,12 @@
 #pragma once
 
-#include "systems/nes/nes_memory.h"
-#include "systems/nes/nes_system.h"
+#include <functional>
+#include <memory>
 
-namespace NES {
+#include "signals.h"
+#include "systems/nes/nes_memory.h"
+
+namespace Systems::NES {
 
 #define NES_BUTTON_A      0
 #define NES_BUTTON_B      1

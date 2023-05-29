@@ -4,11 +4,13 @@
 
 #include "windows/baseproject.h"
 
-namespace NES {
+namespace Systems::NES {
+
 
 struct CreateNewDefineData {};
 
-class Project : public BaseProject {
+// TODO this needs to be in windows/nes/
+class Project : public Windows::BaseProject {
 public:
     virtual char const * const GetWindowClass() { return Project::GetWindowClassStatic(); }
     static char const * const GetWindowClassStatic() { return "NES::Project"; }
@@ -32,11 +34,11 @@ public:
     bool Load(std::istream&, std::string&) override;
 
 protected:
-    void UpdateContent(double deltaTime) override;
-    void RenderContent() override;
+    void Update(double deltaTime) override;
+    void Render() override;
 
 private:
-    void WindowAdded(std::shared_ptr<BaseWindow>&) override;
+    void WindowAdded(std::shared_ptr<BaseWindow> const&) override;
 
     void CommonCommandHandler(std::shared_ptr<BaseWindow>&, std::string const&, void*);
 
@@ -68,4 +70,12 @@ private:
     } popups;
 };
 
+}
+
+inline std::shared_ptr<Systems::NES::Project> GetCurrentProject() {
+    return dynamic_pointer_cast<Systems::NES::Project>(GetMainWindow()->GetCurrentProject());
+}
+
+inline std::shared_ptr<Systems::NES::System> GetSystem() {
+    return dynamic_pointer_cast<Systems::NES::System>(GetCurrentProject()->GetSystem<Systems::NES::System>());
 }

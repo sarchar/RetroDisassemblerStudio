@@ -13,6 +13,8 @@
 
 class BaseSystem;
 
+namespace Windows {
+
 class BaseProject : public BaseWindow {
 public:
     struct Information {
@@ -59,11 +61,12 @@ public:
     static std::vector<Information const*> project_informations;
 
 private:
-    virtual void WindowAdded(std::shared_ptr<BaseWindow>&) {}
-    virtual void WindowRemoved(std::shared_ptr<BaseWindow>&) {}
-    void _WindowAdded(std::shared_ptr<BaseWindow>& window) { WindowAdded(window); }
-    void _WindowRemoved(std::shared_ptr<BaseWindow>& window) { WindowRemoved(window); }
+    virtual void WindowAdded(std::shared_ptr<BaseWindow> const&) {}
+    virtual void WindowRemoved(std::shared_ptr<BaseWindow> const&) {}
+    void _WindowAdded(std::shared_ptr<BaseWindow> const& window) { WindowAdded(window); }
+    void _WindowRemoved(std::shared_ptr<BaseWindow> const& window) { WindowRemoved(window); }
     signal_connection window_added_connection;
     signal_connection window_removed_connection;
 };
 
+}

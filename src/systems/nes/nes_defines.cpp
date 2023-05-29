@@ -5,7 +5,7 @@
 
 using namespace std;
 
-namespace NES {
+namespace Systems::NES {
 
 Define::Define(std::string const& _name, shared_ptr<Expression>& _expression)
     : name(_name), expression(_expression)

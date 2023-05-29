@@ -8,9 +8,9 @@
 #include "imgui_internal.h"
 #include "imgui_stdlib.h"
 
-#include "main.h"
 #include "util.h"
 
+#include "windows/main.h"
 #include "windows/nes/references.h"
 
 #include "systems/nes/nes_disasm.h"
@@ -22,7 +22,7 @@
 
 using namespace std;
 
-namespace NES {
+namespace Systems::NES {
 
 unsigned long ListingItem::common_inner_table_flags = ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_Resizable;
 
@@ -440,7 +440,7 @@ bool ListingItemPrimary::ParseOperandExpression(shared_ptr<System>& system, Glob
     }
 
     if(wait_dialog) {
-        if(MyApp::Instance()->OKPopup("Operand parse error", parse_errmsg)) {
+        if(GetMainWindow()->OKPopup("Operand parse error", parse_errmsg)) {
             wait_dialog = false;
             do_parse_operand_expression = false;
             started_editing = true; // re-edit the expression
@@ -486,9 +486,9 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
 
         if(ImGui::IsKeyPressed(ImGuiKey_R) && ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
             // show references to label
-            auto wnd = Windows::References::CreateWindow(label);
-            wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
-            MyApp::Instance()->AddWindow(wnd);
+            auto wnd = Windows::NES::References::CreateWindow(label);
+            wnd->SetInitialDock(Windows::BaseWindow::DOCK_RIGHT);
+            GetMainWindow()->AddChildWindow(wnd);
         }
 
         if(ImGui::IsKeyPressed(ImGuiKey_Delete)) {

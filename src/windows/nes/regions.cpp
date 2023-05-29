@@ -11,9 +11,7 @@
 
 using namespace std;
 
-namespace NES {
-
-namespace Windows {
+namespace Windows::NES {
 
 shared_ptr<MemoryRegions> MemoryRegions::CreateWindow()
 {
@@ -27,7 +25,7 @@ MemoryRegions::MemoryRegions()
     
     // create internal signals
 
-    if(auto system = (MyApp::Instance()->GetProject()->GetSystem<System>())) {
+    if(auto system = GetSystem()) {
         // grab a weak_ptr so we don't have to continually use dynamic_pointer_cast
         current_system = system;
     }
@@ -37,11 +35,11 @@ MemoryRegions::~MemoryRegions()
 {
 }
 
-void MemoryRegions::UpdateContent(double deltaTime) 
+void MemoryRegions::Update(double deltaTime) 
 {
 }
 
-void MemoryRegions::RenderContent() 
+void MemoryRegions::Render() 
 {
     // All access goes through the system
     auto system = current_system.lock();
@@ -79,7 +77,7 @@ void MemoryRegions::RenderContent()
                 }
 
                 if(ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
-                    if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Listing>()) {
+                    if(auto wnd = GetMainWindow()->FindMostRecentChildWindow<Listing>()) {
                         // build an address from the bank info
                         GlobalMemoryLocation loc;
                         memory_region->GetGlobalMemoryLocation(0, &loc);
@@ -104,6 +102,5 @@ void MemoryRegions::RenderContent()
     ImGui::PopStyleVar(2);
 }
 
-} //namespace Windows
-} //namespace NES
+} //namespace Windows::NES
 

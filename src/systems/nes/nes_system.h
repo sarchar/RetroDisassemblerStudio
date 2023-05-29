@@ -6,14 +6,12 @@
 
 #include "systems/system.h"
 
-
-#include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_defs.h"
 #include "systems/nes/nes_memory.h"
 
 class BaseExpressionNode;
 
-namespace NES {
+namespace Systems::NES {
 
 class Cartridge;
 class CartridgeView;
@@ -22,6 +20,7 @@ class Disassembler;
 class Expression;
 class ExpressionNodeCreator;
 class Label;
+class ListingItem;
 class ProgramRomBank;
 class SystemView;
 
@@ -109,7 +108,7 @@ public:
     std::shared_ptr<MemoryView> CreateMemoryView(std::shared_ptr<MemoryView> const& ppu_view, std::shared_ptr<MemoryView> const& apu_io_view);
 
     // Listings
-    void GetListingItems(GlobalMemoryLocation const&, std::vector<std::shared_ptr<NES::ListingItem>>& out);
+    void GetListingItems(GlobalMemoryLocation const&, std::vector<std::shared_ptr<ListingItem>>& out);
 
     // Defines
     void CreateDefaultDefines(); // for new projects

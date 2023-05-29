@@ -16,6 +16,8 @@
 
 using namespace std;
 
+namespace Windows {
+
 shared_ptr<ProjectCreatorWindow> ProjectCreatorWindow::CreateWindow(string const& _file_path_name)
 {
     return make_shared<ProjectCreatorWindow>(_file_path_name);
@@ -36,7 +38,7 @@ ProjectCreatorWindow::~ProjectCreatorWindow()
     if(create_project_thread) create_project_thread->join();
 }
 
-void ProjectCreatorWindow::UpdateContent(double deltaTime) 
+void ProjectCreatorWindow::Update(double deltaTime) 
 {
     // loop over all projects asking if the file name is valid
     // if there's only 1 valid project, load it
@@ -89,17 +91,17 @@ void ProjectCreatorWindow::UpdateContent(double deltaTime)
     }
 }
 
-void ProjectCreatorWindow::RenderContent() 
+void ProjectCreatorWindow::Render() 
 {
     switch(loader_state) {
     case LOADER_STATE_NOT_A_VALID_ROM:
-        if(MyApp::Instance()->OKPopup("Project Creator##notvalid", "The selected ROM file is not valid with any supported retro system.")) {
+        if(GetMainWindow()->OKPopup("Project Creator##notvalid", "The selected ROM file is not valid with any supported retro system.")) {
             CloseWindow();
         }
         break;
 
     case LOADER_STATE_FILE_NOT_FOUND:
-        if(MyApp::Instance()->OKPopup("Project Creator##notfound", "The selected ROM file was not found or could not be opened for reading.")) {
+        if(GetMainWindow()->OKPopup("Project Creator##notfound", "The selected ROM file was not found or could not be opened for reading.")) {
             CloseWindow();
         }
         break;
@@ -214,3 +216,4 @@ void ProjectCreatorWindow::CreateProjectThreadMain()
     create_project_done = true;
 }
 
+}

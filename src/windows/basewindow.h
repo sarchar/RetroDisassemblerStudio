@@ -5,6 +5,14 @@
 #include <memory>
 #include <string>
 
+class Application;
+
+#ifdef CreateWindow
+#  undef CreateWindow
+#endif
+
+namespace Windows {
+
 class BaseWindow : public std::enable_shared_from_this<BaseWindow> {
 public:
     enum InitialDockPosition {
@@ -19,6 +27,7 @@ public:
     virtual ~BaseWindow();
 
     static void ResetWindowIDs();
+    virtual char const * const GetWindowClass() = 0;
 
     // Utility
     void SetInitialDock(InitialDockPosition idp) { initial_dock_position = idp; } 
@@ -30,36 +39,61 @@ public:
     void SetTitle(std::string const& t);
     std::string const& GetWindowID() const { return window_id; }
     void SetWindowID(std::string const& wid);
+    void SetShowStatusBar(bool enabled) { show_statusbar = false; /*enabled;*/ } // TODO statusbar no workie
+    void SetShowMenuBar(bool enabled) { show_menubar = enabled; }
+    void SetIsDockSpace(bool _v) { is_dockspace = _v; }
+    void SetDockable(bool _v) { is_dockable = _v; }
+    void SetMainWindow(bool _v) { is_mainwindow = _v; }
 
     template <class T>
     std::shared_ptr<T> As() { 
         return dynamic_pointer_cast<T>(shared_from_this());
     }
 
+    std::string WindowPrefix() { return std::string("[") + GetWindowClass() + std::string("] "); }
+
     void CloseWindow(); // emit window_closed and stop rendering
 
     bool IsFocused() const { return focused; }
     bool IsDocked() const { return docked; }
 
-    // Called from the main application
-    void Update(double deltaTime);
-    void RenderGUI();
+    // Child Window support
+    void AddChildWindow(std::shared_ptr<BaseWindow> const&);
+    void CloseChildWindows();
 
-    typedef signal<std::function<void(std::shared_ptr<BaseWindow>)>> window_closed_t;
-    std::shared_ptr<window_closed_t> window_closed;
-
-    virtual char const * const GetWindowClass() = 0;
+    template <class T>
+    std::shared_ptr<T> FindMostRecentChildWindow() {
+        //TODO manage MRU stack
+        for(auto &wnd : child_windows) {
+            if(auto as_wnd = wnd->As<T>()) {
+                return as_wnd;
+            }
+        }
+        return nullptr;
+    }
 
     // signals available in all windows
     typedef signal<std::function<void(std::shared_ptr<BaseWindow>&, std::string const&, void*)>> command_signal_t;
     std::shared_ptr<command_signal_t> command_signal;
 
+    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> window_closed_t;
+    std::shared_ptr<window_closed_t> window_closed;
+
+    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> child_window_added_t;
+    std::shared_ptr<child_window_added_t> child_window_added;
+
+    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> child_window_removed_t;
+    std::shared_ptr<child_window_removed_t> child_window_removed;
+
 protected:
     // Implemented by derived class
-    virtual void UpdateContent(double deltaTime) {};
+    virtual void Update(double deltaTime) {};
 
-    virtual void PreRenderContent();
-    virtual void RenderContent() {};
+    virtual void PreRender() {}; // good for i.e., push style vars that affect frames
+    virtual void Render() {};
+    virtual void PostRender() {}; // pop styles
+    virtual void RenderMenuBar() {}
+    virtual void RenderStatusBar() {}
 
     virtual void CheckInput() {};
 
@@ -78,4 +112,37 @@ private:
     bool docked;
     bool enable_nav;
     bool no_scrollbar;
+
+    bool is_mainwindow;
+
+    bool is_dockspace;
+    bool is_dockable;
+
+    bool show_statusbar;
+    bool show_menubar;
+
+    bool dockspace_is_built = false;
+
+    // Managed child windows
+    void ProcessQueuedChildWindowsForAdd();
+    void ProcessQueuedChildWindowsForDelete();
+    void ChildWindowClosedHandler(std::shared_ptr<BaseWindow> const&);
+
+    std::vector<std::shared_ptr<BaseWindow>> child_windows;
+    std::vector<std::shared_ptr<BaseWindow>> queued_windows_for_add;
+    std::vector<std::shared_ptr<BaseWindow>> queued_windows_for_delete;
+
+    // Called from the main application and parent windows
+    void InternalUpdate(double deltaTime);
+    void InternalPreRender();
+    void InternalRender();
+    void InternalPostRender();
+
+    void InternalDockSpace(float, float);
+    void InternalRenderMenuBar();
+    void InternalRenderStatusBar();
+
+    friend class Application;
 };
+
+} // namespace Windows

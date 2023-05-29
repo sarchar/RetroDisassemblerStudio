@@ -5,18 +5,24 @@
 #include <stack>
 
 #include "signals.h"
-#include "systems/nes/nes_system.h"
+#include "systems/nes/nes_memory.h" // TODO would be nice to switch current_selection to a shared_ptr so to eliminate this include
 #include "windows/basewindow.h"
 
-namespace NES {
+namespace Systems::NES {
+    class GlobalMemoryLocation;
+    class Label;
+    class System;
+}
 
-class GlobalMemoryLocation;
-class Label;
-
-namespace Windows {
+namespace Windows::NES {
 
 class Listing : public BaseWindow {
 public:
+    using GlobalMemoryLocation = Systems::NES::GlobalMemoryLocation;
+    using Label                = Systems::NES::Label;
+    using MemoryObject         = Systems::NES::MemoryObject;
+    using System               = Systems::NES::System;
+
     Listing();
     virtual ~Listing();
 
@@ -31,8 +37,8 @@ public:
     // signals
 
 protected:
-    void UpdateContent(double deltaTime) override;
-    void RenderContent() override;
+    void Update(double deltaTime) override;
+    void Render() override;
 
 private:
     void ClearForwardHistory();
@@ -103,6 +109,5 @@ public:
     static std::shared_ptr<Listing> CreateWindow();
 };
 
-} // namespace Windows
+} // namespace Windows::NES
 
-} // namespace NES

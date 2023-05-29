@@ -17,9 +17,7 @@
 
 using namespace std;
 
-namespace NES {
-
-namespace Windows {
+namespace Windows::NES {
 
 shared_ptr<Labels> Labels::CreateWindow()
 {
@@ -34,7 +32,7 @@ Labels::Labels()
     
     // create internal signals
 
-    if(auto system = (MyApp::Instance()->GetProject()->GetSystem<System>())) {
+    if(auto system = GetSystem()) {
         // grab a weak_ptr so we don't have to continually use dynamic_pointer_cast
         current_system = system;
 
@@ -50,11 +48,11 @@ Labels::~Labels()
 {
 }
 
-void Labels::UpdateContent(double deltaTime) 
+void Labels::Update(double deltaTime) 
 {
 }
 
-void Labels::RenderContent() 
+void Labels::Render() 
 {
     // All access goes through the system
     auto system = current_system.lock();
@@ -183,7 +181,7 @@ void Labels::RenderContent()
 
                     if(ImGui::IsItemHovered()) {
                         if(ImGui::IsMouseClicked(0)) {
-                            if(auto wnd = MyApp::Instance()->FindMostRecentWindow<Listing>()) {
+                            if(auto wnd = GetMainWindow()->FindMostRecentChildWindow<Listing>()) {
                                 // build an address from the bank info
                                 wnd->GoToAddress(label->GetMemoryLocation());
                             }
@@ -229,7 +227,8 @@ void Labels::RenderContent()
         if(ImGui::Selectable("View References")) {
             auto wnd = References::CreateWindow(labels[context_row].lock());
             wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
-            MyApp::Instance()->AddWindow(wnd);
+            cout << WindowPrefix() << "TODO GetSystemWindow()->AddChildWindow(wnd);" << endl;
+            GetMainWindow()->AddChildWindow(wnd);
         }
         ImGui::EndPopup();
     }
@@ -271,6 +270,5 @@ void Labels::LabelDeleted(shared_ptr<Label> const& label, int nth)
     }
 }
 
-} //namespace Windows
-} //namespace NES
+} //namespace Windows::NES
 

@@ -7,19 +7,27 @@
 #include <variant>
 
 #include "signals.h"
-#include "systems/nes/nes_system.h"
 #include "windows/basewindow.h"
 
-namespace NES {
+#include "systems/nes/nes_memory.h"
+
+namespace Systems::NES {
 
 class Define;
-class GlobalMemoryLocation;
 class Label;
+class System;
 
-namespace Windows {
+}
+
+namespace Windows::NES {
 
 class References : public BaseWindow {
 public:
+    using Define               = Systems::NES::Define;
+    using GlobalMemoryLocation = Systems::NES::GlobalMemoryLocation;
+    using Label                = Systems::NES::Label;
+    using System               = Systems::NES::System;
+
     typedef std::variant<
         GlobalMemoryLocation,
         std::shared_ptr<Define>,
@@ -34,8 +42,8 @@ public:
     // signals
 
 protected:
-    void UpdateContent(double deltaTime) override;
-    void RenderContent() override;
+    void Update(double deltaTime) override;
+    void Render() override;
 
 private:
     std::weak_ptr<System>            current_system;
@@ -62,6 +70,5 @@ public:
     static std::shared_ptr<References> CreateWindow(reference_type const&);
 };
 
-} //namespace Windows
+} //namespace Windows::NES
 
-} //namespace NES

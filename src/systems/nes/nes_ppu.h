@@ -3,7 +3,7 @@
 #include <functional>
 #include <memory>
 
-namespace NES {
+namespace Systems::NES {
 
 class MemoryView;
 class PPUView;

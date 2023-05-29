@@ -22,14 +22,14 @@
 
 using namespace std;
 
-namespace NES {
+namespace Systems::NES {
 
-BaseProject::Information const* Project::GetInformation()
+Windows::BaseProject::Information const* Project::GetInformation()
 {
     return Project::GetInformationStatic();
 }
 
-BaseProject::Information const* Project::GetInformationStatic()
+Windows::BaseProject::Information const* Project::GetInformationStatic()
 {
     static Project::Information information = {
         .abbreviation   = "NES",
@@ -41,13 +41,13 @@ BaseProject::Information const* Project::GetInformationStatic()
     return &information;
 }
 
-shared_ptr<BaseProject> Project::CreateProject()
+shared_ptr<Windows::BaseProject> Project::CreateProject()
 {
     return make_shared<Project>();
 }
 
 Project::Project()
-    : BaseProject("Project")
+    : Windows::BaseProject("Project")
 {
 }
 
@@ -162,33 +162,15 @@ bool Project::CreateNewProjectFromFile(string const& file_path_name)
 
 void Project::CreateDefaultWorkspace()
 {
-    auto app = MyApp::Instance();
-
-    shared_ptr<BaseWindow> wnd = Windows::Labels::CreateWindow();
-    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
-    app->AddWindow(wnd);
-
-    wnd = Windows::Defines::CreateWindow();
-    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
-    app->AddWindow(wnd);
-
-    wnd = Windows::MemoryRegions::CreateWindow();
-    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
-    app->AddWindow(wnd);
-
-    wnd = Windows::Listing::CreateWindow();
-    wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
-    app->AddWindow(wnd);
-
-    wnd = Windows::Emulator::CreateWindow();
-    wnd->SetInitialDock(BaseWindow::DOCK_BOTTOM);
-    app->AddWindow(wnd);
+    auto system_instance = Windows::NES::System::CreateWindow();
+    system_instance->SetInitialDock(BaseWindow::DOCK_ROOT);
+    GetMainWindow()->AddChildWindow(system_instance);
 }
 
 bool Project::Save(std::ostream& os, std::string& errmsg) 
 {
     // call the base method first to inject the project Information
-    if(!BaseProject::Save(os, errmsg)) return false;
+    if(!Windows::BaseProject::Save(os, errmsg)) return false;
 
     // save the System structure
     auto system = GetSystem<System>();
@@ -199,7 +181,7 @@ bool Project::Save(std::ostream& os, std::string& errmsg)
 
 bool Project::Load(std::istream& is, std::string& errmsg)
 {
-    if(!BaseProject::Load(is, errmsg)) return false;
+    if(!Windows::BaseProject::Load(is, errmsg)) return false;
 
     current_system = make_shared<System>();
     auto system = GetSystem<System>();
@@ -208,11 +190,11 @@ bool Project::Load(std::istream& is, std::string& errmsg)
     return true;
 }
 
-void Project::UpdateContent(double deltaTime) 
+void Project::Update(double deltaTime) 
 {
 }
 
-void Project::RenderContent() 
+void Project::Render() 
 {
     RenderPopups();
 }
@@ -279,8 +261,7 @@ void Project::RenderCreateNewDefinePopup()
 
     // Do the OKPopup instead
     if(popups.ok.show) {
-        auto app = MyApp::Instance();
-        if(app->OKPopup(popups.ok.title, popups.ok.content)) {
+        if(GetMainWindow()->OKPopup(popups.ok.title, popups.ok.content)) {
             // return to editing the expression
             popups.ok.show = false;
         }
@@ -322,9 +303,9 @@ void Project::RenderCreateNewDefinePopup()
     }
 }
 
-void Project::WindowAdded(std::shared_ptr<BaseWindow>& window)
+void Project::WindowAdded(std::shared_ptr<BaseWindow> const& window)
 {
-    if(auto wnd = dynamic_pointer_cast<Windows::Defines>(window)) {
+    if(auto wnd = dynamic_pointer_cast<Windows::NES::Defines>(window)) {
         *wnd->command_signal += std::bind(&Project::CommonCommandHandler, this, placeholders::_1, placeholders::_2, placeholders::_3);
     }
 }

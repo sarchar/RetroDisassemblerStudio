@@ -21,7 +21,7 @@
 
 using namespace std;
 
-namespace NES {
+namespace Systems::NES {
 
 bool GlobalMemoryLocation::Save(std::ostream& os, std::string& errmsg)
 {
@@ -874,7 +874,7 @@ void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
             label_node->NoteReference(where);
 
             // and create a callback for any label created at the target address
-            auto system = MyApp::Instance()->GetProject()->GetSystem<System>();
+            auto system = GetSystem();
             GlobalMemoryLocation const& target = label_node->GetTarget();
 
             label_connections.push_back(make_shared<LabelCreatedData>(LabelCreatedData {
@@ -905,7 +905,7 @@ void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
 
 void MemoryObject::RemoveReferences(GlobalMemoryLocation const& where)
 {
-    auto system = MyApp::Instance()->GetProject()->GetSystem<System>();
+    auto system = GetSystem();
 
     // Clear all the label_created signal connections
     for(auto& data : label_connections) {
@@ -1172,7 +1172,7 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
 
 bool MemoryObject::Load(std::istream& is, std::string& errmsg)
 {
-    auto system = MyApp::Instance()->GetProject()->GetSystem<System>();
+    auto system = GetSystem();
 
     int inttype = ReadVarInt<int>(is);
     type = (MemoryObject::TYPE)inttype;

@@ -28,47 +28,48 @@ add_subdirectory(libs/glfw)
 add_subdirectory(libs/gl3w)
 
 add_executable(${PROJECT_NAME}
-               libs/imgui/imgui.cpp
-               libs/imgui/imgui_demo.cpp
-               libs/imgui/imgui_draw.cpp
-               libs/imgui/imgui_tables.cpp
-               libs/imgui/imgui_widgets.cpp
-               libs/imgui/misc/cpp/imgui_stdlib.cpp
-
-               libs/imgui/backends/imgui_impl_glfw.cpp
-               libs/imgui/backends/imgui_impl_opengl3.cpp
-
-               libs/ImGuiFileDialog/ImGuiFileDialog.cpp
-
-               src/application.cpp
-               src/systems/expressions.cpp
-               src/main.cpp
-               src/system_clock.cpp
-
-               src/systems/system.cpp
-               src/systems/nes/nes_apu_io.cpp
-               src/systems/nes/nes_cartridge.cpp
-               src/systems/nes/nes_cpu.cpp
-               src/systems/nes/nes_defines.cpp
-               src/systems/nes/nes_disasm.cpp
-               src/systems/nes/nes_expressions.cpp
-               src/systems/nes/nes_label.cpp
-               src/systems/nes/nes_listing.cpp
-               src/systems/nes/nes_memory.cpp
-               src/systems/nes/nes_project.cpp
-               src/systems/nes/nes_ppu.cpp
-               src/systems/nes/nes_system.cpp
-
-               src/windows/baseproject.cpp
-               src/windows/basewindow.cpp
-               src/windows/rom_loader.cpp
-
-               src/windows/nes/defines.cpp
-               src/windows/nes/emulator.cpp
-               src/windows/nes/labels.cpp
-               src/windows/nes/listing.cpp
-               src/windows/nes/references.cpp
-               src/windows/nes/regions.cpp
+    libs/imgui/imgui.cpp
+    libs/imgui/imgui_demo.cpp
+    libs/imgui/imgui_draw.cpp
+    libs/imgui/imgui_tables.cpp
+    libs/imgui/imgui_widgets.cpp
+    libs/imgui/misc/cpp/imgui_stdlib.cpp
+    
+    libs/imgui/backends/imgui_impl_glfw.cpp
+    libs/imgui/backends/imgui_impl_opengl3.cpp
+    
+    libs/ImGuiFileDialog/ImGuiFileDialog.cpp
+    
+    src/application.cpp
+    src/systems/expressions.cpp
+    src/main.cpp
+    src/system_clock.cpp
+    
+    src/systems/system.cpp
+    src/systems/nes/nes_apu_io.cpp
+    src/systems/nes/nes_cartridge.cpp
+    src/systems/nes/nes_cpu.cpp
+    src/systems/nes/nes_defines.cpp
+    src/systems/nes/nes_disasm.cpp
+    src/systems/nes/nes_expressions.cpp
+    src/systems/nes/nes_label.cpp
+    src/systems/nes/nes_listing.cpp
+    src/systems/nes/nes_memory.cpp
+    src/systems/nes/nes_project.cpp
+    src/systems/nes/nes_ppu.cpp
+    src/systems/nes/nes_system.cpp
+    
+    src/windows/baseproject.cpp
+    src/windows/basewindow.cpp
+    src/windows/main.cpp
+    src/windows/rom_loader.cpp
+    
+    src/windows/nes/defines.cpp
+    src/windows/nes/emulator.cpp
+    src/windows/nes/labels.cpp
+    src/windows/nes/listing.cpp
+    src/windows/nes/references.cpp
+    src/windows/nes/regions.cpp
 )
 
 # from https://stackoverflow.com/questions/74426638/how-to-remove-rtc1-from-specific-target-or-file-in-cmake

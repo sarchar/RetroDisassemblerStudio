@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+namespace Windows {
+
 class ProjectCreatorWindow : public BaseWindow {
 public:
     ProjectCreatorWindow(std::string const& _file_path_name);
@@ -21,8 +23,8 @@ public:
     std::shared_ptr<project_created_t> project_created;
 
 protected:
-    void UpdateContent(double deltaTime) override;
-    void RenderContent() override;
+    void Update(double deltaTime) override;
+    void Render() override;
 
     void CreateProjectThreadMain();
 
@@ -53,3 +55,5 @@ public:
     static std::shared_ptr<ProjectCreatorWindow> CreateWindow(std::string const& _file_path_name);
 
 };
+
+} // namespace Windows

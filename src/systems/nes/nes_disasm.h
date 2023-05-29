@@ -6,7 +6,7 @@
 #include "util.h"
 #include "systems/nes/nes_defs.h"
 
-namespace NES {
+namespace Systems::NES {
 
 class Disassembler : public std::enable_shared_from_this<Disassembler> {
 public:

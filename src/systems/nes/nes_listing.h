@@ -6,7 +6,7 @@
 #include "systems/nes/nes_defs.h"
 #include "systems/nes/nes_memory.h"
 
-namespace NES {
+namespace Systems::NES {
 
 class Define;
 class Label;

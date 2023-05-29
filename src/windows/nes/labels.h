@@ -6,18 +6,22 @@
 #include <stack>
 
 #include "signals.h"
-#include "systems/nes/nes_system.h"
 #include "windows/basewindow.h"
 
-namespace NES {
+namespace Systems::NES {
+    class GlobalMemoryLocation;
+    class Label;
+    class System;
+}
 
-class GlobalMemoryLocation;
-class Label;
-
-namespace Windows {
+namespace Windows::NES {
 
 class Labels : public BaseWindow {
 public:
+    using GlobalMemoryLocation = Systems::NES::GlobalMemoryLocation;
+    using Label                = Systems::NES::Label;
+    using System               = Systems::NES::System;
+
     Labels();
     virtual ~Labels();
 
@@ -27,9 +31,9 @@ public:
     // signals
 
 protected:
-    void UpdateContent(double deltaTime) override;
-    void RenderContent() override;
     void CheckInput() override;
+    void Update(double deltaTime) override;
+    void Render() override;
 
 private:
     void LabelCreated(std::shared_ptr<Label> const&, bool);
@@ -53,6 +57,5 @@ public:
     static std::shared_ptr<Labels> CreateWindow();
 };
 
-} //namespace Windows
+} //namespace Windows::NES
 
-} //namespace NES

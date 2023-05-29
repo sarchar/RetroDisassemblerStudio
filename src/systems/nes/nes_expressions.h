@@ -6,7 +6,7 @@
 #include "systems/nes/nes_defines.h"
 #include "systems/nes/nes_memory.h"
 
-namespace NES {
+namespace Systems::NES {
 
 class Label;
 
@@ -335,4 +335,4 @@ protected:
     std::shared_ptr<BaseExpressionNode> ParseParenExpression(std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&) override;
 };
 
-};
+} // namespace Systems::NES
