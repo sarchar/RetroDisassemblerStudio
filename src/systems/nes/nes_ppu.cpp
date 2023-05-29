@@ -99,7 +99,7 @@ public:
             ppu->vblank = 0;
 
             // reset the address latch
-            ppu->vram_address_latch = 8;
+            ppu->vram_address_latch = 1;
             break;
 
         case 0x04: // OAMDATA
@@ -109,8 +109,13 @@ public:
 
         case 0x07: // PPUDATA
             ret = ppu->vram_read_buffer;
-            ppu->vram_read_buffer = ReadPPU(ppu->vram_address);
-            ppu->vram_address += (ppu->vram_increment ? 32 : 1);
+            ppu->vram_read_buffer = ReadPPU(ppu->vram_address_v & 0x3FFF);
+            // TODO there's a technicality here when reading palettes. 
+            // see https://www.nesdev.org/wiki/PPU_registers#Data_.28.242007.29_.3C.3E_read.2Fwrite
+            ppu->vram_address_v += (ppu->vram_increment ? 32 : 1);
+            // also, reading or writing to this port during rendering will adjust vram_address as well, so
+            // that gets updated here too
+            ppu->vram_address = ppu->vram_address_v & 0x3FFF; // address actually on the wire
             break;
 
         default:
@@ -129,10 +134,14 @@ public:
         u16 reg = address & 0x07;
         switch(reg) {
         case 0x00: // PPUCONT
-            // if the PPU is currentinly in vblank and the PPUSTAT flag is still set to 1, changing the NMI enable flag triggers NMI immediately
+            // if the PPU is currentinly in vblank (and the PPUSTAT vblank flag is still set to 1),
+            // changing the NMI enable flag from 0 to 1 triggers NMI immediately
             if(ppu->vblank && !ppu->enable_nmi && (value & 0x80)) ppu->nmi();
 
             ppu->ppucont = value;
+
+            // update vram_address_t
+            ppu->vram_address_t = (ppu->vram_address_t & ~0x0C00) | ((int)ppu->base_nametable_address << 10);
             break;
 
         case 0x01: // PPUMASK
@@ -150,27 +159,37 @@ public:
             if((ppu->show_background || ppu->show_sprites) && ppu->scanline < 240 && ppu->cycle < 257) {
                 cout << "[PPUView::Write] warning: write to OAMDATA during rendering" << endl;
             }
-            //cout << "OAMDATA write $" << hex << (int)value << endl;
             ppu->primary_oam[ppu->primary_oam_address] = value;
             ppu->primary_oam_address += 1;
             break;
 
         case 0x05: // PPUSCRL write x2
             // PPUSCRL uses the address latch -- it affects PPUADDR
-            if(ppu->vram_address_latch) ppu->scroll_x = value;
-            else                        ppu->scroll_y = value;
-            ppu->vram_address_latch ^= 0x08;
+            if(ppu->vram_address_latch) {
+                ppu->vram_address_t = (ppu->vram_address_t & ~0x001F) | (value >> 3);
+                ppu->fine_x = value & 0x07;
+            } else {
+                ppu->vram_address_t = (ppu->vram_address_t & ~0x73E0) | ((u16)(value & 0xF8) << 2) | ((u16)(value & 0x07) << 12);
+            }
+            ppu->vram_address_latch ^= 1;
             break;
 
         case 0x06: // PPUADDR write x2
-            ppu->vram_address = (u16)((ppu->vram_address & ((u16)0x00FF << (ppu->vram_address_latch ^ 0x08))) | ((u16)value << ppu->vram_address_latch));
-            ppu->vram_address_latch ^= 0x08;
-            //if(ppu->vram_address_latch == 8) cout << hex << ppu->vram_address << endl;
+            if(ppu->vram_address_latch) {
+                ppu->vram_address_t = (ppu->vram_address_t & 0x00FF) | ((value & 0x3F) << 8);
+            } else {
+                ppu->vram_address_t = (ppu->vram_address_t & 0xFF00) | (u16)value;
+                ppu->vram_address_v = ppu->vram_address_t;
+            }
+            ppu->vram_address_latch ^= 1;
             break;
 
         case 0x07: // PPUDATA
-            WritePPU(ppu->vram_address, value);
-            ppu->vram_address += (ppu->vram_increment ? 32 : 1);
+            WritePPU(ppu->vram_address_v & 0x3FFF, value);
+            ppu->vram_address_v += (ppu->vram_increment ? 32 : 1);
+            // technically reading or writing to this port during rendering will adjust vram_address as well, so
+            // that gets updated here too
+            ppu->vram_address = ppu->vram_address_v & 0x3FFF; // address actually on the wire
             break;
 
         default:
@@ -224,15 +243,10 @@ PPU::~PPU()
 void PPU::Reset()
 {
     enable_nmi = 0;
+    frame = 0;
     scanline = 0;
     cycle = 0;
     odd = 0;
-
-    scroll_x = 0;
-    scroll_y = 0;
-
-    x_pos = 16;
-    y_pos = 0;
 
     primary_oam_rw = 0;
     secondary_oam_rw = 0;
@@ -245,6 +259,9 @@ shared_ptr<MemoryView> PPU::CreateMemoryView()
 
 int PPU::Step(bool& hblank_out, bool& vblank_out)
 {
+    // used throughout
+    rendering_enabled = show_background || show_sprites;
+
     int color = 0;
 
     // external wires for this particular pixel
@@ -255,7 +272,7 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
     if(scanline < 240 || scanline == 261) {
         if(cycle != 0) {
             // sprite 0 hit is cleared on the first pixel of the prerender line
-            if(scanline == 261) {
+            if(scanline == 261 && cycle == 1) {
                 sprite0_hit = 0;
                 sprite_zero_hit_buffer = 0;
             }
@@ -263,24 +280,45 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
             if(cycle < 257) {   // cycles 1..256
                 vblank = 0; // doesn't hurt to set this every cycle, but the first time it'll matter is (scanline=261,cycle=1) when it should first be cleared
                 color = InternalStep(false);
-                x_pos += 1;
             } else if(cycle < 321) {   // cycles 257..320 (hblank up until bg tile prefetch)
-                if(cycle == 257) { 
-                    // start of hblank
-                    sprite_zero_present = 0;
-                    y_pos += 1;
-                    x_pos = 0;
+                if(cycle == 257) { // start of hblank
+                    // increment the fine Y position in vram_address_v by 1 and move onto the next tile if fine_y overflows
+                    if(rendering_enabled) {
+                        if((vram_address_v & 0x7000) == 0x7000) {
+                            vram_address_v &= ~0x7000;
+
+                            int coarse_y = (vram_address_v & 0x03E0) >> 5;
+                            if(coarse_y == 0x1D) { // at 29 roll over to 0 on the next nametable
+                                vram_address_v &= ~0x03E0;
+                                vram_address_v ^= 0x800;
+                            } else if(coarse_y == 0x1F) { // at 31 wrap on the same nametable
+                                vram_address_v &= ~0x03E0;
+                            } else {
+                                vram_address_v += 0x20; 
+                            }
+                        } else {
+                            vram_address_v += 0x1000;
+                        }
+                    }
+                } else if(cycle == 258) {
+                    // copy all bits related to horizontal position from vram_address_t to vram_address_v
+                    if(rendering_enabled) {
+                        vram_address_v = (vram_address_v & ~0x41F) | (vram_address_t & 0x41F);
+                    }
                 } else if(cycle < 280) {
                     // idle
                 } else if(cycle < 305) {
-                    // latch scroll_y here on the prerender line
-                    if(scanline == 261) y_pos = scroll_y;
+                    // copy all bits related to vertical position from vram_address_t to vram_address_v
+                    if(scanline == 261 && rendering_enabled) {
+                        vram_address_v = (vram_address_v & ~0x7BE0) | (vram_address_t & 0x7BE0);
+                    }
                 }
+
+                // and evaluate sprites during hblank (will use vram_address!)
                 InternalStep(true);
             } else if(cycle < 337) {   // cycles 321..336
                 // first two tiles of the next line
                 InternalStep(false);
-                x_pos += 1;
             } else /* cycle < 341 */ { // cycles 337..340
                 // two unused vram fetches (phases 1..4), which latches the second of the first two tiles
                 // but we have to make sure x_pos doesn't increment here
@@ -299,12 +337,17 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
         cycle = 0;
 
         if(++scanline == 262) {
-            odd ^= 1;
+            frame += 1;
             scanline = 0;
+            odd ^= 1;
 
             // odd frames are one clock shorter than normal, they skip the (0,0) cycle but only if rendering is enabled
             if(odd && (show_background || show_sprites)) cycle = 1;
         }
+
+        // indicate that sprite 0 is present in secondary OAM (as the 0th element, naturally) on this upcoming scanline
+        sprite_zero_present = sprite_zero_next_present;
+        sprite_zero_next_present = 0;
     }
 
     // pipeline the color generation for 4 cycles
@@ -318,15 +361,15 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
 
 int PPU::InternalStep(bool sprite_fetch)
 {
-    // if both sprites and bg are disabled, rendering is disabled, and we don't do any memory accesses
-    if(!(show_sprites || show_background)) return 0;
+    // if rendering is disabled nothing in this substep matters
+    if(!rendering_enabled) return 0;
 
     // phase 1 needs the shift register fully shifted 8 times
     // shift registers start shifting at cycle 2, and the first latch of the shift register happens at cycle 9
     // so we can be sure (at cycles 2, 3, 4, 5, 6, 7, 8, and 9) 8 bits are shifted out before the latch at cycle 9
-    // TODO Shift() is also where things like sprite 0 hit are setup. Don't shift in cycles 337..340
     if(cycle >= 2 && cycle <= 337) Shift();
 
+    // Look over OAM and prepare sprites
     EvaluateSprites();
 
     // setup address and latch data depending on the read phase
@@ -341,25 +384,9 @@ int PPU::InternalStep(bool sprite_fetch)
             attribute_next_byte = attribute_latch;
             background_lsbits = (u16)background_lsbits_latch | (background_lsbits & 0xFF00);
             background_msbits = (u16)background_msbits_latch | (background_msbits & 0xFF00);
-
-            nametable_byte = nametable_next_byte;
-            nametable_next_byte = nametable_latch;
         }
 
-        if(!sprite_fetch) {
-            // initialize base address to 0x2000, 0x2400, 0x2800, 0x2C00
-            vram_address = 0x2000 | (base_nametable_address << 10);
-
-            // x_pos/y_pos two tiles ahead (it's set to zero 20 cycles before the new scanline)
-            int x_tile = ((x_pos + (int)scroll_x) >> 3);
-            if(x_tile >= 32) vram_address ^= 0x400; // change nametables horizontally 
-
-            int y_tile = (y_pos >> 3);
-            if(y_tile >= 30) vram_address ^= 0x800; // change vertically vertically
-
-            vram_address |= (x_tile & 0x1F) + ((y_tile & 0x1F) << 5);
-            //cout << "x=" << dec << x_pos << " y=" << y_pos << " NT addr: $" << hex << vram_address << endl;
-        }
+        if(!sprite_fetch) vram_address = 0x2000 | (vram_address_v & 0x0FFF);
         break;
     }
 
@@ -372,7 +399,7 @@ int PPU::InternalStep(bool sprite_fetch)
     {
         // setup attribute address
         // take out the nametable base
-        int offset = vram_address & 0x3FF;
+        int offset = vram_address_v & 0x3FF;
 
         // 32 tiles per row, 4 x-tiles represented per attribute byte
         // every 32 * 4 y-tiles = 0x80 tiles, increment attribute table address by 8 bytes 
@@ -383,19 +410,24 @@ int PPU::InternalStep(bool sprite_fetch)
         attribute_addr += (offset & 0x1F) >> 2;
 
         // and then add the base of the attribute table
-        if(!sprite_fetch) vram_address = (vram_address & 0x2C00) | 0x3C0 | attribute_addr;
+        if(!sprite_fetch) vram_address = 0x23C0 | (vram_address_v & 0x0C00) | attribute_addr;
         break;
     }
+
     case 4:
         // latch attribute byte
         attribute_latch = Read(vram_address);
         break;
+
     case 5:
         if(!sprite_fetch) {
             // setup lsbits tile address
-            vram_address = (background_pattern_table_address << 12) + (nametable_latch << 4) + (y_pos & 0x07);
+            int fine_y = (vram_address_v & 0x7000) >> 12;
+            // TODO maybe background_pattern_table_address needs special latching
+            vram_address = (background_pattern_table_address << 12) | (nametable_latch << 4) | fine_y;
         }
         break;
+
     case 6:
         // latch lsbits tile byte
         if(sprite_fetch) {
@@ -405,10 +437,12 @@ int PPU::InternalStep(bool sprite_fetch)
             background_lsbits_latch = Read(vram_address);
         }
         break;
+
     case 7:
-        // setup msbits tile address
+        // setup msbits tile address, correct for both sprites and tiles
         vram_address += 8;
         break;
+
     case 0:
         // latch msbits tile byte
         if(sprite_fetch) {
@@ -416,6 +450,14 @@ int PPU::InternalStep(bool sprite_fetch)
             sprite_msbits[sprite] = Read(vram_address);
         } else {
             background_msbits_latch = Read(vram_address);
+
+            // increment 1 tile in X and wrap to the next nametable
+            if((vram_address_v & 0x1F) == 0x1F) { // check wrap X to the horizontal nametable
+                vram_address_v &= ~0x1F; 
+                vram_address_v ^= 0x400;
+            } else {
+                vram_address_v += 0x01;
+            }
         }
         break;
     }
@@ -427,7 +469,6 @@ void PPU::Shift()
 {
     background_lsbits <<= 1;
     background_msbits <<= 1;
-    if(sprite_zero_hit_buffer) sprite0_hit = 1;
 
     // sprites are only shifted during rendering
     if(cycle < 257) {
@@ -490,7 +531,7 @@ void PPU::EvaluateSprites()
                     if(!secondary_oam_rw) sprite_overflow = 1;
 
                     // if this is sprite 0, note it as included in the output list
-                    if(secondary_oam_rw && (primary_oam_address >> 2) == 0) sprite_zero_present = 1;
+                    if(secondary_oam_rw && (primary_oam_address >> 2) == 0) sprite_zero_next_present = 1;
 
                     // set up read address for the next data, this triggers a full copy of the sprite
                     primary_oam_address += 1;
@@ -612,6 +653,9 @@ void PPU::EvaluateSprites()
         secondary_oam_rw = 0;
         secondary_oam_address = 0;
     }
+
+    // Sprite hit only triggers after 2nd cycle
+    if(sprite_zero_hit_buffer && cycle >= 2) sprite0_hit = 1;
 }
 
 int PPU::DeterminePixel()
@@ -623,8 +667,8 @@ int PPU::DeterminePixel()
     int sprite_priority = 0;   // 0 = foreground priority
     int sprite_tile_color = 0; // 0 (transparent), 1, 2, or 3
     int sprite_color = 0;      // color from palette ram
-    int sprite;
-    for(sprite = 0; show_sprites && sprite < 8; sprite++) {
+    int sprite = 0;
+    for(; show_sprites && sprite < 8; sprite++) {
         if(sprite_x[sprite] != 0) continue;
 
         // determine sprite's color
@@ -644,15 +688,12 @@ int PPU::DeterminePixel()
     // select background or sprite color based on sprite priority
     int mux_color = background_color;
     if(sprite_tile_color != 0) {
-        if((sprite_priority == 0) || (tile_color == 0)) {
-            mux_color = sprite_color;
-        }
+        // if sprite has priority or the background is color 0, use the sprite color
+        if((sprite_priority == 0) || (tile_color == 0)) mux_color = sprite_color;
 
-        // sprite0 hit flag when a non-zero pixel of sprite 0 covers a nonzero pixel of the background
+        // sprite0 hit flag happens when a non-zero pixel of sprite 0 covers a nonzero pixel of the background
         // sprite0 hit flag doesn't mean the sprite color is used, just when the two colors appear at the same time
-        if(sprite_zero_present && (sprite == 0) && (tile_color != 0)) {
-            sprite_zero_hit_buffer = 1;
-        }
+        if(sprite_zero_present && (sprite == 0) && (tile_color != 0)) sprite_zero_hit_buffer = 1;
     } 
 
     return rgb_palette_map[mux_color];
@@ -664,28 +705,29 @@ int PPU::DeterminePixel()
 int PPU::DetermineBackgroundColor(int& tile_color) const
 {
     // determine tile color (2 bit)
-    int fine_x = scroll_x & 7;
     u8 bit0 = (u8)((background_lsbits >> (15 - fine_x)) & 0x01);
     u8 bit1 = (u8)((background_msbits >> (15 - fine_x)) & 0x01);
     tile_color = ((bit1 << 1) | bit0);
 
-    // if fine_x puts us into the next tile, change the attribute byte to the next and possibly adjust which 2 bits to use
-    int actual_attribute_byte = attribute_byte;
-    int attr_x = ((x_pos - 16) + (int)scroll_x) & 0x1F; // the actual 2 bits to use is determined by the x coordinate in the
-                                                        // 0..31 pixel block
-    // if the current x position (-16) plus fine_x puts us into rendering the next tile (which is in the shift buffer)
-    // then we also need to use the next attribute byte
-    if((((x_pos - 16) & 7) + fine_x) >= 8) actual_attribute_byte = attribute_next_byte;
-
     // determine attribute bits (palette index), 2 bits
-    // left/right nibble switches on y_pos every 16 rows
-    int y_shift = (y_pos & 0x10) >> 2; // y_shift = 0 or 4
-    int attribute_half = (actual_attribute_byte >> y_shift) & 0x0F;
+    //
+    // if fine_x puts us into the next tile, change the attribute byte to the next and possibly adjust which 2 bits to use
+    // (x_pos is two tiles ahead due to the prefetching of tiles)
+    // (first pixel is produced at cycle==1, so subtract 17 total)
+    int x_pos = (cycle & 0x07) + (((vram_address_v & 0x1F) << 3) | (int)fine_x);
+    int attr_x = (x_pos - 17) & 0x1F; // the actual 2 bits to use is determined by the x coordinate in the 0..31 pixel block
 
-    // left/right byte of said nibble switches on x_pos every 16 pixels
-    // (x_pos is always two tiles = 16 pixels ahead)
-    int x_shift = (attr_x & 0x10) ? 2 : 0; // x_shift is 0 or 2
-    int attr = (attribute_half >> x_shift) & 0x03;
+    // if the current fine x position plus scroll fine_x puts us into rendering the next tile (which is in the shift buffer)
+    // then we also need to use the next attribute byte. note that attr_x will have looped back around 32 pixels
+    int actual_attribute_byte = ((((cycle - 1) & 0x07) + fine_x) >= 8) ? attribute_next_byte : attribute_byte;
+
+    // left/right nibble switches on y_pos every 16 rows
+    int y_pos = ((vram_address_v & 0x3E0) >> 2) | ((vram_address_v & 0x7000) >> 12);
+    int y_shift = (y_pos & 0x10) >> 2; // y_shift = 0 or 4
+
+    // left/right two-bits of said nibble switches on whether attr_x >= 16
+    int x_shift = (attr_x & 0x10) >> 3; // x_shift is 0 or 2
+    int attr = (actual_attribute_byte >> (y_shift + x_shift)) & 0x03;
 
     // NES palette lookup is 4 bits/16 colors
     u8  nes_palette_index = ((attr << 2) | tile_color);

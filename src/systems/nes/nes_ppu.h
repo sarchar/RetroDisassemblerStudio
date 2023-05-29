@@ -68,17 +68,25 @@ private:
         };
     };
 
+    bool rendering_enabled;
+
     // NMI wire connected directly to the CP
     nmi_function_t nmi;
 
-    // internal scroll registers
-    u8  scroll_x;
-    u8  scroll_y;
-    u8  scroll_y_latch;
-
-    // the PPU bus address to use with Read/Write
+    // loopy vars.. they're honestly a decent way of properly timing all these changes
+    // but I wanted to keep individual vars up to date. instead, I'll track t (temp address)
+    // and v (vram address) like everyone else.. "vram_address" is the final address that ends
+    // up on the PPU address bus the cycle before the read
+    // see https://www.nesdev.org/wiki/PPU_scrolling
     u16 vram_address;
+    u16 vram_address_t;
+    u16 vram_address_v;
+    u8  fine_x;
+
+    // read buffer on the PPUDATA port
     u8  vram_read_buffer;
+
+    // toggle on PPUADDR and PPUSCRL
     int vram_address_latch;
 
     // PPU bus (the System module handles the VRAM connection)
@@ -86,14 +94,10 @@ private:
     write_func_t Write;
 
     // internal counting registers
+    int frame;
     int scanline;
     int cycle;
     int odd;
-
-    // moving x/y positions for the calculation of nametable and attribute bytes
-    // y_pos includes scroll_y, x_pos does not
-    int x_pos;
-    int y_pos;
 
     // color pipeline, color produced at cycle 2 is generated at cycle 4
     int color_pipeline[3];
@@ -103,10 +107,6 @@ private:
     u8 attribute_latch;
     u8 background_lsbits_latch;
     u8 background_msbits_latch;
-
-    // TODO temp
-    u8 nametable_byte;
-    u8 nametable_next_byte;
 
     // shift registers for background
     u8  attribute_next_byte;
@@ -133,9 +133,10 @@ private:
 
     // for tracking sprite 0 hit
     struct {
-        u8 unused1                : 6;
-        u8 sprite_zero_present    : 1;
-        u8 sprite_zero_hit_buffer : 1;
+        u8 unused1                  : 5;
+        u8 sprite_zero_present      : 1;
+        u8 sprite_zero_next_present : 1;
+        u8 sprite_zero_hit_buffer   : 1;
     };
 
     // palette RAM, 16 bytes for BG, 16 for OAM
