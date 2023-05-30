@@ -1110,6 +1110,16 @@ u8 SystemView::ReadPPU(u16 address)
         // read cartridge CHR-ROM/RAM
         return cartridge_view->ReadPPU(address);
     } else {
+        switch(cartridge_view->GetNametableMirroring()) {
+        case MIRRORING_VERTICAL:
+            address &= ~0x800;
+            break;
+
+        case MIRRORING_HORIZONTAL: 
+            address &= ~0x400;
+            break;
+        }
+
         return VRAM[address & 0x1FFF];
     }
 }
@@ -1124,8 +1134,14 @@ void SystemView::WritePPU(u16 address, u8 value)
         VRAM[address & 0x1FFF] = value;
 
         // basic mirroring for now
-        if(system->cartridge->header.mirroring == MIRRORING_VERTICAL)        VRAM[(address ^ 0x800) & 0x1FFF] = value;
-        else if(system->cartridge->header.mirroring == MIRRORING_HORIZONTAL) VRAM[(address ^ 0x400) & 0x1FFF] = value;
+        switch(cartridge_view->GetNametableMirroring()) {
+        case MIRRORING_VERTICAL:
+            VRAM[(address ^ 0x800) & 0x1FFF] = value;
+            break;
+        case MIRRORING_HORIZONTAL: 
+            VRAM[(address ^ 0x400) & 0x1FFF] = value;
+            break;
+        }
     }
 }
 
