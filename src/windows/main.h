@@ -9,7 +9,7 @@
 #include "windows/basewindow.h"
 
 #define GetMainWindow() GetApplication()->GetMainWindowAs<Windows::MainWindow>()
-#define GetSystemInstance() (assert(GetMainWindow()); GetMainWindow()->GetMostRecentSystemInstance())
+#define GetSystemInstance() (assert(GetMainWindow()), GetMainWindow()->GetMostRecentSystemInstance())
 
 namespace Windows {
 

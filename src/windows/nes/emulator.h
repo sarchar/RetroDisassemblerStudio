@@ -19,18 +19,24 @@ namespace Systems::NES {
     class GlobalMemoryLocation;
     class PPU;
     class MemoryView;
+    class System;
 }
 
 namespace Windows::NES {
 
 class Listing;
 
-// NES::Windows::System is home to everything you need about an instance of a NES system.  
-// You can have multiple System windows, and that contains its own system state. 
-// NES::System is generic and doesn't contain instance specific state. That information
-// is designated to be here
+// Windows::NES::SystemInstance is home to everything you need about an instance of a NES system.  
+// You can have multiple SystemInstances and they contain their own system state. 
+// Systems::NES::System is generic and doesn't contain instance specific state
 class SystemInstance : public BaseWindow {
 public:
+    using APU_IO     = Systems::NES::APU_IO;
+    using CPU        = Systems::NES::CPU;
+    using MemoryView = Systems::NES::MemoryView;
+    using PPU        = Systems::NES::PPU;
+    using System     = Systems::NES::System;
+
     enum class State {
         INIT,
         PAUSED,
@@ -58,6 +64,7 @@ public:
     // signals
 
 protected:
+    void RenderMenuBar() override;
     void CheckInput() override;
     void Update(double deltaTime) override;
     void Render() override;
@@ -68,8 +75,8 @@ private:
 
     void UpdateTitle();
     void Reset();
+    void UpdateFramebufferTexture();
     void UpdateRAMTexture();
-    void UpdatePPUTexture();
     void UpdateNametableTexture();
     bool SingleCycle();
     bool StepCPU();
@@ -83,20 +90,20 @@ private:
 
     std::shared_ptr<BaseWindow>           most_recent_listing_window;
 
-    std::weak_ptr<Systems::NES::System>   current_system;
-    State                                 current_state = State::INIT;
-    std::shared_ptr<std::thread>          emulation_thread;
-    bool                                  exit_thread = false;
-    bool                                  thread_exited = false;
-    std::shared_ptr<Systems::NES::CPU>    cpu;
-    std::shared_ptr<Systems::NES::PPU>    ppu;
-    std::shared_ptr<Systems::NES::APU_IO> apu_io;
+    std::shared_ptr<System>      current_system;
+    State                        current_state = State::INIT;
+    std::shared_ptr<std::thread> emulation_thread;
+    bool                         exit_thread = false;
+    bool                         thread_exited = false;
+    std::shared_ptr<CPU>         cpu;
+    std::shared_ptr<PPU>         ppu;
+    std::shared_ptr<APU_IO>      apu_io;
 
-    std::shared_ptr<Systems::NES::MemoryView> memory_view;
+    std::shared_ptr<MemoryView> memory_view;
 
     std::string run_to_address_str = "";
     int         run_to_address = -1;
-    int         cpu_shift;
+    int         cpu_shift = 0;
 
     u64 last_cycle_count = 0;
     std::chrono::time_point<std::chrono::steady_clock> last_cycle_time;

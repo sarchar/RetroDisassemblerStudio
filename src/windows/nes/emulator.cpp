@@ -42,28 +42,29 @@ SystemInstance::SystemInstance()
     system_id = next_system_id++;
     SetNav(false);
 
+    SetShowMenuBar(true);
     SetIsDockSpace(true);
 
     *child_window_added += std::bind(&SystemInstance::ChildWindowAdded, this, placeholders::_1);
 
-//!    // allocate storage for framebuffers
-//!    framebuffer = (u32*)new u8[4 * 256 * 256];
-//!    ram_framebuffer = (u32*)new u8[4 * 256 * 256];
-//!    nametable_framebuffer = (u32*)new u8[4 * 256 * 256];
-//!
-//!    // fill the framebuffer with fully transparent pixels (0), so the bottom 16 rows aren't visible
-//!    memset(framebuffer, 0, 4 * 256 * 256);
-//!
-//!    // generate the textures
-//!    GLuint gl_texture;
-//!
-//!    glGenTextures(1, &gl_texture);
-//!    glBindTexture(GL_TEXTURE_2D, gl_texture);
-//!    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
-//!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-//!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-//!    framebuffer_texture = (void*)(intptr_t)gl_texture;
-//!
+    // allocate storage for framebuffers
+    framebuffer = (u32*)new u8[4 * 256 * 256];
+    ram_framebuffer = (u32*)new u8[4 * 256 * 256];
+    nametable_framebuffer = (u32*)new u8[4 * 256 * 256];
+
+    // fill the framebuffer with fully transparent pixels (0), so the bottom 16 rows aren't visible
+    memset(framebuffer, 0, 4 * 256 * 256);
+
+    // generate the textures
+    GLuint gl_texture;
+
+    glGenTextures(1, &gl_texture);
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    framebuffer_texture = (void*)(intptr_t)gl_texture;
+
 //!    glGenTextures(1, &gl_texture);
 //!    glBindTexture(GL_TEXTURE_2D, gl_texture);
 //!    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, ram_framebuffer);
@@ -77,41 +78,38 @@ SystemInstance::SystemInstance()
 //!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 //!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 //!    nametable_texture = (void*)(intptr_t)gl_texture;
-//!
-//!    glBindTexture(GL_TEXTURE_2D, 0);
-//!
-   if(auto system = GetSystem()) {
-       current_system = system;
-//!
-//!        auto& mv = memory_view;
-//!        ppu = make_shared<PPU>([this]() {
-//!                cpu->Nmi();
-//!            },
-//!
-//!            // capturing the reference means the pointer can change after this initialization
-//!            [this, &mv](u16 address)->u8 {
-//!                return memory_view->ReadPPU(address);
-//!            },
-//!            [this, &mv](u16 address, u8 value)->void {
-//!                memory_view->WritePPU(address, value);
-//!            }
-//!        );
-//!
-//!        apu_io = make_shared<APU_IO>();
-//!        oam_dma_callback_connection = apu_io->oam_dma_callback->connect(std::bind(&System::WriteOAMDMA, this, placeholders::_1));
-//!
-//!        memory_view = system->CreateMemoryView(ppu->CreateMemoryView(), apu_io->CreateMemoryView());
-//!
-//!        cpu = make_shared<CPU>(
-//!            std::bind(&MemoryView::Read, memory_view, placeholders::_1),
-//!            std::bind(&MemoryView::Write, memory_view, placeholders::_1, placeholders::_2)
-//!        );
-//!
-//!
-//!        // start the emulation thread
-//!        emulation_thread = make_shared<thread>(std::bind(&System::EmulationThread, this));
-//!
-       current_state = State::PAUSED;
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    if(current_system = GetSystem()) {
+        auto& mv = memory_view;
+        ppu = make_shared<PPU>([this]() {
+                cpu->Nmi();
+            },
+
+            // capturing the reference means the pointer can change after this initialization
+            [this, &mv](u16 address)->u8 {
+                return memory_view->ReadPPU(address);
+            },
+            [this, &mv](u16 address, u8 value)->void {
+                memory_view->WritePPU(address, value);
+            }
+        );
+
+        apu_io = make_shared<APU_IO>();
+        oam_dma_callback_connection = apu_io->oam_dma_callback->connect(std::bind(&SystemInstance::WriteOAMDMA, this, placeholders::_1));
+
+        memory_view = current_system->CreateMemoryView(ppu->CreateMemoryView(), apu_io->CreateMemoryView());
+
+        cpu = make_shared<CPU>(
+            std::bind(&MemoryView::Read, memory_view, placeholders::_1),
+            std::bind(&MemoryView::Write, memory_view, placeholders::_1, placeholders::_2)
+        );
+
+        // start the emulation thread
+        emulation_thread = make_shared<thread>(std::bind(&SystemInstance::EmulationThread, this));
+
+        current_state = State::PAUSED;
    }
 
    Reset();
@@ -119,19 +117,19 @@ SystemInstance::SystemInstance()
 
 SystemInstance::~SystemInstance()
 {
-//!	exit_thread = true;
-//!    if(emulation_thread) emulation_thread->join();
-//!
-//!    GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
-//!    glDeleteTextures(1, &gl_texture);
-//!
+    exit_thread = true;
+    if(emulation_thread) emulation_thread->join();
+
+    GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
+    glDeleteTextures(1, &gl_texture);
+
 //!    gl_texture = (GLuint)(intptr_t)ram_texture;
 //!    glDeleteTextures(1, &gl_texture);
 //!
 //!    gl_texture = (GLuint)(intptr_t)nametable_texture;
 //!    glDeleteTextures(1, &gl_texture);
-//!
-//!    delete [] (u8*)framebuffer;
+
+    delete [] (u8*)framebuffer;
 //!    delete [] (u8*)ram_framebuffer;
 //!    delete [] (u8*)nametable_framebuffer;
 }
@@ -184,6 +182,8 @@ void SystemInstance::UpdateTitle()
 {
     stringstream ss;
     ss << "NES_" << system_id << " :: " << magic_enum::enum_name(current_state);
+    // append ImGui fixed ID, so as to ignore our title text
+    ss << "###NES_" << system_id;
     system_title = ss.str();
     SetTitle(system_title.c_str());
 }
@@ -192,10 +192,24 @@ void SystemInstance::Update(double deltaTime)
 {
     UpdateTitle();
 
-//!    if(thread_exited) {
-//!        cout << "uh oh thread exited" << endl;
-//!    }
-//!
+    // check for global keystrokes that should work in all windows
+    bool is_current_instance = (GetSystemInstance().get() == this);
+    if(is_current_instance) {
+        if(ImGui::IsKeyPressed(ImGuiKey_F5)) {
+            if(current_state == State::PAUSED) {
+                current_state = State::RUNNING;
+            }
+        }
+
+        if(ImGui::IsKeyPressed(ImGuiKey_Escape) && ImGui::IsKeyPressed(ImGuiKey_LeftCtrl)) {
+            cout << GetTitle() << " got ESCAPE" << endl;
+        }
+    }
+
+    if(thread_exited) {
+        cout << "uh oh thread exited" << endl;
+    }
+
 //!    u64 cycle_count = cpu->GetCycleCount();
 //!    auto current_time = chrono::steady_clock::now();
 //!    u64 delta = cycle_count - last_cycle_count;
@@ -207,7 +221,7 @@ void SystemInstance::Update(double deltaTime)
 //!    }
 //!
 //!    UpdateRAMTexture();
-//!    UpdatePPUTexture();
+    UpdateFramebufferTexture();
 //!    UpdateNametableTexture();
 }
 
@@ -245,7 +259,7 @@ void SystemInstance::UpdateRAMTexture()
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void SystemInstance::UpdatePPUTexture()
+void SystemInstance::UpdateFramebufferTexture()
 {
     GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
     glBindTexture(GL_TEXTURE_2D, gl_texture);
@@ -283,11 +297,17 @@ void SystemInstance::UpdateNametableTexture()
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+void SystemInstance::RenderMenuBar()
+{
+    if(current_state == State::PAUSED && ImGui::Button("Run")) {
+        current_state = State::RUNNING;
+    } else if(current_state == State::RUNNING && ImGui::Button("Stop")) {
+        current_state = State::PAUSED;
+    }
+}
+
 void SystemInstance::Render()
 {
-    auto system = current_system.lock();
-    if(!system) return;
-
 //!    auto disassembler = system->GetDisassembler();
 //!
 //!    auto size = ImGui::GetWindowSize();
@@ -391,6 +411,10 @@ void SystemInstance::Render()
 //!    ImGui::Image(nametable_texture, ImVec2(256, 256));
 //!
 //!    ImGui::EndChild();
+    if(ImGui::Begin("Output")) {
+        ImGui::Image(framebuffer_texture, ImGui::GetWindowSize());
+    }
+    ImGui::End();
 }
 
 void SystemInstance::CheckInput()
@@ -408,12 +432,12 @@ void SystemInstance::CheckInput()
 
 void SystemInstance::Reset()
 {
-//!    cpu->Reset();
-//!    ppu->Reset();
-//!    cpu_shift = 0;
-//!    raster_line = framebuffer;
-//!    raster_y = 0;
-//!    oam_dma_enabled = false;
+    cpu->Reset();
+    ppu->Reset();
+    cpu_shift = 0;
+    raster_line = framebuffer;
+    raster_y = 0;
+    oam_dma_enabled = false;
 }
 
 bool SystemInstance::StepCPU()
