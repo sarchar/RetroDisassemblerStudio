@@ -621,8 +621,8 @@ void PPU::EvaluateSprites()
             if(sprite_attribute[sprite] & 0x80) {
                 if(sprite_size) {
                     // TODO this is probably not right..
-                    int new_y = (vram_address & 0x07) + (vram_address & 0x10) ? 8 : 0;
-                    new_y = 15 - new_y;
+                    int cur_y = (vram_address & 0x07) + ((vram_address & 0x10) ? 8 : 0);
+                    int new_y = 15 - cur_y;
                     vram_address = (vram_address & ~0x1F) | (new_y & 0x07) | ((new_y & 0x08) << 1);
                 } else {
                     vram_address = (vram_address & ~0x07) | (~(vram_address & 0x07) & 0x07);
