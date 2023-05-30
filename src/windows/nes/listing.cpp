@@ -14,10 +14,11 @@
 #include "main.h"
 #include "windows/nes/emulator.h"
 #include "windows/nes/listing.h"
+#include "windows/nes/listingitems.h"
+
 #include "systems/nes/nes_cartridge.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
-#include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 
@@ -361,7 +362,7 @@ void Listing::CreateDestinationLabel()
 void Listing::Render() 
 {
     // postponed actions (things that change the listing display that cannot happen while rendering)
-    Systems::NES::ListingItem::postponed_changes changes;
+    Windows::NES::ListingItem::postponed_changes changes;
 
     bool focused = IsFocused();
 

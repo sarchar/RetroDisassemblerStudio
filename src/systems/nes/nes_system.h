@@ -20,7 +20,6 @@ class Disassembler;
 class Expression;
 class ExpressionNodeCreator;
 class Label;
-class ListingItem;
 class ProgramRomBank;
 class SystemView;
 
@@ -106,9 +105,6 @@ public:
     }
 
     std::shared_ptr<MemoryView> CreateMemoryView(std::shared_ptr<MemoryView> const& ppu_view, std::shared_ptr<MemoryView> const& apu_io_view);
-
-    // Listings
-    void GetListingItems(GlobalMemoryLocation const&, std::vector<std::shared_ptr<ListingItem>>& out);
 
     // Defines
     void CreateDefaultDefines(); // for new projects

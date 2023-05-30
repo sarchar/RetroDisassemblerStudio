@@ -9,12 +9,15 @@
 
 #include "systems/nes/nes_defs.h"
 
+namespace Windows::NES {
+    class ListingItem;
+}
+
 namespace Systems::NES {
 
 class Disassembler;
 class Expression;
 class Label;
-class ListingItem;
 class System;
 
 // SystemMemoryLocation dials into a specific byte within the system. It has enough information to select which
@@ -105,6 +108,8 @@ class MemoryRegion;
 // The job of the tree is to keep memory objects ordered, provide iterators over objects
 // and keep track of listings
 struct MemoryObjectTreeNode {
+    using ListingItem = Windows::NES::ListingItem;
+
     std::weak_ptr<MemoryObjectTreeNode>   parent;
     std::shared_ptr<MemoryObjectTreeNode> left  = nullptr;
     std::shared_ptr<MemoryObjectTreeNode> right = nullptr;
@@ -135,6 +140,8 @@ struct MemoryObjectTreeNode {
 };
 
 struct MemoryObject {
+    using ListingItem = Windows::NES::ListingItem;
+
     enum TYPE {
         TYPE_UNDEFINED, // for NES undefined data shows up as bytes
         TYPE_BYTE,

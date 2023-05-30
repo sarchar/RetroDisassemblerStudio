@@ -10,10 +10,11 @@
 #include "main.h"
 #include "magic_enum.hpp"
 
+#include "windows/nes/listingitems.h"
+
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
-#include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 
@@ -126,23 +127,23 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
     // create a blank line inbetween other memory and labels, unless at the start of the bank
     // TODO or if it's a local label
     if(obj->labels.size() && region_offset != 0) {
-        obj->listing_items.push_back(make_shared<ListingItemBlankLine>());
+        obj->listing_items.push_back(make_shared<Windows::NES::ListingItemBlankLine>());
     }
 
     for(int nth = 0; nth < obj->labels.size(); nth++) {
         auto& label = obj->labels[nth];
-        obj->listing_items.push_back(make_shared<ListingItemLabel>(label, nth));
+        obj->listing_items.push_back(make_shared<Windows::NES::ListingItemLabel>(label, nth));
     }
 
     // create the pre comment
-    if(obj->comments.pre) obj->listing_items.push_back(make_shared<ListingItemPrePostComment>(0, false));
+    if(obj->comments.pre) obj->listing_items.push_back(make_shared<Windows::NES::ListingItemPrePostComment>(0, false));
 
     // the primary index is used to focus on code or data when moving to locations in the listing windows
     obj->primary_listing_item_index = obj->listing_items.size();
-    obj->listing_items.push_back(make_shared<ListingItemPrimary>(0));
+    obj->listing_items.push_back(make_shared<Windows::NES::ListingItemPrimary>(0));
 
     // create the post comment
-    if(obj->comments.post) obj->listing_items.push_back(make_shared<ListingItemPrePostComment>(0, true));
+    if(obj->comments.post) obj->listing_items.push_back(make_shared<Windows::NES::ListingItemPrePostComment>(0, true));
 }
 
 void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_node, u32 region_offset, u8* data, int count)
@@ -794,7 +795,7 @@ shared_ptr<MemoryObjectTreeNode::iterator> MemoryRegion::GetListingItemIterator(
     return nullptr;
 }
 
-shared_ptr<ListingItem>& MemoryObjectTreeNode::iterator::GetListingItem()
+shared_ptr<Windows::NES::ListingItem>& MemoryObjectTreeNode::iterator::GetListingItem()
 {
     return memory_object->listing_items[listing_item_index];
 }

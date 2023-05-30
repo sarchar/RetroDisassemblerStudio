@@ -6,21 +6,30 @@
 #include "systems/nes/nes_defs.h"
 #include "systems/nes/nes_memory.h"
 
-namespace Windows::NES {
-    class SystemInstance;
+namespace Systems::NES {
+    class Define;
+    class Label;
+    class GlobalMemoryLocation;
+    class MemoryObject;
+    class System;
+    class ProgramRomBank;
 }
 
-namespace Systems::NES {
+namespace Windows::NES {
 
-class Define;
-class Label;
-class System;
-class ProgramRomBank;
+class SystemInstance;
 
 // A single ListingItem translates to a single row in the Listing window. A listing item can be
 // all sorts of row types: comments, labels, actual code, data, etc.
 class ListingItem {
 public:
+    using Define = Systems::NES::Define;
+    using Label  = Systems::NES::Label;
+    using GlobalMemoryLocation = Systems::NES::GlobalMemoryLocation;
+    using MemoryObject = Systems::NES::MemoryObject;
+    using ProgramRomBank = Systems::NES::ProgramRomBank;
+    using System = Systems::NES::System;
+
     typedef std::function<void()> postponed_change_t;
     typedef std::deque<postponed_change_t> postponed_changes;
 
@@ -140,5 +149,5 @@ private:
     bool started_editing;
 };
 
-}
+} // namespace Windows::NES
 

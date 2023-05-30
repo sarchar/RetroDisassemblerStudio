@@ -13,18 +13,18 @@
 #include "windows/main.h"
 #include "windows/nes/emulator.h"
 #include "windows/nes/listing.h"
+#include "windows/nes/listingitems.h"
 #include "windows/nes/references.h"
 
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
-#include "systems/nes/nes_listing.h"
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_system.h"
 
 using namespace std;
 
-namespace Systems::NES {
+namespace Windows::NES {
 
 unsigned long ListingItem::common_inner_table_flags = ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_Resizable;
 
@@ -245,8 +245,8 @@ void ListingItemPrimary::EditOperandExpression(shared_ptr<System>& system, Globa
     if(auto memory_object = system->GetMemoryObject(where)) {
         if(memory_object->type == MemoryObject::TYPE_CODE) {
             switch(disassembler->GetAddressingMode(memory_object->code.opcode)) {
-            case AM_IMPLIED:
-            case AM_ACCUM:
+            case Systems::NES::AM_IMPLIED:
+            case Systems::NES::AM_ACCUM:
                 break;
 
             default:
@@ -423,7 +423,7 @@ bool ListingItemPrimary::ParseOperandExpression(shared_ptr<System>& system, Glob
     if(!wait_dialog) {
         int errloc;
 
-        auto expr = make_shared<Expression>();
+        auto expr = make_shared<Systems::NES::Expression>();
         if(expr->Set(edit_buffer, parse_errmsg, errloc)) {
             // successfully parsed the expression, try to set it on the operand (where it will do semantic checking
             // and validate the expression is legal)
