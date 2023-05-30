@@ -6,6 +6,7 @@
 #include <GL/gl3w.h>
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imgui_stdlib.h"
 #include "magic_enum.hpp"
 
@@ -132,6 +133,7 @@ void SystemInstance::CreateDefaultWorkspace()
     CreateNewWindow("Regions");
     CreateNewWindow("Listing");
     CreateNewWindow("Screen");
+    CreateNewWindow("CPUState");
 }
 
 void SystemInstance::CreateNewWindow(string const& window_type)
@@ -151,6 +153,9 @@ void SystemInstance::CreateNewWindow(string const& window_type)
         wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
     } else if(window_type == "Screen") {
         wnd = Screen::CreateWindow();
+        wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
+    } else if(window_type == "CPUState") {
+        wnd = CPUState::CreateWindow();
         wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
     }
 
@@ -205,18 +210,17 @@ void SystemInstance::Update(double deltaTime)
         cout << "uh oh thread exited" << endl;
     }
 
-//!    u64 cycle_count = cpu->GetCycleCount();
-//!    auto current_time = chrono::steady_clock::now();
-//!    u64 delta = cycle_count - last_cycle_count;
-//!    double delta_time = (current_time - last_cycle_time) / 1.0s;
-//!    if(delta_time >= 1.0) {
-//!        cycles_per_sec = delta / delta_time;
-//!        last_cycle_time = current_time;
-//!        last_cycle_count = cycle_count;
-//!    }
-//!
+    u64 cycle_count = cpu->GetCycleCount();
+    auto current_time = chrono::steady_clock::now();
+    u64 delta = cycle_count - last_cycle_count;
+    double delta_time = (current_time - last_cycle_time) / 1.0s;
+    if(delta_time >= 1.0) {
+        cycles_per_sec = delta / delta_time;
+        last_cycle_time = current_time;
+        last_cycle_count = cycle_count;
+    }
+
 //!    UpdateRAMTexture();
-    UpdateFramebufferTexture();
 //!    UpdateNametableTexture();
 }
 
@@ -252,10 +256,6 @@ void SystemInstance::UpdateRAMTexture()
     glBindTexture(GL_TEXTURE_2D, gl_texture);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, ram_framebuffer);
     glBindTexture(GL_TEXTURE_2D, 0);
-}
-
-void SystemInstance::UpdateFramebufferTexture()
-{
 }
 
 void SystemInstance::UpdateNametableTexture()
@@ -296,55 +296,42 @@ void SystemInstance::RenderMenuBar()
         current_state = State::PAUSED;
     }
 
+    if(current_state != State::PAUSED) {
+        ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+    }
+
+    ImGui::SameLine();
+    if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
+        if(ImGui::Button("Cycle")) {
+            if(current_state == State::PAUSED) {
+                current_state = State::STEP_CYCLE;
+            }
+        }
+    } else {
+        if(ImGui::Button("Step")) {
+            if(current_state == State::PAUSED) {
+                current_state = State::STEP_INSTRUCTION;
+            }
+        }
+    }
+
+    if(current_state != State::PAUSED) {
+        ImGui::PopStyleVar();
+        ImGui::PopItemFlag();
+    }
+
     ImGui::SameLine();
     if(ImGui::Button("Reset")) {
         Reset();
     }
+
+    ImGui::SameLine();
+    ImGui::Text("%f Hz", cycles_per_sec);
 }
 
 void SystemInstance::Render()
 {
-//!    auto disassembler = system->GetDisassembler();
-//!
-//!    auto size = ImGui::GetWindowSize();
-//!    size.x /= 2;
-//!    ImGui::PushItemWidth(size.x / 2);
-//!    ImGui::BeginChild("CPU view", size, false, ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoNavInputs);
-//!
-//!    if(ImGui::Button("Step Cycle")) {
-//!        if(current_state == State::PAUSED) {
-//!            current_state = State::STEP_CYCLE;
-//!        }
-//!    }
-//!
-//!    ImGui::SameLine();
-//!    if(ImGui::Button("Step Inst")) {
-//!        if(current_state == State::PAUSED) {
-//!            current_state = State::STEP_INSTRUCTION;
-//!        }
-//!    }
-//!
-//!    ImGui::SameLine();
-//!    if(ImGui::Button("Run")) {
-//!        if(current_state == State::PAUSED) {
-//!            current_state = State::RUNNING;
-//!        }
-//!    }
-//!
-//!    ImGui::SameLine();
-//!    if(ImGui::Button("Pause")) {
-//!        if(current_state == State::RUNNING) {
-//!            current_state = State::PAUSED;
-//!        }
-//!    }
-//!
-//!    ImGui::SameLine();
-//!    if(ImGui::Button("Reset")) {
-//!        if(current_state == State::PAUSED) {
-//!            Reset();
-//!        }
-//!    }
-//!
 //!    ImGui::SameLine();
 //!    if(ImGui::InputText("Run-to", &run_to_address_str, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
 //!        stringstream ss;
@@ -352,53 +339,6 @@ void SystemInstance::Render()
 //!        ss >> run_to_address;
 //!        current_state = State::RUNNING;
 //!    }
-//!
-//!    ImGui::Text("%s :: %f Hz", magic_enum::enum_name(current_state).data(), cycles_per_sec);
-//!
-//!    ImGui::Separator();
-//!
-//!    u64 next_uc = cpu->GetNextUC();
-//!    // stop the system clock on invalid opcodes
-//!    if(next_uc == (u64)-1) {
-//!        current_state = State::PAUSED;
-//!        ImGui::Text("Invalid opcode $%02X at $%04X", cpu->GetOpcode(), cpu->GetOpcodePC()-1);
-//!    } else {
-//!        string inst = disassembler->GetInstruction(cpu->GetOpcode());
-//!        auto pc = cpu->GetOpcodePC();
-//!        u8 operands[] = { memory_view->Read(pc+1), memory_view->Read(pc+2) };
-//!        string operand = disassembler->FormatOperand(cpu->GetOpcode(), operands);
-//!        ImGui::Text("$%04X: %s %s (istep %d, uc=0x%X)", pc, inst.c_str(), operand.c_str(), cpu->GetIStep(), next_uc);
-//!    }
-//!
-//!    ImGui::Separator();
-//!
-//!    ImGui::Text("PC:$%04X", cpu->GetPC()); ImGui::SameLine();
-//!    ImGui::Text("S:$%04X", cpu->GetS()); ImGui::SameLine();
-//!    ImGui::Text("A:$%02X", cpu->GetA()); ImGui::SameLine();
-//!    ImGui::Text("X:$%02X", cpu->GetX()); ImGui::SameLine();
-//!    ImGui::Text("Y:$%02X", cpu->GetY());
-//!
-//!    u8 p = cpu->GetP();
-//!    char flags[] = "P:nv-bdizc";
-//!    if(p & CPU_FLAG_N) flags[2] = 'N';
-//!    if(p & CPU_FLAG_V) flags[3] = 'V';
-//!    if(p & CPU_FLAG_B) flags[5] = 'B';
-//!    if(p & CPU_FLAG_D) flags[6] = 'D';
-//!    if(p & CPU_FLAG_I) flags[7] = 'I';
-//!    if(p & CPU_FLAG_Z) flags[8] = 'Z';
-//!    if(p & CPU_FLAG_C) flags[9] = 'C';
-//!    ImGui::Text("%s", flags);
-//!
-//!    ImGui::Text("RAM[$00]=$%02X RAM[$02]=$%02X RAM[$03]=$%02X", memory_view->Read(0x00), memory_view->Read(0x02), memory_view->Read(0x03));
-//!
-//!    {
-//!    }
-//!
-//!    ImGui::EndChild();
-//!
-//!    ImGui::SameLine();
-//!    ImGui::PushItemWidth(size.x / 2);
-//!    ImGui::BeginChild("PPU view", size);
 //!
 //!    ImGui::Image(framebuffer_texture, ImVec2(512, 512));
 //!
@@ -577,6 +517,7 @@ Screen::Screen()
 {
     SetNav(false);
     SetNoScrollbar(true);
+    SetTitle("Screen");
 
     GLuint gl_texture;
 
@@ -638,6 +579,77 @@ void Screen::Render()
 
     ImGui::Image(framebuffer_texture, ImVec2(sz, sz));
 }
+
+std::shared_ptr<CPUState> CPUState::CreateWindow()
+{
+    return make_shared<CPUState>();
+}
+
+CPUState::CPUState()
+    : BaseWindow("Windows::NES::CPUState")
+{
+    SetTitle("CPU");
+}
+
+CPUState::~CPUState()
+{
+}
+
+void CPUState::CheckInput()
+{
+}
+
+void CPUState::Update(double deltaTime)
+{
+}
+
+void CPUState::Render()
+{
+    auto disassembler = GetSystem()->GetDisassembler();
+    if(!disassembler) return;
+
+    auto si = GetMySystemInstance();
+    auto cpu = si->GetCPU();
+    if(!cpu) return;
+
+    auto memory_view = si->GetMemoryView();
+    if(!memory_view) return;
+
+    u64 next_uc = cpu->GetNextUC();
+    if(next_uc == (u64)-1) {
+        ImGui::Text("$%04X: Invalid opcode $%02X", cpu->GetOpcodePC()-1, cpu->GetOpcode());
+    } else {
+        string inst = disassembler->GetInstruction(cpu->GetOpcode());
+        auto pc = cpu->GetOpcodePC();
+        u8 operands[] = { memory_view->Read(pc+1), memory_view->Read(pc+2) };
+        string operand = disassembler->FormatOperand(cpu->GetOpcode(), operands);
+        if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
+            ImGui::Text("$%04X: %s %s (istep %d, uc=0x%X)", pc, inst.c_str(), operand.c_str(), cpu->GetIStep(), next_uc);
+        } else {
+            ImGui::Text("$%04X: %s %s", pc, inst.c_str(), operand.c_str());
+        }
+    }
+
+    ImGui::Separator();
+
+    ImGui::Text("PC:$%04X", cpu->GetPC()); ImGui::SameLine();
+    ImGui::Text("S:$%04X", cpu->GetS()); ImGui::SameLine();
+    ImGui::Text("A:$%02X", cpu->GetA()); ImGui::SameLine();
+    ImGui::Text("X:$%02X", cpu->GetX()); ImGui::SameLine();
+    ImGui::Text("Y:$%02X", cpu->GetY());
+
+    u8 p = cpu->GetP();
+    char flags[] = "P:nv-bdizc";
+    if(p & CPU_FLAG_N) flags[2] = 'N';
+    if(p & CPU_FLAG_V) flags[3] = 'V';
+    if(p & CPU_FLAG_B) flags[5] = 'B';
+    if(p & CPU_FLAG_D) flags[6] = 'D';
+    if(p & CPU_FLAG_I) flags[7] = 'I';
+    if(p & CPU_FLAG_Z) flags[8] = 'Z';
+    if(p & CPU_FLAG_C) flags[9] = 'C';
+    ImGui::Text("%s", flags);
+}
+
 
 } // namespace Windows::NES
 

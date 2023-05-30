@@ -61,9 +61,11 @@ public:
         return dynamic_pointer_cast<Listing>(most_recent_listing_window);
     }
 
-    u32 const* GetFramebuffer() const { return framebuffer; }
 
-    std::shared_ptr<APU_IO> const& GetAPUIO() { return apu_io; }
+    std::shared_ptr<APU_IO>     const& GetAPUIO()      { return apu_io; }
+    std::shared_ptr<CPU>        const& GetCPU()        { return cpu; }
+    u32                         const* GetFramebuffer() const { return framebuffer; }
+    std::shared_ptr<MemoryView> const& GetMemoryView() { return memory_view; }
 
     // signals
 
@@ -79,7 +81,6 @@ private:
 
     void UpdateTitle();
     void Reset();
-    void UpdateFramebufferTexture();
     void UpdateRAMTexture();
     void UpdateNametableTexture();
     bool SingleCycle();
@@ -156,4 +157,22 @@ private:
     void* framebuffer_texture;
 };
  
+class CPUState : public BaseWindow {
+public:
+    CPUState();
+    virtual ~CPUState();
+
+    virtual char const * const GetWindowClass() { return CPUState::GetWindowClassStatic(); }
+    static char const * const GetWindowClassStatic() { return "NES::CPUState"; }
+    static std::shared_ptr<CPUState> CreateWindow();
+
+protected:
+    void CheckInput() override;
+    void Update(double deltaTime) override;
+    void Render() override;
+
+private:
+    void* framebuffer_texture;
+};
+
 } //namespace Windows::NES
