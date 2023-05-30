@@ -56,15 +56,8 @@ SystemInstance::SystemInstance()
     memset(framebuffer, 0, 4 * 256 * 256);
 
     // generate the textures
-    GLuint gl_texture;
-
-    glGenTextures(1, &gl_texture);
-    glBindTexture(GL_TEXTURE_2D, gl_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    framebuffer_texture = (void*)(intptr_t)gl_texture;
-
+//!    GLuint gl_texture;
+//!
 //!    glGenTextures(1, &gl_texture);
 //!    glBindTexture(GL_TEXTURE_2D, gl_texture);
 //!    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, ram_framebuffer);
@@ -120,9 +113,7 @@ SystemInstance::~SystemInstance()
     exit_thread = true;
     if(emulation_thread) emulation_thread->join();
 
-    GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
-    glDeleteTextures(1, &gl_texture);
-
+//!    GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
 //!    gl_texture = (GLuint)(intptr_t)ram_texture;
 //!    glDeleteTextures(1, &gl_texture);
 //!
@@ -140,6 +131,7 @@ void SystemInstance::CreateDefaultWorkspace()
     CreateNewWindow("Defines");
     CreateNewWindow("Regions");
     CreateNewWindow("Listing");
+    CreateNewWindow("Screen");
 }
 
 void SystemInstance::CreateNewWindow(string const& window_type)
@@ -157,6 +149,9 @@ void SystemInstance::CreateNewWindow(string const& window_type)
     } else if(window_type == "Regions") {
         wnd = MemoryRegions::CreateWindow();
         wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+    } else if(window_type == "Screen") {
+        wnd = Screen::CreateWindow();
+        wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
     }
 
     AddChildWindow(wnd);
@@ -261,10 +256,6 @@ void SystemInstance::UpdateRAMTexture()
 
 void SystemInstance::UpdateFramebufferTexture()
 {
-    GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
-    glBindTexture(GL_TEXTURE_2D, gl_texture);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
-    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void SystemInstance::UpdateNametableTexture()
@@ -303,6 +294,11 @@ void SystemInstance::RenderMenuBar()
         current_state = State::RUNNING;
     } else if(current_state == State::RUNNING && ImGui::Button("Stop")) {
         current_state = State::PAUSED;
+    }
+
+    ImGui::SameLine();
+    if(ImGui::Button("Reset")) {
+        Reset();
     }
 }
 
@@ -411,33 +407,28 @@ void SystemInstance::Render()
 //!    ImGui::Image(nametable_texture, ImVec2(256, 256));
 //!
 //!    ImGui::EndChild();
-    if(ImGui::Begin("Output")) {
-        ImGui::Image(framebuffer_texture, ImGui::GetWindowSize());
-    }
-    ImGui::End();
 }
 
 void SystemInstance::CheckInput()
 {
-//!    // update all buttons on the joypad every frame
-//!    apu_io->SetJoy1Pressed(NES_BUTTON_UP    , ImGui::IsKeyDown(ImGuiKey_W));
-//!    apu_io->SetJoy1Pressed(NES_BUTTON_DOWN  , ImGui::IsKeyDown(ImGuiKey_S));
-//!    apu_io->SetJoy1Pressed(NES_BUTTON_LEFT  , ImGui::IsKeyDown(ImGuiKey_A));
-//!    apu_io->SetJoy1Pressed(NES_BUTTON_RIGHT , ImGui::IsKeyDown(ImGuiKey_D));
-//!    apu_io->SetJoy1Pressed(NES_BUTTON_SELECT, ImGui::IsKeyDown(ImGuiKey_Tab));
-//!    apu_io->SetJoy1Pressed(NES_BUTTON_START , ImGui::IsKeyDown(ImGuiKey_Enter));
-//!    apu_io->SetJoy1Pressed(NES_BUTTON_B     , ImGui::IsKeyDown(ImGuiKey_Period));
-//!    apu_io->SetJoy1Pressed(NES_BUTTON_A     , ImGui::IsKeyDown(ImGuiKey_Slash));
 }
 
 void SystemInstance::Reset()
 {
+    auto saved_state = current_state;
+    if(current_state == State::RUNNING) {
+        current_state = State::PAUSED;
+        while(running) ;
+    }
+
     cpu->Reset();
     ppu->Reset();
     cpu_shift = 0;
     raster_line = framebuffer;
     raster_y = 0;
     oam_dma_enabled = false;
+
+    current_state = saved_state;
 }
 
 bool SystemInstance::StepCPU()
@@ -529,18 +520,25 @@ void SystemInstance::EmulationThread()
             break;
 
         case State::STEP_CYCLE:
+            running = true;
             SingleCycle();
             current_state = State::PAUSED;
+            running = false;
             break;
 
         case State::STEP_INSTRUCTION:
+            running = true;
+            // execute cycles until opcode fetch happens
             while(current_state == State::STEP_INSTRUCTION && !SingleCycle()) ;
-            if(current_state == State::STEP_INSTRUCTION) {
-                current_state = State::PAUSED;
-            }
+
+            // always go to paused after a step instruction
+            current_state = State::PAUSED;
+
+            running = false;
             break;
 
         case State::RUNNING:
+            running = true;
             while(!exit_thread && current_state == State::RUNNING) {
                 SingleCycle();
                 if(run_to_address == cpu->GetOpcodePC()) {
@@ -548,10 +546,10 @@ void SystemInstance::EmulationThread()
                     break;
                 }
             }
+            running = false;
             break;
 
         case State::CRASHED:
-
         default:
             assert(false);
             break;
@@ -567,6 +565,78 @@ void SystemInstance::WriteOAMDMA(u8 page)
     oam_dma_source = (page << 8);
     oam_dma_rw = 0;
     dma_halt_cycle_done = false;
+}
+
+std::shared_ptr<Screen> Screen::CreateWindow()
+{
+    return make_shared<Screen>();
+}
+
+Screen::Screen()
+    : BaseWindow("Windows::NES::Screen")
+{
+    SetNav(false);
+    SetNoScrollbar(true);
+
+    GLuint gl_texture;
+
+    glGenTextures(1, &gl_texture);
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    // OpenGL requires at least one glTexImage2D to setup the texture
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    framebuffer_texture = (void*)(intptr_t)gl_texture;
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+Screen::~Screen()
+{
+    GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
+    glDeleteTextures(1, &gl_texture);
+}
+
+void Screen::CheckInput()
+{
+    // only if Screen window is active, check the keyboard inputs
+    // TODO joystick input might be better off in SystemInstance::Update(), since
+    // we will probably want to accept input when Screen is not in focus
+    if(auto apu_io = GetMySystemInstance()->GetAPUIO()) {
+        apu_io->SetJoy1Pressed(NES_BUTTON_UP    , ImGui::IsKeyDown(ImGuiKey_W));
+        apu_io->SetJoy1Pressed(NES_BUTTON_DOWN  , ImGui::IsKeyDown(ImGuiKey_S));
+        apu_io->SetJoy1Pressed(NES_BUTTON_LEFT  , ImGui::IsKeyDown(ImGuiKey_A));
+        apu_io->SetJoy1Pressed(NES_BUTTON_RIGHT , ImGui::IsKeyDown(ImGuiKey_D));
+        apu_io->SetJoy1Pressed(NES_BUTTON_SELECT, ImGui::IsKeyDown(ImGuiKey_Tab));
+        apu_io->SetJoy1Pressed(NES_BUTTON_START , ImGui::IsKeyDown(ImGuiKey_Enter));
+        apu_io->SetJoy1Pressed(NES_BUTTON_B     , ImGui::IsKeyDown(ImGuiKey_Period));
+        apu_io->SetJoy1Pressed(NES_BUTTON_A     , ImGui::IsKeyDown(ImGuiKey_Slash));
+    }
+}
+
+void Screen::Update(double deltaTime)
+{
+    if(auto framebuffer = GetMySystemInstance()->GetFramebuffer()) {
+        GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
+        glBindTexture(GL_TEXTURE_2D, gl_texture);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+}
+
+void Screen::PreRender()
+{
+    // won't really be necessary if the window starts docked
+    ImGui::SetNextWindowSize(ImVec2(324, 324), ImGuiCond_Appearing);
+}
+
+void Screen::Render()
+{
+    auto size = ImGui::GetWindowSize();
+    float sz = min(size.x, size.y);
+
+    //TODO could do some toggles like keep aspect ratio, scale to window size, etc
+
+    ImGui::Image(framebuffer_texture, ImVec2(sz, sz));
 }
 
 } // namespace Windows::NES

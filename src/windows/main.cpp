@@ -251,7 +251,7 @@ void MainWindow::RenderMenuBar()
             if(auto si = dynamic_pointer_cast<Windows::NES::SystemInstance>(most_recent_system_instance)) {
                 if(ImGui::BeginMenu("Instance")) {
                     static char const * const window_types[] = {
-                        "Defines", "Labels", "Listing", "Memory"
+                        "Defines", "Labels", "Listing", "Memory", "Screen"
                     };
 
                     for(int i = 0; i < IM_ARRAYSIZE(window_types); i++) {

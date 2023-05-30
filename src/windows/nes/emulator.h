@@ -61,6 +61,10 @@ public:
         return dynamic_pointer_cast<Listing>(most_recent_listing_window);
     }
 
+    u32 const* GetFramebuffer() const { return framebuffer; }
+
+    std::shared_ptr<APU_IO> const& GetAPUIO() { return apu_io; }
+
     // signals
 
 protected:
@@ -88,10 +92,11 @@ private:
     int         system_id;
     std::string system_title;
 
-    std::shared_ptr<BaseWindow>           most_recent_listing_window;
+    std::shared_ptr<BaseWindow>  most_recent_listing_window;
 
     std::shared_ptr<System>      current_system;
     State                        current_state = State::INIT;
+    bool                         running = false;
     std::shared_ptr<std::thread> emulation_thread;
     bool                         exit_thread = false;
     bool                         thread_exited = false;
@@ -114,7 +119,6 @@ private:
     u32*                         ram_framebuffer;
     u32*                         nametable_framebuffer;
 
-    void*                        framebuffer_texture;
     void*                        ram_texture;
     void*                        nametable_texture;
 
@@ -133,4 +137,23 @@ private:
     signal_connection            oam_dma_callback_connection;
 };
 
+class Screen : public BaseWindow {
+public:
+    Screen();
+    virtual ~Screen();
+
+    virtual char const * const GetWindowClass() { return Screen::GetWindowClassStatic(); }
+    static char const * const GetWindowClassStatic() { return "NES::Screen"; }
+    static std::shared_ptr<Screen> CreateWindow();
+
+protected:
+    void CheckInput() override;
+    void Update(double deltaTime) override;
+    void PreRender() override;
+    void Render() override;
+
+private:
+    void* framebuffer_texture;
+};
+ 
 } //namespace Windows::NES
