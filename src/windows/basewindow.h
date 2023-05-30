@@ -56,6 +56,12 @@ public:
 
     bool IsFocused() const { return focused; }
     bool IsDocked() const { return docked; }
+    bool WasActivated() const { return activated; }
+
+    template<class T>
+    std::shared_ptr<T> GetParentWindowAs() {
+        return dynamic_pointer_cast<T>(parent_window);
+    }
 
     // Child Window support
     void AddChildWindow(std::shared_ptr<BaseWindow> const&);
@@ -75,6 +81,9 @@ public:
     // signals available in all windows
     typedef signal<std::function<void(std::shared_ptr<BaseWindow>&, std::string const&, void*)>> command_signal_t;
     std::shared_ptr<command_signal_t> command_signal;
+
+    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> window_activated_t;
+    std::shared_ptr<window_activated_t> window_activated;
 
     typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> window_closed_t;
     std::shared_ptr<window_closed_t> window_closed;
@@ -112,6 +121,7 @@ private:
     bool open;
     bool focused;
     bool docked;
+    bool activated;
 
     bool windowless = false;
     bool enable_nav = true;

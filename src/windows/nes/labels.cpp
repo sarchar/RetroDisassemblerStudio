@@ -7,6 +7,7 @@
 #include "imgui_internal.h"
 
 #include "main.h"
+#include "windows/nes/emulator.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/labels.h"
 #include "windows/nes/references.h"
@@ -181,9 +182,9 @@ void Labels::Render()
 
                     if(ImGui::IsItemHovered()) {
                         if(ImGui::IsMouseClicked(0)) {
-                            if(auto wnd = GetMainWindow()->FindMostRecentChildWindow<Listing>()) {
+                            if(auto listing = GetMyListing()) {
                                 // build an address from the bank info
-                                wnd->GoToAddress(label->GetMemoryLocation());
+                                listing->GoToAddress(label->GetMemoryLocation());
                             }
                         } else if(ImGui::IsMouseClicked(1)) {
                             context_row = row;
@@ -227,8 +228,7 @@ void Labels::Render()
         if(ImGui::Selectable("View References")) {
             auto wnd = References::CreateWindow(labels[context_row].lock());
             wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
-            cout << WindowPrefix() << "TODO GetSystemWindow()->AddChildWindow(wnd);" << endl;
-            GetMainWindow()->AddChildWindow(wnd);
+            GetMySystemInstance()->AddChildWindow(wnd);
         }
         ImGui::EndPopup();
     }

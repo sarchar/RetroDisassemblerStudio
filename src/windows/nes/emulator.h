@@ -7,6 +7,12 @@
 #include "signals.h"
 #include "windows/basewindow.h"
 
+// GetMySystemInstance only available in some windows
+#define GetMySystemInstance() this->GetParentWindowAs<Windows::NES::System>()
+
+// return the most recent 
+#define GetMyListing() (GetMySystemInstance() ? GetMySystemInstance()->GetMostRecentListingWindow() : nullptr)
+
 namespace Systems::NES {
     class APU_IO;
     class CPU;
@@ -16,6 +22,8 @@ namespace Systems::NES {
 }
 
 namespace Windows::NES {
+
+class Listing;
 
 // NES::Windows::System is home to everything you need about an instance of a NES system.  
 // You can have multiple System windows, and that contains its own system state. 
@@ -41,6 +49,11 @@ public:
 
     // create a default workspace
     void CreateDefaultWorkspace();
+    void CreateNewWindow(std::string const&);
+
+    std::shared_ptr<Listing> GetMostRecentListingWindow() const {
+        return dynamic_pointer_cast<Listing>(most_recent_listing_window);
+    }
 
     // signals
 
@@ -50,6 +63,9 @@ protected:
     void Render() override;
 
 private:
+    void ChildWindowAdded(std::shared_ptr<BaseWindow> const&);
+    void ChildWindowRemoved(std::shared_ptr<BaseWindow> const&);
+
     void UpdateTitle();
     void Reset();
     void UpdateRAMTexture();
@@ -64,6 +80,8 @@ private:
     static int  next_system_id;
     int         system_id;
     std::string system_title;
+
+    std::shared_ptr<BaseWindow>           most_recent_listing_window;
 
     std::weak_ptr<Systems::NES::System>   current_system;
     State                                 current_state = State::INIT;

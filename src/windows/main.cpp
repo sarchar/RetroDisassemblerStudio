@@ -55,10 +55,29 @@ MainWindow::MainWindow()
 
     // show a status bar
     SetShowStatusBar(true);
+
+    *child_window_added += std::bind(&MainWindow::ChildWindowAdded, this, placeholders::_1);
+    *child_window_removed += std::bind(&MainWindow::ChildWindowRemoved, this, placeholders::_1);
 }
 
 MainWindow::~MainWindow()
 {
+}
+
+void MainWindow::ChildWindowAdded(std::shared_ptr<BaseWindow> const& window)
+{
+    if(auto system_instance = dynamic_pointer_cast<Windows::NES::System>(window)) {
+        *window->window_activated += [this](shared_ptr<BaseWindow> const& _wnd) {
+            most_recent_system_instance = _wnd;
+        };
+    }
+}
+
+void MainWindow::ChildWindowRemoved(std::shared_ptr<BaseWindow> const& window)
+{
+    if(window == most_recent_system_instance) {
+        most_recent_system_instance = nullptr;
+    }
 }
 
 void MainWindow::Update(double deltaTime)
@@ -223,34 +242,33 @@ void MainWindow::RenderMenuBar()
         }
     }
 
-    if(ImGui::BeginMenu("Windows")) {
-        if(ImGui::MenuItem("New System")) {
-            auto wnd = Windows::NES::System::CreateWindow();
-            wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
-            AddChildWindow(wnd);
-            wnd->CreateDefaultWorkspace();
-        }
+    if(current_project) {
+        if(ImGui::BeginMenu("Windows")) {
+            if(ImGui::MenuItem("New Instance")) {
+                auto wnd = Windows::NES::System::CreateWindow();
+                wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
+                wnd->CreateDefaultWorkspace();
+                AddChildWindow(wnd);
+            }
 
-        if(ImGui::MenuItem("Defines")) {
-            auto wnd = Windows::NES::Defines::CreateWindow();
-            AddChildWindow(wnd);
-        }
+            if(auto si = dynamic_pointer_cast<Windows::NES::System>(most_recent_system_instance)) {
+                if(ImGui::BeginMenu("Instance")) {
+                    static char const * const window_types[] = {
+                        "Defines", "Labels", "Listing", "Memory"
+                    };
 
-        if(ImGui::MenuItem("Labels")) {
-            auto wnd = Windows::NES::Labels::CreateWindow();
-            AddChildWindow(wnd);
-        }
+                    for(int i = 0; i < IM_ARRAYSIZE(window_types); i++) {
+                        if(ImGui::MenuItem(window_types[i])) {
+                            si->CreateNewWindow(window_types[i]);
+                        }
+                    }
 
-        if(ImGui::MenuItem("Listing")) {
-            auto wnd = Windows::NES::Listing::CreateWindow();
-            AddChildWindow(wnd);
-        }
+                    ImGui::EndMenu();
+                }
+            }
 
-        if(ImGui::MenuItem("Memory")) {
-            auto wnd = Windows::NES::MemoryRegions::CreateWindow();
-            AddChildWindow(wnd);
+            ImGui::EndMenu();
         }
-        ImGui::EndMenu();
     }
 
     if(ImGui::BeginMenu("Debug")) {

@@ -44,6 +44,8 @@ System::System()
 
     SetIsDockSpace(true);
 
+    *child_window_added += std::bind(&System::ChildWindowAdded, this, placeholders::_1);
+
 //!    // allocate storage for framebuffers
 //!    framebuffer = (u32*)new u8[4 * 256 * 256];
 //!    ram_framebuffer = (u32*)new u8[4 * 256 * 256];
@@ -136,25 +138,46 @@ System::~System()
 
 void System::CreateDefaultWorkspace()
 {
-    shared_ptr<BaseWindow> wnd = Labels::CreateWindow();
-    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
-    AddChildWindow(wnd);
+    CreateNewWindow("Labels");
+    CreateNewWindow("Defines");
+    CreateNewWindow("Regions");
+    CreateNewWindow("Listing");
+}
 
-    wnd = Defines::CreateWindow();
-    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
-    AddChildWindow(wnd);
+void System::CreateNewWindow(string const& window_type)
+{
+    shared_ptr<BaseWindow> wnd;
+    if(window_type == "Listing") {
+        wnd = Listing::CreateWindow();
+        wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
+    } else if(window_type == "Defines") {
+        wnd = Defines::CreateWindow();
+        wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+    } else if(window_type == "Labels") {
+        wnd = Labels::CreateWindow();
+        wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+    } else if(window_type == "Regions") {
+        wnd = MemoryRegions::CreateWindow();
+        wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+    }
 
-    wnd = MemoryRegions::CreateWindow();
-    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
     AddChildWindow(wnd);
+}
 
-    wnd = Listing::CreateWindow();
-    wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
-    AddChildWindow(wnd);
+void System::ChildWindowAdded(std::shared_ptr<BaseWindow> const& window)
+{
+    if(auto listing = dynamic_pointer_cast<Listing>(window)) {
+        *window->window_activated += [this](shared_ptr<BaseWindow> const& _wnd) {
+            most_recent_listing_window = _wnd;
+        };
+    }
+}
 
-//!    wnd = Windows::System::CreateWindow();
-//!    wnd->SetInitialDock(BaseWindow::DOCK_BOTTOM);
-//!    AddChildWindow(wnd);
+void System::ChildWindowRemoved(shared_ptr<BaseWindow> const& window)
+{
+    if(most_recent_listing_window == window) {
+        most_recent_listing_window = nullptr;
+    }
 }
 
 void System::UpdateTitle()

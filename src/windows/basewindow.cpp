@@ -46,6 +46,7 @@ BaseWindow::BaseWindow(string const& tag)
 {
     // create the signals
     command_signal = make_shared<command_signal_t>();
+    window_activated = make_shared<window_activated_t>();
     window_closed = make_shared<window_closed_t>();
     child_window_added = make_shared<child_window_added_t>();
     child_window_removed = make_shared<child_window_removed_t>();
@@ -132,6 +133,9 @@ void BaseWindow::ProcessQueuedChildWindowsForDelete()
 
 void BaseWindow::InternalUpdate(double deltaTime)
 {
+    // post activated event 
+    if(activated) window_activated->emit(shared_from_this());
+
     // only scan input if the window is receiving focus
     if(focused) CheckInput();
 
@@ -191,6 +195,7 @@ void BaseWindow::InternalRender()
             ImGui::SetNextWindowSizeConstraints(ImVec2(250, 100),  ImVec2(1200, 800));
         }
 
+        bool was_focused = focused;
         focused = false;
         docked = false;
 
@@ -216,6 +221,8 @@ void BaseWindow::InternalRender()
             InternalRenderMenuBar();
             InternalRenderStatusBar();
         }
+
+        activated = focused && !was_focused;
 
         // for dockspace children, return style var back to normal
         if(is_dockspace) ImGui::PopStyleVar(3);

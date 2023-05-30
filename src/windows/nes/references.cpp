@@ -7,14 +7,17 @@
 #include "imgui_internal.h"
 
 #include "main.h"
-#include "windows/nes/defines.h"
-#include "windows/nes/listing.h"
-#include "windows/nes/references.h"
+
 #include "systems/nes/nes_defines.h"
 #include "systems/nes/nes_label.h"
 #include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
+
+#include "windows/nes/emulator.h"
+#include "windows/nes/defines.h"
+#include "windows/nes/listing.h"
+#include "windows/nes/references.h"
 
 using namespace std;
 
@@ -142,19 +145,20 @@ void References::Render()
 
                 (*memory).FormatAddress(ss, false, false);
 
-                go = [memory]() {
-                    if(auto wnd = GetMainWindow()->FindMostRecentChildWindow<Listing>()) {
-                        wnd->GoToAddress(*memory);
+                go = [this, memory]() {
+                    if(auto listing = GetMyListing()) {
+                        listing->GoToAddress(*memory);
                     }
                 };
             } else if(auto define = get_if<shared_ptr<Define>>(&location)) {
                 ss << "Define: " << (*define)->GetString();
 
-                go = [&define]() {
-                    if(auto wnd = GetMainWindow()->FindMostRecentChildWindow<Windows::NES::Defines>()) {
-                        auto deref = *define;
-                        wnd->Highlight(deref);
-                    }
+                go = [this, &define]() {
+                    cout << WindowPrefix() << "TODO: Highlight define" << endl;
+                    //!if(auto wnd = GetMySystemInstance()->FindMostRecentChildWindow<Windows::NES::Defines>()) {
+                    //!    auto deref = *define;
+                    //!    wnd->Highlight(deref);
+                    //!}
                 };
             }
 

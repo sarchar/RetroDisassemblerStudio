@@ -11,6 +11,8 @@
 #include "util.h"
 
 #include "windows/main.h"
+#include "windows/nes/emulator.h"
+#include "windows/nes/listing.h"
 #include "windows/nes/references.h"
 
 #include "systems/nes/nes_disasm.h"
@@ -26,7 +28,8 @@ namespace Systems::NES {
 
 unsigned long ListingItem::common_inner_table_flags = ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_Resizable;
 
-void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, 
+void ListingItemUnknown::Render(shared_ptr<Windows::NES::System> const& system_instance, shared_ptr<System>& system, 
+        GlobalMemoryLocation const& where, u32 flags, 
         bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
@@ -43,7 +46,8 @@ void ListingItemUnknown::RenderContent(shared_ptr<System>& system, GlobalMemoryL
     }
 }
 
-void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, 
+void ListingItemBlankLine::Render(shared_ptr<Windows::NES::System> const& system_instance, shared_ptr<System>& system, 
+        GlobalMemoryLocation const& where, u32 flags, 
         bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
@@ -63,7 +67,8 @@ void ListingItemBlankLine::RenderContent(shared_ptr<System>& system, GlobalMemor
     }
 }
 
-void ListingItemPrePostComment::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, 
+void ListingItemPrePostComment::Render(shared_ptr<Windows::NES::System> const& system_instance, shared_ptr<System>& system, 
+        GlobalMemoryLocation const& where, u32 flags, 
         bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
@@ -99,7 +104,8 @@ bool ListingItemPrePostComment::IsEditing() const
     return false;
 }
 
-void ListingItemPrimary::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, 
+void ListingItemPrimary::Render(shared_ptr<Windows::NES::System> const& system_instance, shared_ptr<System>& system, 
+        GlobalMemoryLocation const& where, u32 flags, 
         bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
@@ -469,7 +475,8 @@ bool ListingItemPrimary::IsEditing() const
     return edit_mode != EDIT_NONE;
 }
 
-void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLocation const& where, u32 flags, 
+void ListingItemLabel::Render(shared_ptr<Windows::NES::System> const& system_instance, shared_ptr<System>& system, 
+        GlobalMemoryLocation const& where, u32 flags, 
         bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
     ImGuiTableFlags table_flags = ListingItem::common_inner_table_flags;
@@ -488,7 +495,7 @@ void ListingItemLabel::RenderContent(shared_ptr<System>& system, GlobalMemoryLoc
             // show references to label
             auto wnd = Windows::NES::References::CreateWindow(label);
             wnd->SetInitialDock(Windows::BaseWindow::DOCK_RIGHT);
-            GetMainWindow()->AddChildWindow(wnd);
+            system_instance->AddChildWindow(wnd);
         }
 
         if(ImGui::IsKeyPressed(ImGuiKey_Delete)) {

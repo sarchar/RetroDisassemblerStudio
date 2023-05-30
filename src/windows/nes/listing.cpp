@@ -12,6 +12,7 @@
 #include "imgui_internal.h"
 
 #include "main.h"
+#include "windows/nes/emulator.h"
 #include "windows/nes/listing.h"
 #include "systems/nes/nes_cartridge.h"
 #include "systems/nes/nes_expressions.h"
@@ -418,17 +419,13 @@ void Listing::Render()
                 if(end_listing_item_index < listing_item_index) swap(listing_item_index, end_listing_item_index);
             }
 
+            auto system_instance = GetMySystemInstance();
             while(clipper.Step()) {
                 auto listing_item_iterator = memory_region->GetListingItemIterator(clipper.DisplayStart);
                 bool did_scroll = false;
 
                 //cout << "DisplayStart = " << hex << clipper.DisplayStart << " - " << clipper.DisplayEnd << endl;
                 for(int row = clipper.DisplayStart; row < clipper.DisplayEnd && listing_item_iterator; ++row, ++*listing_item_iterator) {
-                    // it's possible that the listing can change in the middle of render -- i.e., deleting a label which 
-                    // occurs in ListingItemLabel::RenderContent. So if our listing count changes at all, we stop rendering this frame
-                    // this prevents multiple listing items from processing the same keystroke 
-//                    if(memory_region->GetTotalListingItems() != total_listing_items) break;
-
                     // get the listing item
                     auto listing_item = listing_item_iterator->GetListingItem();
 
@@ -450,7 +447,7 @@ void Listing::Render()
                     if(selected || hovered) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, row_color);
 
                     ImGui::TableNextColumn(); // start the content of the listing item
-                    listing_item->RenderContent(current_system, current_address, adjust_columns, focused, selected, hovered, changes); // render the content
+                    listing_item->Render(system_instance, current_system, current_address, adjust_columns, focused, selected, hovered, changes); // render the content
 
                     // if the item has determined to be editing something, take note
                     if(listing_item->IsEditing()) {
