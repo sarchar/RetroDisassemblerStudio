@@ -66,7 +66,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::ChildWindowAdded(std::shared_ptr<BaseWindow> const& window)
 {
-    if(auto system_instance = dynamic_pointer_cast<Windows::NES::System>(window)) {
+    if(auto system_instance = dynamic_pointer_cast<Windows::NES::SystemInstance>(window)) {
         *window->window_activated += [this](shared_ptr<BaseWindow> const& _wnd) {
             most_recent_system_instance = _wnd;
         };
@@ -245,13 +245,10 @@ void MainWindow::RenderMenuBar()
     if(current_project) {
         if(ImGui::BeginMenu("Windows")) {
             if(ImGui::MenuItem("New Instance")) {
-                auto wnd = Windows::NES::System::CreateWindow();
-                wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
-                wnd->CreateDefaultWorkspace();
-                AddChildWindow(wnd);
+                current_project->CreateSystemInstance();
             }
 
-            if(auto si = dynamic_pointer_cast<Windows::NES::System>(most_recent_system_instance)) {
+            if(auto si = dynamic_pointer_cast<Windows::NES::SystemInstance>(most_recent_system_instance)) {
                 if(ImGui::BeginMenu("Instance")) {
                     static char const * const window_types[] = {
                         "Defines", "Labels", "Listing", "Memory"
@@ -467,7 +464,7 @@ void MainWindow::ProjectCreatedHandler(std::shared_ptr<BaseWindow> project_creat
     AddChildWindow(project);
 
     // create the default workspace for the new system
-    current_project->CreateFirstSystemInstance();
+    current_project->CreateSystemInstance();
 }
 
 
@@ -658,7 +655,7 @@ void MainWindow::LoadProjectPopup()
             // TODO this should go away once the workspace is saved in the project file
             if(!popups.load_project.errored) {
                 AddChildWindow(current_project);
-                current_project->CreateFirstSystemInstance();
+                current_project->CreateSystemInstance();
             }
 
             ImGui::CloseCurrentPopup();

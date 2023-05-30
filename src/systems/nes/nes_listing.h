@@ -7,7 +7,7 @@
 #include "systems/nes/nes_memory.h"
 
 namespace Windows::NES {
-    class System;
+    class SystemInstance;
 }
 
 namespace Systems::NES {
@@ -29,7 +29,7 @@ public:
     ListingItem() {}
     virtual ~ListingItem() {}
 
-    virtual void Render(std::shared_ptr<Windows::NES::System> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
+    virtual void Render(std::shared_ptr<Windows::NES::SystemInstance> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
             u32, bool, bool, bool, postponed_changes&) = 0;
     virtual bool IsEditing() const = 0;
 
@@ -43,7 +43,7 @@ public:
     { }
     virtual ~ListingItemUnknown() { }
 
-    void Render(std::shared_ptr<Windows::NES::System> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
+    void Render(std::shared_ptr<Windows::NES::SystemInstance> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
             u32, bool, bool, bool, postponed_changes&) override;
     bool IsEditing() const override { return false; }
 };
@@ -55,7 +55,7 @@ public:
     { }
     virtual ~ListingItemBlankLine() { }
 
-    void Render(std::shared_ptr<Windows::NES::System> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
+    void Render(std::shared_ptr<Windows::NES::SystemInstance> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
             u32, bool, bool, bool, postponed_changes&) override;
     bool IsEditing() const override { return false; }
 };
@@ -67,7 +67,7 @@ public:
     { }
     virtual ~ListingItemPrePostComment() { }
 
-    void Render(std::shared_ptr<Windows::NES::System> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
+    void Render(std::shared_ptr<Windows::NES::SystemInstance> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
             u32, bool, bool, bool, postponed_changes&) override;
     bool IsEditing() const override;
 private:
@@ -82,7 +82,7 @@ public:
     { }
     virtual ~ListingItemPrimary() { }
 
-    void Render(std::shared_ptr<Windows::NES::System> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
+    void Render(std::shared_ptr<Windows::NES::SystemInstance> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
             u32, bool, bool, bool, postponed_changes&) override;
 
     void EditOperandExpression(std::shared_ptr<System>&, GlobalMemoryLocation const&);
@@ -128,7 +128,7 @@ public:
     { }
     virtual ~ListingItemLabel() { }
 
-    void Render(std::shared_ptr<Windows::NES::System> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
+    void Render(std::shared_ptr<Windows::NES::SystemInstance> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
             u32, bool, bool, bool, postponed_changes&) override;
     bool IsEditing() const override;
 

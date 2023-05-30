@@ -8,7 +8,7 @@
 #include "windows/basewindow.h"
 
 // GetMySystemInstance only available in some windows
-#define GetMySystemInstance() this->GetParentWindowAs<Windows::NES::System>()
+#define GetMySystemInstance() this->GetParentWindowAs<Windows::NES::SystemInstance>()
 
 // return the most recent 
 #define GetMyListing() (GetMySystemInstance() ? GetMySystemInstance()->GetMostRecentListingWindow() : nullptr)
@@ -29,7 +29,7 @@ class Listing;
 // You can have multiple System windows, and that contains its own system state. 
 // NES::System is generic and doesn't contain instance specific state. That information
 // is designated to be here
-class System : public BaseWindow {
+class SystemInstance : public BaseWindow {
 public:
     enum class State {
         INIT,
@@ -40,12 +40,12 @@ public:
         CRASHED
     };
 
-    System();
-    virtual ~System();
+    SystemInstance();
+    virtual ~SystemInstance();
 
-    virtual char const * const GetWindowClass() { return System::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "NES::System"; }
-    static std::shared_ptr<System> CreateWindow();
+    virtual char const * const GetWindowClass() { return SystemInstance::GetWindowClassStatic(); }
+    static char const * const GetWindowClassStatic() { return "NES::SystemInstance"; }
+    static std::shared_ptr<SystemInstance> CreateWindow();
 
     // create a default workspace
     void CreateDefaultWorkspace();

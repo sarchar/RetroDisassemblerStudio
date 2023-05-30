@@ -22,7 +22,7 @@ public:
 
     bool CreateNewProjectFromFile(std::string const&) override;
 
-    void CreateFirstSystemInstance() override;
+    void CreateSystemInstance() override;
 
     // creation interface
     static BaseProject::Information const* GetInformationStatic();

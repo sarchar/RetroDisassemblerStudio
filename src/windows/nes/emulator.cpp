@@ -29,22 +29,22 @@ using namespace std;
 
 namespace Windows::NES {
 
-int System::next_system_id = 1;
+int SystemInstance::next_system_id = 1;
 
-std::shared_ptr<System> System::CreateWindow()
+std::shared_ptr<SystemInstance> SystemInstance::CreateWindow()
 {
-    return make_shared<System>();
+    return make_shared<SystemInstance>();
 }
 
-System::System()
-    : BaseWindow("NES::System")
+SystemInstance::SystemInstance()
+    : BaseWindow("NES::SystemInstance")
 {
     system_id = next_system_id++;
     SetNav(false);
 
     SetIsDockSpace(true);
 
-    *child_window_added += std::bind(&System::ChildWindowAdded, this, placeholders::_1);
+    *child_window_added += std::bind(&SystemInstance::ChildWindowAdded, this, placeholders::_1);
 
 //!    // allocate storage for framebuffers
 //!    framebuffer = (u32*)new u8[4 * 256 * 256];
@@ -117,7 +117,7 @@ System::System()
    Reset();
 }
 
-System::~System()
+SystemInstance::~SystemInstance()
 {
 //!	exit_thread = true;
 //!    if(emulation_thread) emulation_thread->join();
@@ -136,7 +136,7 @@ System::~System()
 //!    delete [] (u8*)nametable_framebuffer;
 }
 
-void System::CreateDefaultWorkspace()
+void SystemInstance::CreateDefaultWorkspace()
 {
     CreateNewWindow("Labels");
     CreateNewWindow("Defines");
@@ -144,7 +144,7 @@ void System::CreateDefaultWorkspace()
     CreateNewWindow("Listing");
 }
 
-void System::CreateNewWindow(string const& window_type)
+void SystemInstance::CreateNewWindow(string const& window_type)
 {
     shared_ptr<BaseWindow> wnd;
     if(window_type == "Listing") {
@@ -164,7 +164,7 @@ void System::CreateNewWindow(string const& window_type)
     AddChildWindow(wnd);
 }
 
-void System::ChildWindowAdded(std::shared_ptr<BaseWindow> const& window)
+void SystemInstance::ChildWindowAdded(std::shared_ptr<BaseWindow> const& window)
 {
     if(auto listing = dynamic_pointer_cast<Listing>(window)) {
         *window->window_activated += [this](shared_ptr<BaseWindow> const& _wnd) {
@@ -173,14 +173,14 @@ void System::ChildWindowAdded(std::shared_ptr<BaseWindow> const& window)
     }
 }
 
-void System::ChildWindowRemoved(shared_ptr<BaseWindow> const& window)
+void SystemInstance::ChildWindowRemoved(shared_ptr<BaseWindow> const& window)
 {
     if(most_recent_listing_window == window) {
         most_recent_listing_window = nullptr;
     }
 }
 
-void System::UpdateTitle()
+void SystemInstance::UpdateTitle()
 {
     stringstream ss;
     ss << "NES_" << system_id << " :: " << magic_enum::enum_name(current_state);
@@ -188,7 +188,7 @@ void System::UpdateTitle()
     SetTitle(system_title.c_str());
 }
 
-void System::Update(double deltaTime)
+void SystemInstance::Update(double deltaTime)
 {
     UpdateTitle();
 
@@ -211,7 +211,7 @@ void System::Update(double deltaTime)
 //!    UpdateNametableTexture();
 }
 
-void System::UpdateRAMTexture()
+void SystemInstance::UpdateRAMTexture()
 {
     int cx = 0;
     int cy = 0;
@@ -245,7 +245,7 @@ void System::UpdateRAMTexture()
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void System::UpdatePPUTexture()
+void SystemInstance::UpdatePPUTexture()
 {
     GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
     glBindTexture(GL_TEXTURE_2D, gl_texture);
@@ -253,7 +253,7 @@ void System::UpdatePPUTexture()
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void System::UpdateNametableTexture()
+void SystemInstance::UpdateNametableTexture()
 {
     int cx = 0;
     int cy = 0;
@@ -283,7 +283,7 @@ void System::UpdateNametableTexture()
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void System::Render()
+void SystemInstance::Render()
 {
     auto system = current_system.lock();
     if(!system) return;
@@ -393,7 +393,7 @@ void System::Render()
 //!    ImGui::EndChild();
 }
 
-void System::CheckInput()
+void SystemInstance::CheckInput()
 {
 //!    // update all buttons on the joypad every frame
 //!    apu_io->SetJoy1Pressed(NES_BUTTON_UP    , ImGui::IsKeyDown(ImGuiKey_W));
@@ -406,7 +406,7 @@ void System::CheckInput()
 //!    apu_io->SetJoy1Pressed(NES_BUTTON_A     , ImGui::IsKeyDown(ImGuiKey_Slash));
 }
 
-void System::Reset()
+void SystemInstance::Reset()
 {
 //!    cpu->Reset();
 //!    ppu->Reset();
@@ -416,7 +416,7 @@ void System::Reset()
 //!    oam_dma_enabled = false;
 }
 
-bool System::StepCPU()
+bool SystemInstance::StepCPU()
 {
     // TODO DMC DMA has priority over OAM DMA
     if(oam_dma_enabled && cpu->IsReadCycle()) { // CPU can only be halted on a read cycle
@@ -447,7 +447,7 @@ bool System::StepCPU()
     }
 }
 
-void System::StepPPU()
+void SystemInstance::StepPPU()
 {
     bool hblank_new, vblank;
     int color = ppu->Step(hblank_new, vblank);
@@ -466,7 +466,7 @@ void System::StepPPU()
     }
 }
 
-bool System::SingleCycle()
+bool SystemInstance::SingleCycle()
 {
     bool ret;
 
@@ -496,7 +496,7 @@ bool System::SingleCycle()
     return ret;
 }
 
-void System::EmulationThread()
+void SystemInstance::EmulationThread()
 {
     while(!exit_thread) {
         switch(current_state) {
@@ -537,7 +537,7 @@ void System::EmulationThread()
     thread_exited = true;
 }
 
-void System::WriteOAMDMA(u8 page)
+void SystemInstance::WriteOAMDMA(u8 page)
 {
     oam_dma_enabled = true;
     oam_dma_source = (page << 8);

@@ -160,9 +160,9 @@ bool Project::CreateNewProjectFromFile(string const& file_path_name)
     return true;
 }
 
-void Project::CreateFirstSystemInstance()
+void Project::CreateSystemInstance()
 {
-    auto system_instance = Windows::NES::System::CreateWindow();
+    auto system_instance = Windows::NES::SystemInstance::CreateWindow();
     system_instance->SetInitialDock(BaseWindow::DOCK_ROOT);
     GetMainWindow()->AddChildWindow(system_instance);
     system_instance->CreateDefaultWorkspace();

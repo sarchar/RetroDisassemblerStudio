@@ -28,7 +28,7 @@ namespace Systems::NES {
 
 unsigned long ListingItem::common_inner_table_flags = ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_Resizable;
 
-void ListingItemUnknown::Render(shared_ptr<Windows::NES::System> const& system_instance, shared_ptr<System>& system, 
+void ListingItemUnknown::Render(shared_ptr<Windows::NES::SystemInstance> const& system_instance, shared_ptr<System>& system, 
         GlobalMemoryLocation const& where, u32 flags, 
         bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
@@ -46,7 +46,7 @@ void ListingItemUnknown::Render(shared_ptr<Windows::NES::System> const& system_i
     }
 }
 
-void ListingItemBlankLine::Render(shared_ptr<Windows::NES::System> const& system_instance, shared_ptr<System>& system, 
+void ListingItemBlankLine::Render(shared_ptr<Windows::NES::SystemInstance> const& system_instance, shared_ptr<System>& system, 
         GlobalMemoryLocation const& where, u32 flags, 
         bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
@@ -67,7 +67,7 @@ void ListingItemBlankLine::Render(shared_ptr<Windows::NES::System> const& system
     }
 }
 
-void ListingItemPrePostComment::Render(shared_ptr<Windows::NES::System> const& system_instance, shared_ptr<System>& system, 
+void ListingItemPrePostComment::Render(shared_ptr<Windows::NES::SystemInstance> const& system_instance, shared_ptr<System>& system, 
         GlobalMemoryLocation const& where, u32 flags, 
         bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
@@ -104,7 +104,7 @@ bool ListingItemPrePostComment::IsEditing() const
     return false;
 }
 
-void ListingItemPrimary::Render(shared_ptr<Windows::NES::System> const& system_instance, shared_ptr<System>& system, 
+void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& system_instance, shared_ptr<System>& system, 
         GlobalMemoryLocation const& where, u32 flags, 
         bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
@@ -475,7 +475,7 @@ bool ListingItemPrimary::IsEditing() const
     return edit_mode != EDIT_NONE;
 }
 
-void ListingItemLabel::Render(shared_ptr<Windows::NES::System> const& system_instance, shared_ptr<System>& system, 
+void ListingItemLabel::Render(shared_ptr<Windows::NES::SystemInstance> const& system_instance, shared_ptr<System>& system, 
         GlobalMemoryLocation const& where, u32 flags, 
         bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
