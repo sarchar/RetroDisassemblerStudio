@@ -41,9 +41,7 @@ string BaseWindow::GetRandomID()
 }
 
 BaseWindow::BaseWindow(string const& tag)
-    : windowless(false), open(true), focused(false), docked(false), enable_nav(true), 
-      show_menubar(false), show_statusbar(false),
-      is_mainwindow(false), is_dockspace(false), is_dockable(true),
+    : open(true), focused(false), docked(false),
       window_tag(tag), initial_dock_position(DOCK_NONE)
 {
     // create the signals
@@ -51,6 +49,8 @@ BaseWindow::BaseWindow(string const& tag)
     window_closed = make_shared<window_closed_t>();
     child_window_added = make_shared<child_window_added_t>();
     child_window_removed = make_shared<child_window_removed_t>();
+
+    SetTitle("##Untitled");
 }
 
 BaseWindow::~BaseWindow()
@@ -71,8 +71,12 @@ void BaseWindow::SetTitle(std::string const& t)
     if(window_id.length() == 0) {
         window_id = BaseWindow::GetRandomID();
     }
-    ss << t << "###" << window_tag << "_" << window_id;
+    ss << t << "##" << window_tag << "_" << window_id;
     window_title = ss.str();
+
+    stringstream idstr;
+    idstr << window_title << "_DockSpace" << endl;
+    dockspace_id = idstr.str();
 }
 
 void BaseWindow::CloseWindow()
@@ -93,7 +97,8 @@ void BaseWindow::CloseChildWindows()
 
 void BaseWindow::AddChildWindow(shared_ptr<BaseWindow> const& window)
 {
-    cout << WindowPrefix() << "Added child window \"" << window->GetTitle() << "\" (managed window count = " << child_windows.size() << ")" << endl;
+    window->parent_window = shared_from_this();
+    cout << WindowPrefix() << "Added child window \"" << window->window_tag << "\" (managed window count = " << child_windows.size() << ")" << endl;
     *window->window_closed += std::bind(&BaseWindow::ChildWindowClosedHandler, this, placeholders::_1);
     queued_windows_for_add.push_back(window);
 }
@@ -157,10 +162,9 @@ void BaseWindow::InternalRender()
         // otherwise a window can be opened and its content rendered within
         bool local_open = open;
     
-   
         // TODO cache these
         ImGuiWindowFlags window_flags = 0;
-        if(is_mainwindow) window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse 
+        if(is_mainwindow) window_flags |= ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoCollapse 
                                             | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
                                             | ImGuiWindowFlags_NoBringToFrontOnFocus;
         if(!enable_nav || is_mainwindow) {
@@ -173,17 +177,14 @@ void BaseWindow::InternalRender()
         // Adjust the window size if necessary
         ImVec2 client_size = ImGui::GetWindowSize();
         if(is_mainwindow) {
-            //auto io = ImGui::GetIO();
-
             ImGuiViewport* viewport = ImGui::GetMainViewport();
             ImGui::SetNextWindowPos(viewport->Pos);
-            //ImGui::SetNextWindowPos(ImVec2(0, 0));
 
-            client_size = viewport->Size;//io.DisplaySize;
+            client_size = viewport->Size;
             // Adjust dockspace height for the status bar, if shown
             if(show_statusbar) client_size.y -= ImGui::GetFrameHeight();
 
-            ImGui::SetNextWindowSize(client_size, ImGuiCond_Appearing);
+            ImGui::SetNextWindowSize(client_size, ImGuiCond_Always);
             ImGui::SetNextWindowViewport(viewport->ID);
         } else {
             // TODO make this size configurable in BaseWindow
@@ -193,17 +194,37 @@ void BaseWindow::InternalRender()
         focused = false;
         docked = false;
 
-        if(ImGui::Begin(window_title.c_str(), &local_open, window_flags)) {
+        // for dockspaces, make sure we utilize the entire window area
+        if(is_dockspace) {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        }
+
+        auto visible = ImGui::Begin(window_title.c_str(), &local_open, window_flags);
+
+        // Dockspaces need to be kept alive if the window is hidden, otherwise docked windows will be undocked!
+        InternalDockSpace(client_size.x, client_size.y);
+
+        if(visible) {
             docked = ImGui::IsWindowDocked();
 
-            focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) 
+            focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) 
                 && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId);
 
-            InternalDockSpace(client_size.x, client_size.y);
             Render();
             InternalRenderMenuBar();
             InternalRenderStatusBar();
         }
+
+        // for dockspace children, return style var back to normal
+        if(is_dockspace) ImGui::PopStyleVar(3);
+
+        // render child windows inside Begin/End to keep the ID stack healthy,
+        // but outside the success of ImGui::Begin() so that if the contents of that
+        // window are hidden, child windows can still be visible, and some of them may
+        // have their own dockspaces, which also need to be kept alive
+        for(auto &window : child_windows) window->InternalRender();
     
         ImGui::End(); // always call end regardless of Begin()'s return value
 
@@ -211,45 +232,41 @@ void BaseWindow::InternalRender()
         if(!local_open) CloseWindow();
     }
 
-    // Render child windows (they won't show if CloseWindow() was called
-    for(auto &window : child_windows) window->InternalRender();
-
     InternalPostRender();
 }
 
-
 void BaseWindow::InternalPreRender()
 {
-//!    if(initial_dock_position != DOCK_NONE) {
-//!        auto app = MyApp::Instance();
-//!        if(app->HasDockBuilder()) {
-//!            int dock_node_id = -1;
-//!
-//!            switch(initial_dock_position) {
-//!            case DOCK_LEFT:
-//!                dock_node_id = app->GetDockBuilderLeftID();
-//!                break;
-//!
-//!            case DOCK_RIGHT:
-//!                dock_node_id = app->GetDockBuilderRightID();
-//!                break;
-//!
-//!            case DOCK_BOTTOM:
-//!                dock_node_id = app->GetDockBuilderBottomID();
-//!                break;
-//!
-//!            case DOCK_ROOT:
-//!                dock_node_id = app->GetDockBuilderRootID();
-//!                break;
-//!
-//!            default:
-//!                break;
-//!            }
-//!
-//!            // Initialize this window on specified dock
-//!            ImGui::SetNextWindowDockID(dock_node_id, ImGuiCond_Appearing);
-//!        }
-//!    }
+    if(initial_dock_position != DOCK_NONE) {
+        if(parent_window && parent_window->dockspace_is_built) {
+            int dock_node_id = -1;
+
+            switch(initial_dock_position) {
+            case DOCK_LEFT:
+                dock_node_id = parent_window->imgui_dock_builder_left_id;
+                break;
+
+            case DOCK_RIGHT:
+                dock_node_id = parent_window->imgui_dock_builder_right_id;
+                break;
+
+            case DOCK_BOTTOM:
+                dock_node_id = parent_window->imgui_dock_builder_bottom_id;
+                break;
+
+            case DOCK_ROOT:
+                dock_node_id = parent_window->imgui_dock_builder_root_id;
+                break;
+
+            default:
+                break;
+            }
+
+            // Initialize this window on specified dock
+            ImGui::SetNextWindowDockID(dock_node_id, ImGuiCond_Always);
+            initial_dock_position = DOCK_NONE;
+        }
+    }
 
     PreRender();
 }
@@ -270,22 +287,33 @@ void BaseWindow::InternalDockSpace(float w, float h)
     ImGuiIO& io = ImGui::GetIO();
     if(!(io.ConfigFlags & ImGuiConfigFlags_DockingEnable)) return;
 
-    auto imgui_dockspace_id = ImGui::GetID("##DockSpace");
-    ImGui::DockSpace(imgui_dockspace_id, ImVec2(w, h), dockspace_flags);
+    imgui_dockspace_id = ImGui::GetID(dockspace_id.c_str());
 
-    //TODO dock builder
+    ImGui::DockSpace(imgui_dockspace_id, ImVec2(-1, -1), dockspace_flags);
+
+    // create the dockspace areas
     if(!dockspace_is_built) {
-        ImGuiViewport* viewport = ImGui::GetWindowViewport();
+        imgui_dock_builder_root_id = imgui_dockspace_id;
 
         // Create the root node, which we can use to dock windows
-        /*imgui_dock_builder_root_id =*/ ImGui::DockBuilderAddNode(imgui_dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
+        imgui_dock_builder_root_id = ImGui::DockBuilderAddNode(imgui_dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
+
+        // initialize to the current window size
+        ImGuiViewport* viewport = ImGui::GetWindowViewport();
+        ImGui::DockBuilderSetNodeSize(imgui_dock_builder_root_id, viewport->Size);
         
-        // And make it take the entire viewport
-        ImGui::DockBuilderSetNodeSize(imgui_dockspace_id, viewport->Size);
+        // split the dockspace into left and right, with the right side a temporary ID
+        ImGuiID right_id;
+        imgui_dock_builder_left_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_root_id, ImGuiDir_Left, 0.3f, nullptr, &right_id);
+        
+        // split the right area, creating a temporary top/bottom
+        ImGuiID top_id;
+        imgui_dock_builder_bottom_id = ImGui::DockBuilderSplitNode(right_id, ImGuiDir_Down, 0.5f, nullptr, &top_id);
+        
+        // now split the top area into a middle and right
+        imgui_dock_builder_right_id = ImGui::DockBuilderSplitNode(top_id, ImGuiDir_Right, 0.5f, nullptr, nullptr);
 
         ImGui::DockBuilderFinish(imgui_dockspace_id);
-
-        // do this last for race conditions
         dockspace_is_built = true;
     }
 }

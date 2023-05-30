@@ -105,23 +105,32 @@ private:
     std::string base_title;
     std::string window_tag; // window tag is used in ImGui window titles to keep the IDs unique
     std::string window_id;
+    std::string dockspace_id;
+    std::shared_ptr<BaseWindow> parent_window;
     InitialDockPosition initial_dock_position;
-    bool windowless;
+
     bool open;
     bool focused;
     bool docked;
-    bool enable_nav;
-    bool no_scrollbar;
 
-    bool is_mainwindow;
+    bool windowless = false;
+    bool enable_nav = true;
+    bool no_scrollbar = false;
 
-    bool is_dockspace;
-    bool is_dockable;
+    bool is_mainwindow = false;
 
-    bool show_statusbar;
-    bool show_menubar;
+    bool is_dockspace = false;
+    bool is_dockable = true;
+
+    bool show_statusbar = false;
+    bool show_menubar = false;
 
     bool dockspace_is_built = false;
+    unsigned int imgui_dockspace_id;
+    unsigned int imgui_dock_builder_root_id;
+    unsigned int imgui_dock_builder_left_id;
+    unsigned int imgui_dock_builder_right_id;
+    unsigned int imgui_dock_builder_bottom_id;
 
     // Managed child windows
     void ProcessQueuedChildWindowsForAdd();

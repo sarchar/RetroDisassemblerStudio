@@ -160,11 +160,12 @@ bool Project::CreateNewProjectFromFile(string const& file_path_name)
     return true;
 }
 
-void Project::CreateDefaultWorkspace()
+void Project::CreateFirstSystemInstance()
 {
     auto system_instance = Windows::NES::System::CreateWindow();
     system_instance->SetInitialDock(BaseWindow::DOCK_ROOT);
     GetMainWindow()->AddChildWindow(system_instance);
+    system_instance->CreateDefaultWorkspace();
 }
 
 bool Project::Save(std::ostream& os, std::string& errmsg) 

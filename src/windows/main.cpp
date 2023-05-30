@@ -71,9 +71,6 @@ void MainWindow::CheckInput()
 
 void MainWindow::PreRender()
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 }
 
 void MainWindow::Render()
@@ -124,7 +121,7 @@ void MainWindow::Render()
 
 void MainWindow::PostRender()
 {
-    ImGui::PopStyleVar(3);
+//    ImGui::PopStyleVar(3);
 }
 
 void MainWindow::RenderMenuBar()
@@ -227,18 +224,11 @@ void MainWindow::RenderMenuBar()
     }
 
     if(ImGui::BeginMenu("Windows")) {
-        //!if(ImGui::MenuItem("Debugger")) {
-        //!    auto wnd = SNESDebugger::CreateWindow();
-        //!    AddChildWindow(wnd);
-        //!}
-        //!if(ImGui::MenuItem("Memory")) {
-        //!    auto wnd = SNESMemory::CreateWindow();
-        //!    AddChildWindow(wnd);
-        //!}
         if(ImGui::MenuItem("New System")) {
             auto wnd = Windows::NES::System::CreateWindow();
             wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
             AddChildWindow(wnd);
+            wnd->CreateDefaultWorkspace();
         }
 
         if(ImGui::MenuItem("Defines")) {
@@ -459,7 +449,7 @@ void MainWindow::ProjectCreatedHandler(std::shared_ptr<BaseWindow> project_creat
     AddChildWindow(project);
 
     // create the default workspace for the new system
-    current_project->CreateDefaultWorkspace();
+    current_project->CreateFirstSystemInstance();
 }
 
 
@@ -650,7 +640,7 @@ void MainWindow::LoadProjectPopup()
             // TODO this should go away once the workspace is saved in the project file
             if(!popups.load_project.errored) {
                 AddChildWindow(current_project);
-                current_project->CreateDefaultWorkspace();
+                current_project->CreateFirstSystemInstance();
             }
 
             ImGui::CloseCurrentPopup();

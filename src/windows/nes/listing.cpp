@@ -40,21 +40,18 @@ Listing::Listing()
     
     // create internal signals
 
-    if(auto system = GetSystem()) {
-        // grab a weak_ptr so we don't have to continually use dynamic_pointer_cast
-        current_system = system;
-
+    if(current_system = GetSystem()) {
         // after certain events, force the listing window back to where the cursor was
         label_created_connection = 
-            system->label_created->connect(std::bind(&Listing::LabelCreated, this, placeholders::_1, placeholders::_2));
+            current_system->label_created->connect(std::bind(&Listing::LabelCreated, this, placeholders::_1, placeholders::_2));
 
         disassembly_stopped_connection = 
-            system->disassembly_stopped->connect(std::bind(&Listing::DisassemblyStopped, this, placeholders::_1));
+            current_system->disassembly_stopped->connect(std::bind(&Listing::DisassemblyStopped, this, placeholders::_1));
 
         // initialize the first selection to the entry point of the program
         // TODO save last location as well as location history?
-        system->GetEntryPoint(&current_selection);
-        if(auto memory_object = system->GetMemoryObject(current_selection)) {
+        current_system->GetEntryPoint(&current_selection);
+        if(auto memory_object = current_system->GetMemoryObject(current_selection)) {
             current_selection_listing_item = memory_object->primary_listing_item_index;
         }
         jump_to_selection = JUMP_TO_SELECTION_START_VALUE; // TODO this is stupid, I wish I could scroll within one or 
@@ -73,41 +70,38 @@ Listing::~Listing()
 // TODO actually, can't we just evaluate the operand expression?
 void Listing::Follow()
 {
-    if(auto system = current_system.lock()) {
-        if(auto memory_object = system->GetMemoryObject(current_selection)) {
-            if(memory_object->operand_expression && memory_object->operand_expression->GetRoot()) {
-                // look for a label
-                bool found = false;
-                memory_object->operand_expression->Explore([this, &found](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
-                    if(auto label_node = dynamic_pointer_cast<Systems::NES::ExpressionNodes::Label>(node)) {
-                        // first label found, go to it
-                        GoToAddress(label_node->GetTarget());
-                        found = true;
-                        return false; // bail
-                    }
-                    return true; // keep hunting
-                }, nullptr);
+    if(auto memory_object = current_system->GetMemoryObject(current_selection)) {
+        if(memory_object->operand_expression && memory_object->operand_expression->GetRoot()) {
+            // look for a label
+            bool found = false;
+            memory_object->operand_expression->Explore([this, &found](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+                if(auto label_node = dynamic_pointer_cast<Systems::NES::ExpressionNodes::Label>(node)) {
+                    // first label found, go to it
+                    GoToAddress(label_node->GetTarget());
+                    found = true;
+                    return false; // bail
+                }
+                return true; // keep hunting
+            }, nullptr);
 
-                // if no label was found, go to the evaluation
-                if(!found) {
-                    s64 result;
-                    string errmsg;
-                    if(memory_object->operand_expression->Evaluate(&result, errmsg)) {
-                        GoToAddress((u16)(result & 0xFFFF));
-                    }
+            // if no label was found, go to the evaluation
+            if(!found) {
+                s64 result;
+                string errmsg;
+                if(memory_object->operand_expression->Evaluate(&result, errmsg)) {
+                    GoToAddress((u16)(result & 0xFFFF));
                 }
-            } else if(memory_object->type == MemoryObject::TYPE_CODE) {
-                u16 dest = 0;
-                if(memory_object->GetSize() == 2) {
-                    dest = (u16)memory_object->code.operands[0];
-                } else if(memory_object->GetSize() == 3) {
-                    dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
-                }
-                GoToAddress(dest);
-            } else if(memory_object->type == MemoryObject::TYPE_WORD) {
-                GoToAddress(memory_object->hval);
             }
-
+        } else if(memory_object->type == MemoryObject::TYPE_CODE) {
+            u16 dest = 0;
+            if(memory_object->GetSize() == 2) {
+                dest = (u16)memory_object->code.operands[0];
+            } else if(memory_object->GetSize() == 3) {
+                dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
+            }
+            GoToAddress(dest);
+        } else if(memory_object->type == MemoryObject::TYPE_WORD) {
+            GoToAddress(memory_object->hval);
         }
     }
 }
@@ -125,10 +119,8 @@ void Listing::GoToAddress(GlobalMemoryLocation const& address, bool save)
     }
     current_selection = address;
 
-    if(auto system = current_system.lock()) {
-        if(auto memory_object = system->GetMemoryObject(current_selection)) {
-            current_selection_listing_item = memory_object->primary_listing_item_index;
-        }
+    if(auto memory_object = current_system->GetMemoryObject(current_selection)) {
+        current_selection_listing_item = memory_object->primary_listing_item_index;
     }
 
     jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
@@ -136,10 +128,7 @@ void Listing::GoToAddress(GlobalMemoryLocation const& address, bool save)
 
 void Listing::GoToAddress(u32 address)
 {
-    auto system = current_system.lock();
-    if(!system) return;
-
-    auto memory_region = system->GetMemoryRegion(current_selection);
+    auto memory_region = current_system->GetMemoryRegion(current_selection);
 
     if(address >= memory_region->GetBaseAddress() && address < memory_region->GetEndAddress()) {
         GlobalMemoryLocation new_selection(current_selection);
@@ -150,13 +139,13 @@ void Listing::GoToAddress(u32 address)
         GlobalMemoryLocation guessed_address;
         guessed_address.address = address;
 
-        if(system->CanBank(guessed_address)) {
+        if(current_system->CanBank(guessed_address)) {
             vector<u16> possible_banks;
-            system->GetBanksForAddress(guessed_address, possible_banks);
+            current_system->GetBanksForAddress(guessed_address, possible_banks);
 
             if(possible_banks.size() == 1) {
                 guessed_address.prg_rom_bank = possible_banks[0];
-                memory_region = system->GetMemoryRegion(guessed_address);
+                memory_region = current_system->GetMemoryRegion(guessed_address);
                 if(memory_region) {
                     GoToAddress(guessed_address);
                 }
@@ -165,7 +154,7 @@ void Listing::GoToAddress(u32 address)
             }
         } else {
             // not a banked address, go to it if it's valid
-            if(system->GetMemoryRegion(guessed_address)) GoToAddress(guessed_address);
+            if(current_system->GetMemoryRegion(guessed_address)) GoToAddress(guessed_address);
         }
     }
 }
@@ -181,14 +170,11 @@ void Listing::ClearForwardHistory()
 
 void Listing::MoveSelectionUp()
 {
-    auto system = current_system.lock();
-    if(!system) return;
-
-    auto memory_object = system->GetMemoryObject(current_selection);
+    auto memory_object = current_system->GetMemoryObject(current_selection);
     if(!memory_object) return;
 
     if(current_selection_listing_item == 0) {
-        if(auto memory_object = system->GetMemoryObject(current_selection + -1)) {
+        if(auto memory_object = current_system->GetMemoryObject(current_selection + -1)) {
             current_selection = current_selection + -memory_object->GetSize();
             current_selection_listing_item = memory_object->listing_items.size() - 1;
         }
@@ -199,10 +185,7 @@ void Listing::MoveSelectionUp()
 
 void Listing::MoveSelectionDown()
 {
-    auto system = current_system.lock();
-    if(!system) return;
-
-    auto memory_object = system->GetMemoryObject(current_selection);
+    auto memory_object = current_system->GetMemoryObject(current_selection);
     if(!memory_object) return;
 
     current_selection_listing_item += 1;
@@ -216,188 +199,168 @@ void Listing::CheckInput()
 {
     ImGuiIO& io = ImGui::GetIO();
 
-    auto system = current_system.lock();
-    if(!system) return;
-
     // don't process keypresses while editing a listing item
     if(editing_listing_item) return;
 
-    // handle back button
-    if(ImGui::IsKeyPressed(ImGuiKey_MouseX1) && selection_history_back.size()) {
-        selection_history_forward.push(current_selection);
-        GlobalMemoryLocation dest = selection_history_back.top();
-        selection_history_back.pop();
-        GoToAddress(dest);
-    }
+    bool no_mods = !(io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper);
+    bool shift_only = !(io.KeyCtrl || io.KeyAlt || io.KeySuper) && io.KeyShift;
 
-    // handle forward button
-    if(ImGui::IsKeyPressed(ImGuiKey_MouseX2) && selection_history_forward.size()) {
-        selection_history_back.push(current_selection);
-        GlobalMemoryLocation dest = selection_history_forward.top();
-        selection_history_forward.pop();
-        GoToAddress(dest);
-    }
-
-    if(ImGui::IsKeyPressed(ImGuiKey_UpArrow)) MoveSelectionUp();
-
-    if(ImGui::IsKeyPressed(ImGuiKey_DownArrow)) MoveSelectionDown();
-
-    if(ImGui::IsKeyDown(ImGuiKey_Tab) && !(io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper)) {
-        Refocus();
-    }
- 
-    for(int i = 0; i < io.InputQueueCharacters.Size; i++) { 
-        ImWchar c = io.InputQueueCharacters[i]; 
-
-        // TODO really should be using signals and emit to broadcast these messages
-        switch(c) {
-        case L'j': // move current_selection down
-            MoveSelectionDown();
-            break;
-
-        case L'k': // move current_selection up
-            MoveSelectionUp();
-            break;
-
-        case L'w': // mark data as a word
-        {
-            int len = GetSelection();
-            if(len > 0) system->MarkMemoryAsWords(current_selection, len);
-            break;
+    if(no_mods) {
+        // handle back button
+        if(ImGui::IsKeyPressed(ImGuiKey_MouseX1) && selection_history_back.size()) {
+            selection_history_forward.push(current_selection);
+            GlobalMemoryLocation dest = selection_history_back.top();
+            selection_history_back.pop();
+            GoToAddress(dest);
         }
 
-        case L's': // mark data as a string
-        {
-            int len = GetSelection();
-            if(len > 0) system->MarkMemoryAsString(current_selection, len);
-            break;
+        // handle forward button
+        if(ImGui::IsKeyPressed(ImGuiKey_MouseX2) && selection_history_forward.size()) {
+            selection_history_back.push(current_selection);
+            GlobalMemoryLocation dest = selection_history_forward.top();
+            selection_history_forward.pop();
+            GoToAddress(dest);
         }
 
-        case L'l': // create or edit a label
-        {
+        // Move selection up
+        if(ImGui::IsKeyPressed(ImGuiKey_UpArrow) || ImGui::IsKeyPressed(ImGuiKey_K)) MoveSelectionUp();
+
+        // Move selection down
+        if(ImGui::IsKeyPressed(ImGuiKey_DownArrow) || ImGui::IsKeyPressed(ImGuiKey_J)) MoveSelectionDown();
+
+        // Refocus window on current selection
+        if(ImGui::IsKeyPressed(ImGuiKey_Tab)) Refocus();
+
+        // start disassembly
+        if(ImGui::IsKeyPressed(ImGuiKey_D)) {
+            if(!popups.disassembly.thread) { // should never happen
+                current_system->InitDisassembly(current_selection);
+                popups.disassembly.thread = make_unique<std::thread>(std::bind(&System::DisassemblyThread, current_system));
+                popups.disassembly.show = true;
+                cout << "[Listing::CheckInput] started disassembly thread" << endl;
+            }
+        }
+
+        // mark data as word
+        if(ImGui::IsKeyPressed(ImGuiKey_W)) {
+            if(int len = GetSelection(); len > 0) {
+                current_system->MarkMemoryAsWords(current_selection, len);
+            }
+        }
+
+        // mark data as a string
+        if(ImGui::IsKeyPressed(ImGuiKey_S)) {
+            if(int len = GetSelection(); len > 0) {
+                current_system->MarkMemoryAsString(current_selection, len);
+            }
+        }
+
+        // goto address
+        if(ImGui::IsKeyPressed(ImGuiKey_G)) {
+            popups.goto_address.show = true;
+            popups.goto_address.buf = "";
+        }
+
+        // create or edit a label
+        if(ImGui::IsKeyPressed(ImGuiKey_L)) {
             popups.create_label.buf = "";
             popups.create_label.show = true;
             popups.create_label.title = "Create new label";
             popups.create_label.where = current_selection;
-            break;
         }
 
-        case L'O': // edit pre comment
-        {
-            popups.edit_comment.title = "Edit pre-comment";
-            popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_PRE;
-            popups.edit_comment.show  = true;
-            popups.edit_comment.where = current_selection;
-            system->GetComment(current_selection, popups.edit_comment.type, popups.edit_comment.buf);
-            break;
-        }
-
-        case L'o': // edit post comment
-        {
+        // edit post comment
+        if(ImGui::IsKeyPressed(ImGuiKey_O)) {
             popups.edit_comment.title = "Edit post-comment";
             popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_POST;
             popups.edit_comment.show  = true;
             popups.edit_comment.where = current_selection;
-            system->GetComment(current_selection, popups.edit_comment.type, popups.edit_comment.buf);
-            break;
+            current_system->GetComment(current_selection, popups.edit_comment.type, popups.edit_comment.buf);
         }
 
-        case L'd': // start disassembly
-        {
-            if(!popups.disassembly.thread) { // should never happen
-                system->InitDisassembly(current_selection);
-                popups.disassembly.thread = make_unique<std::thread>(std::bind(&System::DisassemblyThread, system));
-                popups.disassembly.show = true;
-                cout << "[Listing::CheckInput] started disassembly thread" << endl;
-            }
-            break;
+        if(ImGui::IsKeyPressed(ImGuiKey_P)) {
+            CreateDestinationLabel();
         }
 
-        case L'g': // go to address
-            popups.goto_address.show = true;
-            popups.goto_address.buf = "";
-            break;
+    } 
 
-        case L'F': // very hacky (F)ollow address button
-        {
-            Follow();
-            break;
-        }
+    if(shift_only) {
+        if(ImGui::IsKeyPressed(ImGuiKey_F)) Follow();
 
-        case L'p': // create pointer at cursor (apply a label to the address pointed by the word at this location)
-        {
-            if(auto memory_region = system->GetMemoryRegion(current_selection)) {
-                if(auto memory_object = memory_region->GetMemoryObject(current_selection)) {
-                    // only create pointers from word data
-                    if(memory_object->type != MemoryObject::TYPE_WORD) break;
-
-                    // use the word data as a pointer to memory
-                    u16 target = memory_object->hval;
-
-                    // set up a default address using the current bank/address
-                    GlobalMemoryLocation label_address(current_selection);
-                    label_address.address = target;
-
-                    if(!(target >= memory_region->GetBaseAddress() && target < memory_region->GetEndAddress())) {
-                        // destination is not in this memory region, see if we can find it
-                        vector<u16> possible_banks;
-                        system->GetBanksForAddress(label_address, possible_banks); // only uses the address field
-
-                        if(possible_banks.size() == 1) {
-                            label_address.prg_rom_bank = possible_banks[0];
-                            memory_region = system->GetMemoryRegion(label_address);
-                        } else {
-                            cout << "[Listing::CheckInput] TODO: popup dialog asking for which bank this should point to" << endl;
-                            break;
-                        }
-                    }
-
-                    // get the target location and create a label if none exists
-                    int offset = 0;
-
-                    // create a label at the target address. counterintuitively, this is not a "user created label"
-                    auto label = system->GetDefaultLabelForTarget(label_address, false, &offset, true, "L_");
-
-                    // now apply a OperandAddressOrLabel to the data on this memory object
-                    auto default_operand_format = memory_object->FormatOperandField(); // will format the data $xxxx
-                    auto expr = make_shared<Systems::NES::Expression>();
-                    auto nc = dynamic_pointer_cast<Systems::NES::ExpressionNodeCreator>(expr->GetNodeCreator());
-                    auto root = nc->CreateLabel(label_address, label->GetIndex(), default_operand_format);
-
-                    // if offset is nonzero, create an add offset expression
-                    if(offset != 0) {
-                        stringstream ss;
-                        ss << offset;
-                        auto offset_node = nc->CreateConstant(offset, ss.str());
-                        root = nc->CreateAddOp(root, "+", offset_node);
-                    }
-
-                    // set the root node in the expression
-                    expr->Set(root);
-
-                    // set the expression for memory object at current_selection. it'll show up immediately
-                    memory_region->SetOperandExpression(current_selection, expr);
-                }
-            }
-            break;
-        }
-
-        default:
-            break;
-
+        // edit pre comment
+        if(ImGui::IsKeyPressed(ImGuiKey_O)) {
+            popups.edit_comment.title = "Edit pre-comment";
+            popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_PRE;
+            popups.edit_comment.show  = true;
+            popups.edit_comment.where = current_selection;
+            current_system->GetComment(current_selection, popups.edit_comment.type, popups.edit_comment.buf);
         }
     }
-   
+}
+
+void Listing::CreateDestinationLabel()
+{
+    auto memory_region = current_system->GetMemoryRegion(current_selection);
+    if(!memory_region) return;
+
+    auto memory_object = memory_region->GetMemoryObject(current_selection);
+    if(!memory_object) return;
+
+    // only create pointers from word data
+    if(memory_object->type != MemoryObject::TYPE_WORD) return;
+
+    // use the word data as a pointer to memory
+    u16 target = memory_object->hval;
+
+    // set up a default address using the current bank/address
+    GlobalMemoryLocation label_address(current_selection);
+    label_address.address = target;
+
+    if(!(target >= memory_region->GetBaseAddress() && target < memory_region->GetEndAddress())) {
+        // destination is not in this memory region, see if we can find it
+        vector<u16> possible_banks;
+        current_system->GetBanksForAddress(label_address, possible_banks); // only uses the address field
+
+        if(possible_banks.size() == 1) {
+            label_address.prg_rom_bank = possible_banks[0];
+            memory_region = current_system->GetMemoryRegion(label_address);
+        } else {
+            cout << "[Listing::CheckInput] TODO: popup dialog asking for which bank this should point to" << endl;
+            return;
+        }
+    }
+
+    // get the target location and create a label if none exists
+    int offset = 0;
+
+    // create a label at the target address. counterintuitively, this is not a "user created label"
+    auto label = current_system->GetDefaultLabelForTarget(label_address, false, &offset, true, "L_");
+    
+    // now apply a OperandAddressOrLabel to the data on this memory object
+    auto default_operand_format = memory_object->FormatOperandField(); // will format the data $xxxx
+    auto expr = make_shared<Systems::NES::Expression>();
+    auto nc = dynamic_pointer_cast<Systems::NES::ExpressionNodeCreator>(expr->GetNodeCreator());
+    auto root = nc->CreateLabel(label_address, label->GetIndex(), default_operand_format);
+    
+    // if offset is nonzero, create an add offset expression
+    if(offset != 0) {
+        stringstream ss;
+        ss << offset;
+        auto offset_node = nc->CreateConstant(offset, ss.str());
+        root = nc->CreateAddOp(root, "+", offset_node);
+    }
+    
+    // set the root node in the expression
+    expr->Set(root);
+    
+    // set the expression for memory object at current_selection. it'll show up immediately
+    memory_region->SetOperandExpression(current_selection, expr);
 }
 
 void Listing::Render() 
 {
     // postponed actions (things that change the listing display that cannot happen while rendering)
     Systems::NES::ListingItem::postponed_changes changes;
-
-    // All access goes through the system
-    auto system = current_system.lock();
-    if(!system) return;
 
     bool focused = IsFocused();
 
@@ -421,9 +384,9 @@ void Listing::Render()
     }
 
     // Let's not render content while disassembling
-    if(!system->IsDisassembling()) {
+    if(!current_system->IsDisassembling()) {
         // Need the program rom bank that is currently in the listing
-        auto memory_region = system->GetMemoryRegion(current_selection);
+        auto memory_region = current_system->GetMemoryRegion(current_selection);
 
         ImGuiTableFlags outer_table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoBordersInBody;
 
@@ -487,7 +450,7 @@ void Listing::Render()
                     if(selected || hovered) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, row_color);
 
                     ImGui::TableNextColumn(); // start the content of the listing item
-                    listing_item->RenderContent(system, current_address, adjust_columns, focused, selected, hovered, changes); // render the content
+                    listing_item->RenderContent(current_system, current_address, adjust_columns, focused, selected, hovered, changes); // render the content
 
                     // if the item has determined to be editing something, take note
                     if(listing_item->IsEditing()) {
@@ -552,12 +515,8 @@ void Listing::Render()
 // and then we should return the distance between the two addresses (+ length of the end object)
 int Listing::GetSelection()
 {
-    // All access goes through the system
-    auto system = current_system.lock();
-    if(!system) return 0;
-
     if(!has_end_selection) { // no selection, just return the size of the current object
-        if(auto memory_object = system->GetMemoryObject(current_selection)) {
+        if(auto memory_object = current_system->GetMemoryObject(current_selection)) {
             return memory_object->GetSize();
         } else {
             return 0;
@@ -569,7 +528,7 @@ int Listing::GetSelection()
         swap(current_selection_listing_item, end_selection_listing_item);
     }
 
-    if(auto end_object = system->GetMemoryObject(end_selection)) {
+    if(auto end_object = current_system->GetMemoryObject(end_selection)) {
         return (end_selection.address - current_selection.address) + end_object->GetSize();
     }
 
@@ -581,23 +540,20 @@ void Listing::RenderPopups()
 {
     int ret;
 
-    auto system = current_system.lock();
-    if(!system) return;
-
     if(popups.create_label.show 
             && (ret = GetMainWindow()->InputNamePopup(popups.create_label.title, "Label", &popups.create_label.buf)) != 0) {
         if(ret > 0) {
             if(popups.create_label.buf.size() > 0) {
                 //TODO verify valid label (no spaces, etc)
                 // dialog was OK'd, add the label
-                system->CreateLabel(popups.create_label.where, popups.create_label.buf, true);
+                current_system->CreateLabel(popups.create_label.where, popups.create_label.buf, true);
             }
         }
         popups.create_label.show = false;
     }
 
     if(popups.disassembly.show
-            && (ret = GetMainWindow()->WaitPopup(popups.disassembly.title, "Disassembling...", !system->IsDisassembling())) != 0) {
+            && (ret = GetMainWindow()->WaitPopup(popups.disassembly.title, "Disassembling...", !current_system->IsDisassembling())) != 0) {
         if(popups.disassembly.thread) {
             popups.disassembly.thread->join();
             popups.disassembly.thread = nullptr;
@@ -610,7 +566,7 @@ void Listing::RenderPopups()
             && (ret = GetMainWindow()->InputMultilinePopup(popups.edit_comment.title, "Comment", &popups.edit_comment.buf)) != 0) {
         if(ret > 0) {
             if(popups.edit_comment.buf.size() > 0) {
-                system->SetComment(popups.edit_comment.where, popups.edit_comment.type, popups.edit_comment.buf);
+                current_system->SetComment(popups.edit_comment.where, popups.edit_comment.type, popups.edit_comment.buf);
             } else {
                 cout << "TODO: delete comment";
             }

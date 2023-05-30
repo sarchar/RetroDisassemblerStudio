@@ -18,7 +18,12 @@
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_ppu.h"
 #include "systems/nes/nes_system.h"
+
 #include "windows/nes/emulator.h"
+#include "windows/nes/defines.h"
+#include "windows/nes/labels.h"
+#include "windows/nes/listing.h"
+#include "windows/nes/regions.h"
 
 using namespace std;
 
@@ -36,6 +41,8 @@ System::System()
 {
     system_id = next_system_id++;
     SetNav(false);
+
+    SetIsDockSpace(true);
 
 //!    // allocate storage for framebuffers
 //!    framebuffer = (u32*)new u8[4 * 256 * 256];
@@ -129,31 +136,31 @@ System::~System()
 
 void System::CreateDefaultWorkspace()
 {
-//!    shared_ptr<BaseWindow> wnd = Windows::Labels::CreateWindow();
-//!    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
-//!    app->AddWindow(wnd);
-//!
-//!    wnd = Windows::Defines::CreateWindow();
-//!    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
-//!    app->AddWindow(wnd);
-//!
-//!    wnd = Windows::MemoryRegions::CreateWindow();
-//!    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
-//!    app->AddWindow(wnd);
-//!
-//!    wnd = Windows::Listing::CreateWindow();
-//!    wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
-//!    app->AddWindow(wnd);
-//!
+    shared_ptr<BaseWindow> wnd = Labels::CreateWindow();
+    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+    AddChildWindow(wnd);
+
+    wnd = Defines::CreateWindow();
+    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+    AddChildWindow(wnd);
+
+    wnd = MemoryRegions::CreateWindow();
+    wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+    AddChildWindow(wnd);
+
+    wnd = Listing::CreateWindow();
+    wnd->SetInitialDock(BaseWindow::DOCK_ROOT);
+    AddChildWindow(wnd);
+
 //!    wnd = Windows::System::CreateWindow();
 //!    wnd->SetInitialDock(BaseWindow::DOCK_BOTTOM);
-//!    app->AddWindow(wnd);
+//!    AddChildWindow(wnd);
 }
 
 void System::UpdateTitle()
 {
     stringstream ss;
-    ss << "System_" << system_id << " :: " << magic_enum::enum_name(current_state);
+    ss << "NES_" << system_id << " :: " << magic_enum::enum_name(current_state);
     system_title = ss.str();
     SetTitle(system_title.c_str());
 }
@@ -253,15 +260,10 @@ void System::UpdateNametableTexture()
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-
 void System::Render()
 {
     auto system = current_system.lock();
     if(!system) return;
-
-    // The only thing this window renders is a subdock!
-    auto dockspace_id = ImGui::GetID("system_dockspace");
-    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), 0);
 
 //!    auto disassembler = system->GetDisassembler();
 //!

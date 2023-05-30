@@ -45,12 +45,13 @@ private:
     void CheckInput() override;
     void MoveSelectionUp();
     void MoveSelectionDown();
+    void CreateDestinationLabel();
 
     void LabelCreated(std::shared_ptr<Label> const&, bool);
     void DisassemblyStopped(GlobalMemoryLocation const&);
 
 private:
-    std::weak_ptr<System>            current_system;
+    std::shared_ptr<System>          current_system;
     GlobalMemoryLocation             current_selection;
     int                              current_selection_listing_item;
     int                              hovered_listing_item_index;

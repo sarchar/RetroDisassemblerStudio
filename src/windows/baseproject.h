@@ -39,7 +39,7 @@ public:
     // slow, call from separate thread
     virtual bool CreateNewProjectFromFile(std::string const&) = 0;
 
-    virtual void CreateDefaultWorkspace() = 0;
+    virtual void CreateFirstSystemInstance() = 0;
 
     virtual bool Save(std::ostream&, std::string&);
     virtual bool Load(std::istream&, std::string&);
