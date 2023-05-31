@@ -4,12 +4,27 @@
 #include <stack>
 #include <thread>
 
+#include "imgui.h"
+
 #include "main_application.h"
 #include "signals.h"
 #include "windows/basewindow.h"
 
 #define GetMainWindow() GetApplication()->GetMainWindowAs<Windows::MainWindow>()
 #define GetSystemInstance() (assert(GetMainWindow()), GetMainWindow()->GetMostRecentSystemInstance())
+
+// Common flag buttons used in many windows
+inline void ImGuiFlagButton(bool* var, char const* text, char const* hover) {
+    bool need_pop = false;
+    if(*var) {
+        ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor(255, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor(196, 0, 0));
+        need_pop = true;
+    }
+    if(ImGui::SmallButton(text)) *var = !(*var);
+    if(ImGui::IsItemHovered()) ImGui::SetTooltip(hover);
+    if(need_pop) ImGui::PopStyleColor(2);
+}
 
 namespace Windows {
 

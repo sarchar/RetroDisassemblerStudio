@@ -125,7 +125,7 @@ bool Project::CreateNewProjectFromFile(string const& file_path_name)
     }
 
     // Load the CHR banks
-    for(u32 i = 0; i < cartridge->header.num_chr_rom_banks; i++) {
+    for(u32 i = 0; i < cartridge->GetNumCharacterRomBanks(); i++) {
         stringstream ss;
         ss << "Loading CHR ROM bank " << i;
         create_new_project_progress->emit(selfptr, false, num_steps, ++current_step, ss.str());

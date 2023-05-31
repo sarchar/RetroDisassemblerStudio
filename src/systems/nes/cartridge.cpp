@@ -271,6 +271,12 @@ u8 Cartridge::ReadCharacterRomRelative(int bank, u16 relative_address)
     return memory_region->ReadByte(relative_address + memory_region->GetBaseAddress());
 }
 
+void Cartridge::CopyCharacterRomRelative(int bank, u8* dest, u16 relative_address, u16 size)
+{
+    auto memory_region = character_rom_banks[bank];
+    memory_region->Copy(dest, relative_address + memory_region->GetBaseAddress(), size);
+}
+
 shared_ptr<MemoryView> Cartridge::CreateMemoryView()
 {
     return make_shared<CartridgeView>(shared_from_this());
@@ -432,25 +438,42 @@ u8 CartridgeView::ReadPPU(u16 address)
     if(cartridge->header.num_chr_rom_banks == 0) return chr_ram[address & 0x1FFF];
     
     // check CHR-ROM banking
+    int chr_bank = SelectCHRRomBankForAddress(address);
+    return cartridge->ReadCharacterRomRelative(chr_bank, address);
+}
+
+void CartridgeView::WritePPU(u16 address, u8 value)
+{
+    if(cartridge->header.num_chr_rom_banks == 0) chr_ram[address & 0x1FFF] = value;
+}
+
+int CartridgeView::SelectCHRRomBankForAddress(u16& address)
+{
+    int chr_bank = 0;
+
     switch(cartridge->header.mapper) {
     case 0:
         // One 8KiB bank at $0000-$1FFF
-        return cartridge->ReadCharacterRomRelative(0, address & 0x1FFF);
+        address &= 0x1FFF;
+        chr_bank = 0;
+        break;
 
     case 1:
         if(mmc1.chr_rom_bank_mode) { // switch two separate 4KiB banks
-            if(address & 0x2000) { // high bank
-                return cartridge->ReadCharacterRomRelative(mmc1.chr_rom_bank_high, address & 0x0FFF);
+            if(address & 0x1000) { // high bank
+                chr_bank = mmc1.chr_rom_bank_high;
             } else { // low bank
-                return cartridge->ReadCharacterRomRelative(mmc1.chr_rom_bank, address & 0x0FFF);
+                chr_bank = mmc1.chr_rom_bank;
             }
         } else { // switch one 8KiB bank
-            if(address & 0x2000) {
-                return cartridge->ReadCharacterRomRelative(mmc1.chr_rom_bank + 1, address & 0x0FFF);
+            if(address & 0x1000) {
+                chr_bank = mmc1.chr_rom_bank + 1;
             } else {
-                return cartridge->ReadCharacterRomRelative(mmc1.chr_rom_bank, address & 0x0FFF);
+                chr_bank = mmc1.chr_rom_bank;
             }
         }
+
+        address &= 0x0FFF;
         break;
 
     default:
@@ -458,12 +481,21 @@ u8 CartridgeView::ReadPPU(u16 address)
         break;
     }
 
-    return 0;
+    return chr_bank;
 }
 
-void CartridgeView::WritePPU(u16 address, u8 value)
+void CartridgeView::CopyPatterns(u8* dest, u16 source, u16 size)
 {
-    if(cartridge->header.num_chr_rom_banks == 0) chr_ram[address & 0x1FFF] = value;
+    assert(size <= 0x1000);
+    assert(source == 0 || source == 0x1000);
+
+    if(cartridge->header.num_chr_rom_banks == 0) {
+        memcpy(dest, &chr_ram[source], size);
+        return;
+    }
+
+    int chr_bank = SelectCHRRomBankForAddress(source);
+    cartridge->CopyCharacterRomRelative(chr_bank, dest, source, size);
 }
 
 }

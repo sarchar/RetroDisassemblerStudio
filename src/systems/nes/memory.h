@@ -296,6 +296,7 @@ public:
     u32  GetListingIndexByAddress(GlobalMemoryLocation const&);
 
     u8  ReadByte(int offset);
+    void Copy(u8* dest, int offset, int size);
 
     // Labels
     void ApplyLabel(std::shared_ptr<Label>&);

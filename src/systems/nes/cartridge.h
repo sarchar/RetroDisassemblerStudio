@@ -35,6 +35,7 @@ public:
     std::shared_ptr<ProgramRomBank>&   GetProgramRomBank(u8 bank) { return program_rom_banks[bank]; }
     std::shared_ptr<CharacterRomBank>& GetCharacterRomBank(u8 bank) { return character_rom_banks[bank]; }
     int                                GetNumMemoryRegions() const;
+    int                                GetNumCharacterRomBanks() const { return character_rom_banks.size(); }
     std::shared_ptr<MemoryRegion>      GetMemoryRegion(GlobalMemoryLocation const&);
     std::shared_ptr<MemoryRegion>      GetMemoryRegionByIndex(int);
 
@@ -46,6 +47,7 @@ public:
 
     u8 ReadProgramRomRelative(int, u16);
     u8 ReadCharacterRomRelative(int, u16);
+    void CopyCharacterRomRelative(int, u8*, u16, u16);
 
     bool Save(std::ostream&, std::string&);
     bool Load(std::istream&, std::string&, std::shared_ptr<System>&);
@@ -71,9 +73,12 @@ public:
     u8 ReadPPU(u16) override;
     void WritePPU(u16, u8) override;
 
+    void CopyPatterns(u8*, u16, u16);
+
     friend class Cartridge;
 
 private:
+    int SelectCHRRomBankForAddress(u16&);
     std::shared_ptr<Cartridge> cartridge;
 
     u8 reset_vector_bank;

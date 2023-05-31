@@ -10,7 +10,7 @@ using namespace std;
 namespace Systems::NES {
 
 #define RGB(r,g,b) (((u32)(b) << 16) | ((u32)(g) << 8) | (u32)(r))
-static int const rgb_palette_map[] = {
+int const rgb_palette_map[] = {
     RGB(82, 82, 82),
     RGB(1, 26, 81),
     RGB(15, 15, 101),
@@ -142,6 +142,10 @@ public:
 
             // update vram_address_t
             ppu->vram_address_t = (ppu->vram_address_t & ~0x0C00) | ((int)ppu->base_nametable_address << 10);
+
+            // and scroll_x/y
+            ppu->scroll_x = (ppu->scroll_x & ~0x100) | (((int)ppu->base_nametable_address & 0x01) << 8);
+            ppu->scroll_y = (ppu->scroll_y & ~0x100) | (((int)ppu->base_nametable_address & 0x02) << 7);
             break;
 
         case 0x01: // PPUMASK
@@ -168,8 +172,10 @@ public:
             if(ppu->vram_address_latch) {
                 ppu->vram_address_t = (ppu->vram_address_t & ~0x001F) | (value >> 3);
                 ppu->fine_x = value & 0x07;
+                ppu->scroll_x = (ppu->scroll_x & ~0xFF) | value;
             } else {
                 ppu->vram_address_t = (ppu->vram_address_t & ~0x73E0) | ((u16)(value & 0xF8) << 2) | ((u16)(value & 0x07) << 12);
+                ppu->scroll_y = (ppu->scroll_x & ~0xFF) | value;
             }
             ppu->vram_address_latch ^= 1;
             break;
@@ -247,6 +253,9 @@ void PPU::Reset()
     scanline = 0;
     cycle = 0;
     odd = 0;
+
+    scroll_x = 0;
+    scroll_y = 0;
 
     primary_oam_rw = 0;
     secondary_oam_rw = 0;

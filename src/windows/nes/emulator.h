@@ -83,7 +83,6 @@ private:
     void UpdateTitle();
     void Reset();
     void UpdateRAMTexture();
-    void UpdateNametableTexture();
     bool SingleCycle();
     bool StepCPU();
     void StepPPU();
@@ -119,10 +118,8 @@ private:
     // Framebuffers are 0xAABBGGRR format (MSB = alpha)
     u32*                         framebuffer;
     u32*                         ram_framebuffer;
-    u32*                         nametable_framebuffer;
 
     void*                        ram_texture;
-    void*                        nametable_texture;
 
     // rasterizer position
     bool                         hblank;
@@ -199,6 +196,11 @@ private:
     void RenderSprites(std::shared_ptr<PPU> const&);
 
     int display_mode = 0;
+
+    void  UpdateNametableTexture();
+    u32*  nametable_framebuffer;
+    void* nametable_texture;
+    bool  show_scroll_window = true;
 };
 
 

@@ -1260,6 +1260,15 @@ u8 MemoryRegion::ReadByte(int offset)
     }
 }
 
+void MemoryRegion::Copy(u8* dest, int offset, int size)
+{
+    // oh god this is gonna be slow. TODO need a cache badly
+    for(int i = offset; i < offset+size; i++) {
+        *dest++ = ReadByte(i);
+    }
+}
+
+
 bool MemoryRegion::Save(std::ostream& os, std::string& errmsg)
 {
     // save name

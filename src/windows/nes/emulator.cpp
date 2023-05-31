@@ -13,6 +13,7 @@
 #include "util.h"
 
 #include "systems/nes/apu_io.h"
+#include "systems/nes/cartridge.h"
 #include "systems/nes/cpu.h"
 #include "systems/nes/disasm.h"
 #include "systems/nes/ppu.h"
@@ -50,7 +51,6 @@ SystemInstance::SystemInstance()
     // allocate storage for framebuffers
     framebuffer = (u32*)new u8[4 * 256 * 256];
     ram_framebuffer = (u32*)new u8[4 * 256 * 256];
-    nametable_framebuffer = (u32*)new u8[4 * 256 * 256];
 
     // fill the framebuffer with fully transparent pixels (0), so the bottom 16 rows aren't visible
     memset(framebuffer, 0, 4 * 256 * 256);
@@ -72,7 +72,7 @@ SystemInstance::SystemInstance()
 //!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 //!    nametable_texture = (void*)(intptr_t)gl_texture;
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+//!    glBindTexture(GL_TEXTURE_2D, 0);
 
     if(current_system = GetSystem()) {
         auto& mv = memory_view;
@@ -122,7 +122,6 @@ SystemInstance::~SystemInstance()
 
     delete [] (u8*)framebuffer;
 //!    delete [] (u8*)ram_framebuffer;
-//!    delete [] (u8*)nametable_framebuffer;
 }
 
 void SystemInstance::CreateDefaultWorkspace()
@@ -224,7 +223,6 @@ void SystemInstance::Update(double deltaTime)
     }
 
 //!    UpdateRAMTexture();
-//!    UpdateNametableTexture();
 }
 
 void SystemInstance::UpdateRAMTexture()
@@ -258,36 +256,6 @@ void SystemInstance::UpdateRAMTexture()
     GLuint gl_texture = (GLuint)(intptr_t)ram_texture;
     glBindTexture(GL_TEXTURE_2D, gl_texture);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, ram_framebuffer);
-    glBindTexture(GL_TEXTURE_2D, 0);
-}
-
-void SystemInstance::UpdateNametableTexture()
-{
-    int cx = 0;
-    int cy = 0;
-    int sz = 5;
-
-    for(int y = 0; y < 30; y++) {
-        for(int x = 0; x < 32; x++) {
-            u8 t = memory_view->ReadPPU(0x2000 + y * 32 + x);
-
-            // render 8x8
-            for(int i = 0; i < 8; i++) {
-                int cy = y * 8 + i;
-                for(int j = 0; j < 8; j++) {
-                    int cx = x * 8 + j;
-                    // cycle between R/G/B colors
-                    nametable_framebuffer[cy * 256 + cx] = 0xFF000000 | ((0x01 << ((t % 3) * 8)) * (u32)t);
-                }
-            }
-
-        }
-    }
-
-    // update the opengl texture
-    GLuint gl_texture = (GLuint)(intptr_t)nametable_texture;
-    glBindTexture(GL_TEXTURE_2D, gl_texture);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, nametable_framebuffer);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -663,10 +631,31 @@ PPUState::PPUState()
     : BaseWindow("Windows::NES::PPUState")
 {
     SetTitle("PPU");
+
+    // allocate storage for the nametable rendering
+    nametable_framebuffer = (u32*)new u8[sizeof(int) * 512 * 512];
+    memset(nametable_framebuffer, 0, sizeof(int) * 512 * 512);
+
+    // generate the nametable GL texture
+    GLuint gl_texture;
+
+    glGenTextures(1, &gl_texture);
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    nametable_texture = (void*)(intptr_t)gl_texture;
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
 }
 
 PPUState::~PPUState()
 {
+    GLuint gl_texture = (GLuint)(intptr_t)nametable_texture;
+    glDeleteTextures(1, &gl_texture);
+
+    delete [] (u8*)nametable_framebuffer;
 }
 
 void PPUState::CheckInput()
@@ -675,6 +664,9 @@ void PPUState::CheckInput()
 
 void PPUState::Update(double deltaTime)
 {
+    if(display_mode == 1) {
+        UpdateNametableTexture();
+    }
 }
 
 void PPUState::Render()
@@ -716,6 +708,7 @@ void PPUState::RenderRegisters(std::shared_ptr<PPU> const& ppu)
 {
     bool open;
     u8 v;
+    u16 addr;
 
     ImGuiTableFlags table_flags = ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoBordersInBodyUntilResize
         | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable
@@ -749,6 +742,48 @@ void PPUState::RenderRegisters(std::shared_ptr<PPU> const& ppu)
         ImGui::Text("Cycle");
         ImGui::TableNextColumn();
         ImGui::Text("%d", ppu->GetCycle());
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("Scroll X");
+        ImGui::TableNextColumn();
+        ImGui::Text("%d", ppu->GetScrollX());
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("Scroll Y");
+        ImGui::TableNextColumn();
+        ImGui::Text("%d", ppu->GetScrollY());
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        open = ImGui::TreeNodeEx("VRAM bus address", ImGuiTreeNodeFlags_SpanFullWidth);
+        addr = ppu->GetVramAddress();
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled("$%04X", addr);
+        ImGui::TableNextColumn();
+        ImGui::Text("Value currently on VRAM address bus");
+        if(open) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("Intermediate VRAM address");
+            addr = ppu->GetVramAddressT();
+            ImGui::TableNextColumn();
+            ImGui::Text("$%04X", addr);
+            ImGui::TableNextColumn();
+            ImGui::Text("Loopy T");
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("Final VRAM address");
+            addr = ppu->GetVramAddressV();
+            ImGui::TableNextColumn();
+            ImGui::Text("$%04X", addr);
+            ImGui::TableNextColumn();
+            ImGui::Text("Loopy V");
+
+            ImGui::TreePop();
+        }
 
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
@@ -944,7 +979,13 @@ void PPUState::RenderRegisters(std::shared_ptr<PPU> const& ppu)
 
 void PPUState::RenderNametables(std::shared_ptr<PPU> const& ppu)
 {
-    ImGui::Text("Nametables TODO");
+    ImGuiFlagButton(&show_scroll_window, "S", "Show Scroll Window");
+    ImGui::Separator();
+
+    ImVec2 size = ImGui::GetWindowSize();
+    float sz = size.x < size.y ? size.x : size.y;
+    sz *= 0.9;
+    ImGui::Image(nametable_texture, ImVec2(sz, sz));//480/512 * sz));
 }
 
 void PPUState::RenderPalettes(std::shared_ptr<PPU> const& ppu)
@@ -955,6 +996,108 @@ void PPUState::RenderPalettes(std::shared_ptr<PPU> const& ppu)
 void PPUState::RenderSprites(std::shared_ptr<PPU> const& ppu)
 {
     ImGui::Text("Sprites TODO");
+}
+
+void PPUState::UpdateNametableTexture()
+{
+    int cx = 0;
+    int cy = 0;
+    int sz = 5;
+
+    auto render_screen = [](u32* fb, u8* nametable, u8* bg_patterns, u8* palette_ram, int fx, int fy) {
+        u8* attrtable = &nametable[0x3C0];
+        for(int ty = 0; ty < 30; ty++) {
+            for(int tx = 0; tx < 32; tx++) {
+                u8 tile = *nametable++;
+
+                u8 attr = attrtable[8 * (ty / 4) + tx / 4];
+                if((ty & 0x02)) attr >>= 4;
+                if((tx & 0x02)) attr >>= 2;
+                attr &= 0x03;
+
+                // render 8x8
+                for(int y = 0; y < 8; y++) {
+                    u8 row0 = bg_patterns[(u16)(tile << 4) + y + 0x00];
+                    u8 row1 = bg_patterns[(u16)(tile << 4) + y + 0x08];
+
+                    int cy = fy + ty * 8 + y;
+                    for(int x = 0; x < 8; x++) {
+                        int b0 = (row0 & 0x80) >> 7; row0 <<= 1;
+                        int b1 = (row1 & 0x80) >> 7; row1 <<= 1;
+                        int pal = (attr << 2) | (b1 << 1) | b0;
+
+                        // use BG color for color 0
+                        if(b0 == 0 && b1 == 0) pal = 0;
+
+                        int color = palette_ram[pal & 0x0F] & 0x3F;
+                        int cx = fx + tx * 8 + x;
+                        fb[cy * 512 + cx] = 0xFF000000 | Systems::NES::rgb_palette_map[color];
+                    }
+                }
+            }
+        }
+    };
+
+    auto si = GetMySystemInstance();
+    auto ppu = si->GetPPU();
+
+    if(auto system_view = dynamic_pointer_cast<Systems::NES::SystemView>(si->GetMemoryView())) {
+        u8 vram[0x800];
+        system_view->CopyVRAM(vram);
+
+        u8 bg_patterns[0x1000];
+        auto cartridge_view = system_view->GetCartridgeView();
+        u16 bg_pattern_address = (u16)(ppu->GetPPUCONT() & 0x10) << 8;
+        cartridge_view->CopyPatterns(bg_patterns, bg_pattern_address, 0x1000);
+
+        u8 palette_ram[0x10];
+        ppu->CopyPaletteRAM(palette_ram, false);
+
+        // top left screen is fixed
+        render_screen(nametable_framebuffer, &vram[0x000], bg_patterns, palette_ram, 0, 0);
+
+        // render the others based on mirroring
+        switch(cartridge_view->GetNametableMirroring()) {
+        case Systems::NES::MIRRORING_VERTICAL:
+            render_screen(nametable_framebuffer, &vram[0x400], bg_patterns, palette_ram, 256,   0);
+            render_screen(nametable_framebuffer, &vram[0x000], bg_patterns, palette_ram,   0, 240);
+            render_screen(nametable_framebuffer, &vram[0x400], bg_patterns, palette_ram, 256, 240);
+            break;
+
+        case Systems::NES::MIRRORING_HORIZONTAL:
+            render_screen(nametable_framebuffer, &vram[0x000], bg_patterns, palette_ram, 256,   0);
+            render_screen(nametable_framebuffer, &vram[0x400], bg_patterns, palette_ram,   0, 240);
+            render_screen(nametable_framebuffer, &vram[0x400], bg_patterns, palette_ram, 256, 240);
+            break;
+
+        default:
+            break;
+        }
+
+        if(show_scroll_window) {
+            int scroll_x = ppu->GetScrollX();
+            int scroll_y = ppu->GetScrollY();
+            int ey = (scroll_y + 239) % 240;
+            for(int i = 0; i < 256; i++) {
+                int x = (scroll_x + i) & 511;
+                nametable_framebuffer[scroll_y * 512 + x] = 0xFF000000;
+                nametable_framebuffer[ey * 512 + x] = 0xFF000000;
+            }
+
+            int ex = (scroll_x + 256) & 511;
+            for(int i = 0; i < 256; i++) {
+                int y = (scroll_y + i) % 240;
+                nametable_framebuffer[y * 512 + scroll_x] = 0xFF000000;
+                nametable_framebuffer[y * 512 + ex] = 0xFF000000;
+            }
+        }
+
+        // update the opengl texture
+        GLuint gl_texture = (GLuint)(intptr_t)nametable_texture;
+        glBindTexture(GL_TEXTURE_2D, gl_texture);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 512, 512, GL_RGBA, GL_UNSIGNED_BYTE, nametable_framebuffer);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
 }
 
 } // namespace Windows::NES

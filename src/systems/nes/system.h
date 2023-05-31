@@ -234,6 +234,13 @@ public:
     u8 ReadPPU(u16) override;
     void WritePPU(u16, u8) override;
 
+    void CopyVRAM(u8* dest, u16 offset = 0, u16 size = 0x800) {
+        assert(offset < 0x800);
+        int left = 0x800 - offset;
+        memcpy(dest, &VRAM[offset], (left < size) ? left : size);
+    }
+
+    std::shared_ptr<CartridgeView> const& GetCartridgeView() const { return cartridge_view; }
 private:
     std::shared_ptr<System> system;
     std::shared_ptr<MemoryView> ppu_view;

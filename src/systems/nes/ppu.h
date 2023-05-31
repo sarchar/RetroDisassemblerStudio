@@ -8,6 +8,8 @@ namespace Systems::NES {
 class MemoryView;
 class PPUView;
 
+extern int const rgb_palette_map[];
+
 class PPU : public std::enable_shared_from_this<PPU> {
 public:
     typedef std::function<void()> nmi_function_t;
@@ -24,9 +26,18 @@ public:
     inline int GetScanline() const { return scanline; }
     inline int GetFrame() const { return frame; }
     inline int GetIsOdd() const { return odd; }
-    inline int GetPPUCONT() const { return ppucont; }
-    inline int GetPPUMASK() const { return ppumask; }
-    inline int GetPPUSTAT() const { return ppustat; }
+    inline u8 GetPPUCONT() const { return ppucont; }
+    inline u8 GetPPUMASK() const { return ppumask; }
+    inline u8 GetPPUSTAT() const { return ppustat; }
+    inline u16 GetVramAddress() const { return vram_address; }
+    inline u16 GetVramAddressT() const { return vram_address_t; }
+    inline u16 GetVramAddressV() const { return vram_address_v; }
+    inline u16 GetScrollX() const { return scroll_x; }
+    inline u16 GetScrollY() const { return scroll_y; }
+
+    inline void CopyPaletteRAM(u8* dest, bool sprites) {
+        memcpy(dest, sprites ? &palette_ram[0x10] : palette_ram, 0x10);
+    }
 
     // returns color, outputs true for either blanking period
     int Step(bool& hblank_out, bool& vblank_out);
@@ -106,6 +117,10 @@ private:
     int scanline;
     int cycle;
     int odd;
+
+    // used only in the debugger
+    int scroll_x;
+    int scroll_y;
 
     // color pipeline, color produced at cycle 2 is generated at cycle 4
     int color_pipeline[3];
