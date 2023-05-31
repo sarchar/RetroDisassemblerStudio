@@ -45,16 +45,16 @@ add_executable(${PROJECT_NAME}
     
     src/systems/expressions.cpp
     src/systems/system.cpp
-    src/systems/nes/nes_apu_io.cpp
-    src/systems/nes/nes_cartridge.cpp
-    src/systems/nes/nes_cpu.cpp
-    src/systems/nes/nes_defines.cpp
-    src/systems/nes/nes_disasm.cpp
-    src/systems/nes/nes_expressions.cpp
-    src/systems/nes/nes_label.cpp
-    src/systems/nes/nes_memory.cpp
-    src/systems/nes/nes_ppu.cpp
-    src/systems/nes/nes_system.cpp
+    src/systems/nes/apu_io.cpp
+    src/systems/nes/cartridge.cpp
+    src/systems/nes/cpu.cpp
+    src/systems/nes/defines.cpp
+    src/systems/nes/disasm.cpp
+    src/systems/nes/expressions.cpp
+    src/systems/nes/label.cpp
+    src/systems/nes/memory.cpp
+    src/systems/nes/ppu.cpp
+    src/systems/nes/system.cpp
     
     src/windows/baseproject.cpp
     src/windows/basewindow.cpp
