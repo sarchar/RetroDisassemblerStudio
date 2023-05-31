@@ -487,7 +487,7 @@ void MainWindow::RenderStatusBar()
     ImGui::Text("Main Window status bar");
 }
 
-bool MainWindow::StartPopup(std::string const& title, bool resizeable)
+bool MainWindow::StartPopup(std::string const& title, bool resizeable, bool always_centered)
 {
     auto ctitle = title.c_str();
     if(title != current_popup_title) {
@@ -498,7 +498,7 @@ bool MainWindow::StartPopup(std::string const& title, bool resizeable)
 
     // center the popup
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowPos(center, always_centered ? ImGuiCond_Always : ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
     // configure flags
     ImGuiWindowFlags popup_flags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize;
@@ -603,17 +603,21 @@ int MainWindow::InputMultilinePopup(std::string const& title, std::string const&
     return EndPopup(ret);
 }
 
-int MainWindow::WaitPopup(std::string const& title, std::string const& content, bool done, bool cancelable, bool resizeable)
+int MainWindow::WaitPopup(std::string const& title, std::string const& content, bool done, bool cancelable, bool resizeable, bool wait_ok)
 {
     int ret = 0;
 
     // no further rendering if the dialog isn't visible
-    if(!StartPopup(title, resizeable)) return 0;
+    if(!StartPopup(title, resizeable, true)) return 0;
 
     // Show the content of the dialog
     ImGui::Text("%s", content.c_str());
 
-    if(done) ret = 1;
+    if(done) {
+        if(!wait_ok || (wait_ok && ImGui::Button("OK"))) {
+            ret = 1;
+        }
+    }
 
     return EndPopup(ret, false, cancelable, false);
 }

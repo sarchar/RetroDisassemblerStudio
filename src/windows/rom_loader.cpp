@@ -8,10 +8,10 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include "main.h"
 #include "signals.h"
 #include "systems/system.h"
 #include "windows/baseproject.h"
+#include "windows/main.h"
 #include "windows/rom_loader.h"
 
 using namespace std;
@@ -148,28 +148,22 @@ void ProjectCreatorWindow::Render()
         string title = "Project Creator";
         ImGui::OpenPopup(title.c_str());
 
-        // center this window
-        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        stringstream ss;
+        if(create_project_max_progress != 0) {
+            ss << create_project_message << "(" << (create_project_current_progress / (float)create_project_max_progress * 100.0f) << "%)";
+        } else {
+            // might be empty for a frame or two, but that's OK
+            ss << create_project_message;
+        }
 
-        ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoResize;
-        if(ImGui::BeginPopupModal(title.c_str(), nullptr, flags)) {
-            if(create_project_max_progress != 0) {
-                ImGui::Text("%s (%.2f%%)", create_project_message.c_str(), create_project_current_progress / (float)create_project_max_progress * 100.0f);
-            } else {
-                // might be empty for a frame or two, but that's OK
-                ImGui::Text("%s", create_project_message.c_str());
-            }
-
-            if(create_project_done) {
-                if(!create_project_error || ImGui::Button("Close")) { // wait for OK to be pressed
-                    project_created->emit(shared_from_this(), current_project);
-                    create_project_done = false;
-                }
+        auto main = GetMainWindow();
+        if(auto ret = main->WaitPopup(title, ss.str(), create_project_done, false, false, create_project_error)) { // on error, wait for user to press OK before dialog closes
+            if(ret == 1 && !create_project_error) {
+                project_created->emit(shared_from_this(), current_project);
+                create_project_done = false;
             }
         }
 
-        ImGui::EndPopup();
         break;
     }
 

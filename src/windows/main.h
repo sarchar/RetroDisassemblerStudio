@@ -47,7 +47,8 @@ public:
     // showing and should now close (via CloseCurrentPopup)
     int  WaitPopup(std::string const& title, std::string const& content, bool done = false,
             bool cancelable = false,
-            bool resizeable = false);
+            bool resizeable = false,
+            bool wait_ok = false); // wait for OK to be pressed when done == true
 
     // Project
     inline std::shared_ptr<BaseProject> GetCurrentProject() { return current_project; }
@@ -78,7 +79,7 @@ private:
     void OpenROMInfosPane();
 
     // Popups
-    bool StartPopup(std::string const&, bool);
+    bool StartPopup(std::string const&, bool, bool always_centered = false);
     int  EndPopup(int, bool show_ok = true, bool show_cancel = true, bool allow_escape = true, bool focus_ok = false);
     void RenderPopups();
 
