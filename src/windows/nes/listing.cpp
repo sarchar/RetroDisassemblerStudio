@@ -11,15 +11,17 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include "windows/nes/emulator.h"
-#include "windows/nes/listing.h"
-#include "windows/nes/listingitems.h"
+#include "util.h"
 
 #include "systems/nes/nes_cartridge.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
-#include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
+
+#include "windows/nes/emulator.h"
+#include "windows/nes/listing.h"
+#include "windows/nes/listingitems.h"
+#include "windows/nes/project.h"
 
 #define JUMP_TO_SELECTION_START_VALUE 3
 

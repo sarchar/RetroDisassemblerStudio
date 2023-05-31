@@ -4,8 +4,9 @@
 #include "systems/expressions.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
-#include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
+
+#include "windows/nes/project.h"
 
 using namespace std;
 

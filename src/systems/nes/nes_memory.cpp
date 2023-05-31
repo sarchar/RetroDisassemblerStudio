@@ -8,16 +8,15 @@
 #include "imgui_internal.h"
 
 #include "magic_enum.hpp"
-
-#include "windows/nes/listingitems.h"
+#include "util.h"
 
 #include "systems/nes/nes_disasm.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"
-#include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
 
-#include "util.h"
+#include "windows/nes/listingitems.h"
+#include "windows/nes/project.h"
 
 using namespace std;
 

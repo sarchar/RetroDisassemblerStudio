@@ -15,7 +15,6 @@
 #include "systems/nes/nes_apu_io.h"
 #include "systems/nes/nes_cpu.h"
 #include "systems/nes/nes_disasm.h"
-#include "systems/nes/nes_project.h"
 #include "systems/nes/nes_ppu.h"
 #include "systems/nes/nes_system.h"
 
@@ -23,6 +22,7 @@
 #include "windows/nes/defines.h"
 #include "windows/nes/labels.h"
 #include "windows/nes/listing.h"
+#include "windows/nes/project.h"
 #include "windows/nes/regions.h"
 
 using namespace std;

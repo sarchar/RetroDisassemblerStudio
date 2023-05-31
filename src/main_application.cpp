@@ -1,39 +1,17 @@
 #include "config.h"
 
 #include <filesystem>
-//#include <iostream>
-//#include <locale>
-//#include <sstream>
-//#include <vector>
-//
-//#include <GL/gl3w.h>
-//#include <GLFW/glfw3.h>
 
 #include "cfgpath.h"
 
 #include "imgui.h"
-//#include "imgui_internal.h"
-//#include "imgui_stdlib.h"
-//
-//#define USE_IMGUI_TABLES
-//#include "ImGuiFileDialog.h"
-//#include "dirent/dirent.h"
 
 #include "main_application.h"
-#include "systems/expressions.h"
-#include "systems/nes/nes_expressions.h"
-//#include "systems/nes/nes_label.h"
-//#include "systems/nes/nes_memory.h"
-#include "systems/nes/nes_project.h"
-//#include "systems/nes/nes_system.h"
+#include "systems/expressions.h"         // to register components
+#include "systems/nes/nes_expressions.h" // to register components
+
 #include "windows/baseproject.h"
-//#include "windows/rom_loader.h"
-//#include "windows/nes/defines.h"
-//#include "windows/nes/emulator.h"
-//#include "windows/nes/labels.h"
-//#include "windows/nes/listing.h"
-//#include "windows/nes/regions.h"
-//
+#include "windows/nes/project.h"
 
 #undef DISABLE_IMGUI_SAVE_LOAD_LAYOUT
 
@@ -47,13 +25,6 @@ MainApplication::MainApplication(int, char*[])
 
     BaseExpressionNodeCreator::RegisterBaseExpressionNodes();
     Systems::NES::ExpressionNodeCreator::RegisterExpressionNodes();
-
-    // register all the windows
-#   define REGISTER_WINDOW_TYPE(className) \
-        create_window_functions[className::GetWindowClassStatic()] = std::bind(&className::CreateWindow);
-    //!REGISTER_WINDOW_TYPE(NES::Windows::Listing);
-    //!REGISTER_WINDOW_TYPE(NES::Windows::MemoryRegions);
-#   undef REGISTER_WINDOW_TYPE
 }
 
 MainApplication::~MainApplication()

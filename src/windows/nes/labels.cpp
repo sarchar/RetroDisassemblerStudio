@@ -6,14 +6,17 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
+#include "util.h"
+
+#include "systems/nes/nes_label.h"
+#include "systems/nes/nes_memory.h"
+#include "systems/nes/nes_system.h"
+
 #include "windows/nes/emulator.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/labels.h"
+#include "windows/nes/project.h"
 #include "windows/nes/references.h"
-#include "systems/nes/nes_label.h"
-#include "systems/nes/nes_memory.h"
-#include "systems/nes/nes_project.h"
-#include "systems/nes/nes_system.h"
 
 using namespace std;
 

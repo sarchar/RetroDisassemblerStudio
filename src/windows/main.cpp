@@ -52,6 +52,13 @@ MainWindow::MainWindow()
 
     *child_window_added += std::bind(&MainWindow::ChildWindowAdded, this, placeholders::_1);
     *child_window_removed += std::bind(&MainWindow::ChildWindowRemoved, this, placeholders::_1);
+
+    // register all the windows here
+#   define REGISTER_WINDOW_TYPE(className) \
+        create_window_functions[className::GetWindowClassStatic()] = std::bind(&className::CreateWindow);
+    //!REGISTER_WINDOW_TYPE(NES::Windows::Listing);
+    //!REGISTER_WINDOW_TYPE(NES::Windows::MemoryRegions);
+#   undef REGISTER_WINDOW_TYPE
 }
 
 MainWindow::~MainWindow()

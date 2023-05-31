@@ -10,15 +10,12 @@
 #include "util.h"
 
 #include "systems/nes/nes_cartridge.h"
-#include "systems/nes/nes_defines.h"
-#include "systems/nes/nes_label.h"
-#include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
+
 #include "windows/nes/defines.h"
 #include "windows/nes/emulator.h"
-#include "windows/nes/labels.h"
 #include "windows/nes/listing.h"
-#include "windows/nes/regions.h"
+#include "windows/nes/project.h"
 
 using namespace std;
 

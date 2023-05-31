@@ -53,7 +53,6 @@ add_executable(${PROJECT_NAME}
     src/systems/nes/nes_expressions.cpp
     src/systems/nes/nes_label.cpp
     src/systems/nes/nes_memory.cpp
-    src/systems/nes/nes_project.cpp
     src/systems/nes/nes_ppu.cpp
     src/systems/nes/nes_system.cpp
     
@@ -67,6 +66,7 @@ add_executable(${PROJECT_NAME}
     src/windows/nes/labels.cpp
     src/windows/nes/listing.cpp
     src/windows/nes/listingitems.cpp
+    src/windows/nes/project.cpp
     src/windows/nes/references.cpp
     src/windows/nes/regions.cpp
 )

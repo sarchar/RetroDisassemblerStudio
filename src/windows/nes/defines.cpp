@@ -5,12 +5,13 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include "windows/nes/defines.h"
-#include "windows/nes/references.h"
 #include "systems/nes/nes_defines.h"
 #include "systems/nes/nes_memory.h"
-#include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
+
+#include "windows/nes/defines.h"
+#include "windows/nes/project.h"
+#include "windows/nes/references.h"
 
 using namespace std;
 
