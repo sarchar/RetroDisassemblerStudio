@@ -152,10 +152,10 @@ void SystemInstance::CreateNewWindow(string const& window_type)
         wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
     } else if(window_type == "Screen") {
         wnd = Screen::CreateWindow();
-        wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
+        wnd->SetInitialDock(BaseWindow::DOCK_TOPRIGHT);
     } else if(window_type == "CPUState") {
         wnd = CPUState::CreateWindow();
-        wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
+        wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
     }
 
     AddChildWindow(wnd);

@@ -257,6 +257,14 @@ void BaseWindow::InternalPreRender()
                 dock_node_id = parent_window->imgui_dock_builder_right_id;
                 break;
 
+            case DOCK_TOPRIGHT:
+                dock_node_id = parent_window->imgui_dock_builder_topright_id;
+                break;
+
+            case DOCK_BOTTOMRIGHT:
+                dock_node_id = parent_window->imgui_dock_builder_bottomright_id;
+                break;
+
             case DOCK_BOTTOM:
                 dock_node_id = parent_window->imgui_dock_builder_bottom_id;
                 break;
@@ -318,7 +326,10 @@ void BaseWindow::InternalDockSpace(float w, float h)
         imgui_dock_builder_bottom_id = ImGui::DockBuilderSplitNode(right_id, ImGuiDir_Down, 0.5f, nullptr, &top_id);
         
         // now split the top area into a middle and right
-        imgui_dock_builder_right_id = ImGui::DockBuilderSplitNode(top_id, ImGuiDir_Right, 0.5f, nullptr, nullptr);
+        imgui_dock_builder_right_id = ImGui::DockBuilderSplitNode(top_id, ImGuiDir_Right, 0.4f, nullptr, nullptr);
+
+        // and split the right area into top and bottom
+        imgui_dock_builder_topright_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_right_id, ImGuiDir_Up, 0.5f, nullptr, &imgui_dock_builder_bottomright_id);
 
         ImGui::DockBuilderFinish(imgui_dockspace_id);
         dockspace_is_built = true;

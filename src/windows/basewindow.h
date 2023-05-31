@@ -20,6 +20,8 @@ public:
         DOCK_ROOT,
         DOCK_LEFT,
         DOCK_RIGHT,
+        DOCK_TOPRIGHT,
+        DOCK_BOTTOMRIGHT,
         DOCK_BOTTOM
     };
 
@@ -140,6 +142,8 @@ private:
     unsigned int imgui_dock_builder_root_id;
     unsigned int imgui_dock_builder_left_id;
     unsigned int imgui_dock_builder_right_id;
+    unsigned int imgui_dock_builder_topright_id;
+    unsigned int imgui_dock_builder_bottomright_id;
     unsigned int imgui_dock_builder_bottom_id;
 
     // Managed child windows
