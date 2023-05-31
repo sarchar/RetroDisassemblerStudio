@@ -64,6 +64,7 @@ public:
 
     std::shared_ptr<APU_IO>     const& GetAPUIO()      { return apu_io; }
     std::shared_ptr<CPU>        const& GetCPU()        { return cpu; }
+    std::shared_ptr<PPU>        const& GetPPU()        { return ppu; }
     u32                         const* GetFramebuffer() const { return framebuffer; }
     std::shared_ptr<MemoryView> const& GetMemoryView() { return memory_view; }
 
@@ -174,5 +175,31 @@ protected:
 private:
     void* framebuffer_texture;
 };
+
+class PPUState : public BaseWindow {
+public:
+    using PPU = Systems::NES::PPU;
+
+    PPUState();
+    virtual ~PPUState();
+
+    virtual char const * const GetWindowClass() { return PPUState::GetWindowClassStatic(); }
+    static char const * const GetWindowClassStatic() { return "NES::PPUState"; }
+    static std::shared_ptr<PPUState> CreateWindow();
+
+protected:
+    void CheckInput() override;
+    void Update(double deltaTime) override;
+    void Render() override;
+
+private:
+    void RenderRegisters(std::shared_ptr<PPU> const&);
+    void RenderNametables(std::shared_ptr<PPU> const&);
+    void RenderPalettes(std::shared_ptr<PPU> const&);
+    void RenderSprites(std::shared_ptr<PPU> const&);
+
+    int display_mode = 0;
+};
+
 
 } //namespace Windows::NES

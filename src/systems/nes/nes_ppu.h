@@ -24,9 +24,6 @@ public:
     inline int GetScanline() const { return scanline; }
     inline int GetFrame() const { return frame; }
     inline int GetIsOdd() const { return odd; }
-    inline int GetPPUCONT() const { return ppucont; }
-    inline int GetPPUMASK() const { return ppumask; }
-    inline int GetPPUSTAT() const { return ppustat; }
 
     // returns color, outputs true for either blanking period
     int Step(bool& hblank_out, bool& vblank_out);

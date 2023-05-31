@@ -433,10 +433,16 @@ public:
     virtual u8 Read(u16) = 0;
     virtual void Write(u16, u8) = 0;
 
+    // Peek can have different meanings depending on the memory view, but
+    // the general idea is that Peeking at memory should have no side effects
+    // i.e., clearing the VBL flag in the PPU
+    virtual u8 Peek(u16 address) { return Read(address); }
+
     // NES has essentially two buses, the normal CPU bus and one private to the PPU
     // the PPU memory can be mapped to cartridges, but is normally backed by internal RAM
     virtual u8 ReadPPU(u16) = 0;
     virtual void WritePPU(u16, u8) = 0;
+    virtual u8 PeekPPU(u16 address) { return ReadPPU(address); }
 };
 
 } // namespace Systems::NES

@@ -132,6 +132,7 @@ void SystemInstance::CreateDefaultWorkspace()
     CreateNewWindow("Regions");
     CreateNewWindow("Listing");
     CreateNewWindow("Screen");
+    CreateNewWindow("PPUState");
     CreateNewWindow("CPUState");
 }
 
@@ -155,6 +156,9 @@ void SystemInstance::CreateNewWindow(string const& window_type)
         wnd->SetInitialDock(BaseWindow::DOCK_TOPRIGHT);
     } else if(window_type == "CPUState") {
         wnd = CPUState::CreateWindow();
+        wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
+    } else if(window_type == "PPUState") {
+        wnd = PPUState::CreateWindow();
         wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
     }
 
@@ -295,6 +299,7 @@ void SystemInstance::RenderMenuBar()
         current_state = State::PAUSED;
     }
 
+    auto last_state = current_state;
     if(current_state != State::PAUSED) {
         ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
@@ -315,7 +320,7 @@ void SystemInstance::RenderMenuBar()
         }
     }
 
-    if(current_state != State::PAUSED) {
+    if(last_state != State::PAUSED) {
         ImGui::PopStyleVar();
         ImGui::PopItemFlag();
     }
@@ -649,6 +654,308 @@ void CPUState::Render()
     ImGui::Text("%s", flags);
 }
 
+std::shared_ptr<PPUState> PPUState::CreateWindow()
+{
+    return make_shared<PPUState>();
+}
+
+PPUState::PPUState()
+    : BaseWindow("Windows::NES::PPUState")
+{
+    SetTitle("PPU");
+}
+
+PPUState::~PPUState()
+{
+}
+
+void PPUState::CheckInput()
+{
+}
+
+void PPUState::Update(double deltaTime)
+{
+}
+
+void PPUState::Render()
+{
+    auto si = GetMySystemInstance();
+    auto ppu = si->GetPPU();
+    if(!ppu) return;
+
+    auto memory_view = si->GetMemoryView();
+    if(!memory_view) return;
+
+    ImGui::RadioButton("Registers", &display_mode, 0); ImGui::SameLine();
+    ImGui::RadioButton("Nametables", &display_mode, 1); ImGui::SameLine();
+    ImGui::RadioButton("Palettes", &display_mode, 2); ImGui::SameLine();
+    ImGui::RadioButton("Sprites", &display_mode, 3);
+
+    ImGui::Separator();
+
+    switch(display_mode) {
+    case 0:
+        RenderRegisters(ppu);
+        break;
+
+    case 1:
+        RenderNametables(ppu);
+        break;
+
+    case 2:
+        RenderPalettes(ppu);
+        break;
+
+    case 3:
+        RenderSprites(ppu);
+        break;
+    }
+}
+
+void PPUState::RenderRegisters(std::shared_ptr<PPU> const& ppu)
+{
+    bool open;
+    u8 v;
+
+    ImGuiTableFlags table_flags = ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoBordersInBodyUntilResize
+        | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable
+        | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchSame;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
+
+    // We use nested tables so that each row can have its own layout. This will be useful when we can render
+    // things like plate comments, labels, etc
+    if(ImGui::BeginTable("ppustats_registers_table", 3, table_flags)) {
+        ImGui::TableSetupColumn("Register", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_WidthStretch);
+
+        // Begin a new row and next column
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("Frame Index");
+        ImGui::TableNextColumn();
+        ImGui::Text("%d", ppu->GetFrame());
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("Scanline");
+        ImGui::TableNextColumn();
+        ImGui::Text("%d", ppu->GetScanline());
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("Cycle");
+        ImGui::TableNextColumn();
+        ImGui::Text("%d", ppu->GetCycle());
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        open = ImGui::TreeNodeEx("[PPUCONT] $2000", ImGuiTreeNodeFlags_SpanFullWidth);
+        v = ppu->GetPPUCONT();
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled("$%02X", v);
+
+        if(open) {
+            //u8 base_nametable_address           : 2;
+            //u8 vram_increment                   : 1;
+            //u8 sprite_pattern_table_address     : 1;
+            //u8 background_pattern_table_address : 1;
+            //u8 sprite_size                      : 1;
+            //u8 _master_slave                    : 1; // unused
+            //u8 enable_nmi                       : 1;
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[ NT] $2000.01");
+            ImGui::TableNextColumn();
+            ImGui::Text("$%x", v & 0x03);
+            ImGui::TableNextColumn();
+            ImGui::Text("Nametable @ $%04X", 0x2000 | ((v & 0x03) << 10));
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[ VI] $2000.2");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x04) >> 2);
+            ImGui::TableNextColumn();
+            ImGui::Text("VRAM increment %d", (v & 0x04) ? 32 : 1);
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[SPT] $2000.3");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x08) >> 3);
+            ImGui::TableNextColumn();
+            ImGui::Text("Sprite tiles @ $%04X", (v & 0x08) ? 0x1000 : 0);
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[BGT] $2000.4");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x10) >> 4);
+            ImGui::TableNextColumn();
+            ImGui::Text("BG tiles @ $%04X", (v & 0x10) ? 0x1000 : 0);
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[SSZ] $2000.5");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x20) >> 5);
+            ImGui::TableNextColumn();
+            ImGui::Text("Sprite size 8x%d", (v & 0x20) ? 16 : 8);
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[NMI] $2000.7");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x80) >> 7);
+            ImGui::TableNextColumn();
+            ImGui::Text("NMI %s", (v & 0x80) ? "enabled" : "disabled");
+
+            ImGui::TreePop();
+        }
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        open = ImGui::TreeNodeEx("[PPUMASK] $2001", ImGuiTreeNodeFlags_SpanFullWidth);
+        v = ppu->GetPPUMASK();
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled("$%02X", v);
+        if(open) {
+            //u8 greyscale             : 1;
+            //u8 show_background_left8 : 1;
+            //u8 show_sprites_left8    : 1;
+            //u8 show_background       : 1;
+            //u8 show_sprites          : 1;
+            //u8 emphasize_red         : 1;
+            //u8 emphasize_green       : 1;
+            //u8 emphasize_blue        : 1;
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[GRY] $2001.00");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", v & 0x01);
+            ImGui::TableNextColumn();
+            ImGui::Text((v & 0x01) ? "Greyscale" : "Not greyscale");
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[BL8] $2001.01");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x02) >> 1);
+            ImGui::TableNextColumn();
+            ImGui::Text((v & 0x02) ? "Show left 8 BG pixels" : "Don't show left 8 BG pixels");
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[SL8] $2001.02");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x04) >> 2);
+            ImGui::TableNextColumn();
+            ImGui::Text((v & 0x04) ? "Show left 8 sprite pixels" : "Don't show left 8 sprite pixels");
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[BGE] $2001.03");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x08) >> 3);
+            ImGui::TableNextColumn();
+            ImGui::Text((v & 0x08) ? "Show BG" : "Don't show BG");
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[BGE] $2001.04");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x10) >> 4);
+            ImGui::TableNextColumn();
+            ImGui::Text((v & 0x10) ? "Show Sprites" : "Don't show Sprites");
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[BGE] $2001.05");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x20) >> 5);
+            ImGui::TableNextColumn();
+            ImGui::Text((v & 0x20) ? "Emphasize RED" : "Normal RED");
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[BGE] $2001.06");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x40) >> 6);
+            ImGui::TableNextColumn();
+            ImGui::Text((v & 0x40) ? "Emphasize GREEN" : "Normal GREEN");
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[BGE] $2001.07");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x80) >> 7);
+            ImGui::TableNextColumn();
+            ImGui::Text((v & 0x80) ? "Emphasize BLUE" : "Normal BLUE");
+
+            ImGui::TreePop();
+        }
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        open = ImGui::TreeNodeEx("[PPUSTAT] $2002", ImGuiTreeNodeFlags_SpanFullWidth);
+        v = ppu->GetPPUSTAT();
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled("$%02X", v);
+        if(open) {
+            //u8 unused0         : 5;
+            //u8 sprite_overflow : 1;
+            //u8 sprite0_hit     : 1;
+            //u8 vblank          : 1;
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[SOV] $2002.05");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x20) >> 5);
+            ImGui::TableNextColumn();
+            ImGui::Text((v & 0x20) ? "Sprite overflow" : "No sprite overflow");
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[S0H] $2002.06");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x40) >> 6);
+            ImGui::TableNextColumn();
+            ImGui::Text((v & 0x20) ? "Sprite 0 hit" : "No sprite 0 hit");
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("[VBL] $2002.07");
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", (v & 0x80) >> 7);
+            ImGui::TableNextColumn();
+            ImGui::Text((v & 0x80) ? "In VBlank" : "Not in VBlank");
+
+            ImGui::TreePop();
+        }
+
+        ImGui::EndTable();
+    }
+
+    ImGui::PopStyleVar(2);
+}
+
+void PPUState::RenderNametables(std::shared_ptr<PPU> const& ppu)
+{
+    ImGui::Text("Nametables TODO");
+}
+
+void PPUState::RenderPalettes(std::shared_ptr<PPU> const& ppu)
+{
+    ImGui::Text("Palettes TODO");
+}
+
+void PPUState::RenderSprites(std::shared_ptr<PPU> const& ppu)
+{
+    ImGui::Text("Sprites TODO");
+}
 
 } // namespace Windows::NES
 
