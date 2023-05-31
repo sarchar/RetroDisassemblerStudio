@@ -14,7 +14,7 @@
 
 #include "windows/baseproject.h"
 #include "windows/main.h"
-#include "windows/rom_loader.h"
+#include "windows/projectcreator.h"
 #include "windows/nes/defines.h"
 #include "windows/nes/emulator.h"
 #include "windows/nes/labels.h"

@@ -59,7 +59,7 @@ add_executable(${PROJECT_NAME}
     src/windows/baseproject.cpp
     src/windows/basewindow.cpp
     src/windows/main.cpp
-    src/windows/rom_loader.cpp
+    src/windows/projectcreator.cpp
     
     src/windows/nes/defines.cpp
     src/windows/nes/emulator.cpp

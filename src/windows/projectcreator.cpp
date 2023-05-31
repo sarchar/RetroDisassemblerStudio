@@ -12,7 +12,7 @@
 #include "systems/system.h"
 #include "windows/baseproject.h"
 #include "windows/main.h"
-#include "windows/rom_loader.h"
+#include "windows/projectcreator.h"
 
 using namespace std;
 
