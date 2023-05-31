@@ -243,7 +243,7 @@ private:
     // It could be more C++ish by using RAMRegion to request a memory view and redirect
     // read/writes there, but RAM is so simple I think I'll just embed it directly into SystemView.
     u8 RAM[0x800];
-    u8 VRAM[0x2000];
+    u8 VRAM[0x800];
 };
 
 }

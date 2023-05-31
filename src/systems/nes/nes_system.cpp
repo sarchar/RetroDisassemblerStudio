@@ -1109,18 +1109,22 @@ u8 SystemView::ReadPPU(u16 address)
     if(address < 0x2000) {
         // read cartridge CHR-ROM/RAM
         return cartridge_view->ReadPPU(address);
-    } else {
+    } else if(address < 0x4000) {
+        // see the note below in WritePPU on why the funky math is performed on horizontal mirroring
         switch(cartridge_view->GetNametableMirroring()) {
         case MIRRORING_VERTICAL:
             address &= ~0x800;
             break;
 
         case MIRRORING_HORIZONTAL: 
-            address &= ~0x400;
+            address = ((address & 0x800) >> 1) | (address & ~0xC00);
             break;
         }
 
-        return VRAM[address & 0x1FFF];
+        return VRAM[address & 0x7FF];
+    } else {
+        assert(false);
+        return 0;
     }
 }
 
@@ -1130,18 +1134,43 @@ void SystemView::WritePPU(u16 address, u8 value)
     if(address < 0x2000) {
         // write to cartridge CHR-RAM
         cartridge_view->WritePPU(address, value);
-    } else {
-        VRAM[address & 0x1FFF] = value;
-
-        // basic mirroring for now
+    } else if(address < 0x4000) {
+        // we have space for 2KiB of nametables - two full nametables,
+        // and our linear local space is 0-0x7FF bytes for that.  It's trivial
+        // to map the first name table at 0x2000-0x23FF to our first
+        // name table 0-0x3FF but depending on mirroring, we need to map
+        // 0x2400, 0x2800, 0x2C00 to the second (or first!) nametable range.
+        // With vertical mirroring, we have two nametables arranged horizontally, with
+        // the two bottom tables as "mirrors" of the top two. Mapping the top two
+        // 0x2000-0x27FF is trivial -- just take out bit 0x800.
+        //
+        // [A][B]
+        // [A][B]
+        //
+        // but with horizontal mapping, we have two vertical nametables with the two right
+        // nametables being mirrors of the left ones:
+        //
+        // [A][A]
+        // [B][B]
+        //
+        // and we need to map 0x2000/0x2800 and 0x2400/0x2C00 to the same memory, while 0x2000 and 0x2800
+        // need to be converted to the local space of 0x7FF.  We can accomplish that by applying horizontal mirroring
+        // (ignore bit 0x400) and then move bit 0x800 into 0x400 for our local address range
         switch(cartridge_view->GetNametableMirroring()) {
         case MIRRORING_VERTICAL:
-            VRAM[(address ^ 0x800) & 0x1FFF] = value;
+            // take out bit 0x800 and write like normal
+            address &= ~0x800;
             break;
         case MIRRORING_HORIZONTAL: 
-            VRAM[(address ^ 0x400) & 0x1FFF] = value;
+            // and move bit 0x800 right one, overwriting whatever was in bit 0x400 and clearing old bit 0x800
+            address = ((address & 0x800) >> 1) | (address & ~0xC00);
             break;
         }
+
+        // apply mirroring throughout 0x3000..0x3FFF as well
+        VRAM[address & 0x7FF] = value;
+    } else {
+        assert(false);
     }
 }
 

@@ -77,16 +77,16 @@ SystemInstance::SystemInstance()
 
     if(current_system = GetSystem()) {
         auto& mv = memory_view;
-        ppu = make_shared<PPU>([this]() {
+
+        ppu = make_shared<PPU>(
+            [this]() {
                 cpu->Nmi();
             },
-
-            // capturing the reference means the pointer can change after this initialization
-            [this, &mv](u16 address)->u8 {
-                return memory_view->ReadPPU(address);
+            [this, &mv](u16 address)->u8 { // capturing the reference means the pointer can change after this initialization
+                return memory_view->ReadPPU(address & 0x3FFF);
             },
             [this, &mv](u16 address, u8 value)->void {
-                memory_view->WritePPU(address, value);
+                memory_view->WritePPU(address & 0x3FFF, value);
             }
         );
 
