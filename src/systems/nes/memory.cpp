@@ -10,10 +10,10 @@
 #include "magic_enum.hpp"
 #include "util.h"
 
-#include "systems/nes/nes_disasm.h"
-#include "systems/nes/nes_expressions.h"
-#include "systems/nes/nes_label.h"
-#include "systems/nes/nes_system.h"
+#include "systems/nes/disasm.h"
+#include "systems/nes/expressions.h"
+#include "systems/nes/label.h"
+#include "systems/nes/system.h"
 
 #include "windows/nes/listingitems.h"
 #include "windows/nes/project.h"

@@ -9,13 +9,13 @@
 #include "magic_enum.hpp"
 #include "util.h"
 
-#include "systems/nes/nes_cpu.h"
+#include "systems/nes/cpu.h"
 
 using namespace std;
 
 namespace Systems::NES {
 
-#include "systems/nes/nes_cpu_tables.h"
+#include "systems/nes/cpu_tables.h"
 
 CPU::CPU(read_func_t const& read_func, write_func_t const& write_func)
     : Read(read_func), Write(write_func)

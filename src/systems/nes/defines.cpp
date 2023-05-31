@@ -1,7 +1,7 @@
 #include <memory>
 
-#include "systems/nes/nes_defines.h"
-#include "systems/nes/nes_expressions.h"
+#include "systems/nes/defines.h"
+#include "systems/nes/expressions.h"
 
 using namespace std;
 

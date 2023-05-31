@@ -6,8 +6,8 @@
 
 #include "systems/system.h"
 
-#include "systems/nes/nes_defs.h"
-#include "systems/nes/nes_memory.h"
+#include "systems/nes/defs.h"
+#include "systems/nes/memory.h"
 
 class BaseExpressionNode;
 

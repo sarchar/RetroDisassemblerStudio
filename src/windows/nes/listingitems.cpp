@@ -16,11 +16,11 @@
 #include "windows/nes/listingitems.h"
 #include "windows/nes/references.h"
 
-#include "systems/nes/nes_disasm.h"
-#include "systems/nes/nes_expressions.h"
-#include "systems/nes/nes_label.h"
-#include "systems/nes/nes_memory.h"
-#include "systems/nes/nes_system.h"
+#include "systems/nes/disasm.h"
+#include "systems/nes/expressions.h"
+#include "systems/nes/label.h"
+#include "systems/nes/memory.h"
+#include "systems/nes/system.h"
 
 using namespace std;
 

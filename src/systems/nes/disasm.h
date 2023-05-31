@@ -4,7 +4,7 @@
 #include <string>
 
 #include "util.h"
-#include "systems/nes/nes_defs.h"
+#include "systems/nes/defs.h"
 
 namespace Systems::NES {
 

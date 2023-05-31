@@ -8,7 +8,7 @@
 
 #include "main_application.h"
 #include "systems/expressions.h"         // to register components
-#include "systems/nes/nes_expressions.h" // to register components
+#include "systems/nes/expressions.h" // to register components
 
 #include "windows/baseproject.h"
 #include "windows/nes/project.h"

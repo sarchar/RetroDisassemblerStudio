@@ -5,7 +5,7 @@
 #include <stack>
 
 #include "signals.h"
-#include "systems/nes/nes_memory.h" // TODO would be nice to switch current_selection to a shared_ptr so to eliminate this include
+#include "systems/nes/memory.h" // TODO would be nice to switch current_selection to a shared_ptr so to eliminate this include
 #include "windows/basewindow.h"
 
 namespace Systems::NES {

@@ -3,8 +3,8 @@
 #include <deque>
 #include <variant>
 
-#include "systems/nes/nes_defs.h"
-#include "systems/nes/nes_memory.h"
+#include "systems/nes/defs.h"
+#include "systems/nes/memory.h"
 
 namespace Systems::NES {
     class Define;

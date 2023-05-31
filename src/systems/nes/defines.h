@@ -7,7 +7,7 @@
 
 #include "signals.h"
 
-#include "systems/nes/nes_memory.h"
+#include "systems/nes/memory.h"
 
 namespace Systems::NES {
 

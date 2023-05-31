@@ -5,7 +5,7 @@
 #include <memory>
 #include <sstream>
 
-#include "systems/nes/nes_cartridge.h"
+#include "systems/nes/cartridge.h"
 
 using namespace std;
 

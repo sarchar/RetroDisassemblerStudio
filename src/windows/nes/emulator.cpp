@@ -12,11 +12,11 @@
 
 #include "util.h"
 
-#include "systems/nes/nes_apu_io.h"
-#include "systems/nes/nes_cpu.h"
-#include "systems/nes/nes_disasm.h"
-#include "systems/nes/nes_ppu.h"
-#include "systems/nes/nes_system.h"
+#include "systems/nes/apu_io.h"
+#include "systems/nes/cpu.h"
+#include "systems/nes/disasm.h"
+#include "systems/nes/ppu.h"
+#include "systems/nes/system.h"
 
 #include "windows/nes/emulator.h"
 #include "windows/nes/defines.h"

@@ -1,4 +1,4 @@
-#include "systems/nes/nes_label.h"
+#include "systems/nes/label.h"
 
 using namespace std;
 

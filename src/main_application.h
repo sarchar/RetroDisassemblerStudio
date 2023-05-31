@@ -9,8 +9,10 @@
 
 #include "application.h"
 #include "signals.h"
-#include "systems/nes/nes_memory.h"
-#include "windows/basewindow.h"
+
+namespace Windows {
+    class BaseWindow;
+}
 
 class BaseProject;
 

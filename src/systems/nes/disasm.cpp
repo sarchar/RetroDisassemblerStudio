@@ -3,8 +3,8 @@
 #include <sstream>
 #include <string>
 
-#include "systems/nes/nes_defs.h"
-#include "systems/nes/nes_disasm.h"
+#include "systems/nes/defs.h"
+#include "systems/nes/disasm.h"
 
 using namespace std;
 

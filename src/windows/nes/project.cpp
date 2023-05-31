@@ -9,8 +9,8 @@
 
 #include "util.h"
 
-#include "systems/nes/nes_cartridge.h"
-#include "systems/nes/nes_system.h"
+#include "systems/nes/cartridge.h"
+#include "systems/nes/system.h"
 
 #include "windows/nes/defines.h"
 #include "windows/nes/emulator.h"

@@ -9,7 +9,7 @@
 #include "signals.h"
 #include "windows/basewindow.h"
 
-#include "systems/nes/nes_memory.h"
+#include "systems/nes/memory.h"
 
 namespace Systems::NES {
 

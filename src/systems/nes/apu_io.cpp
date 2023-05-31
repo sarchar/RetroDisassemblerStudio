@@ -2,8 +2,8 @@
 
 #include "util.h"
 
-#include "systems/nes/nes_apu_io.h"
-#include "systems/nes/nes_system.h"
+#include "systems/nes/apu_io.h"
+#include "systems/nes/system.h"
 
 using namespace std;
 

@@ -3,8 +3,8 @@
 #include <memory>
 
 #include "systems/expressions.h"
-#include "systems/nes/nes_defines.h"
-#include "systems/nes/nes_memory.h"
+#include "systems/nes/defines.h"
+#include "systems/nes/memory.h"
 
 namespace Systems::NES {
 
