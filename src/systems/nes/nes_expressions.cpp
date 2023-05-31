@@ -1,7 +1,6 @@
 #include <iostream>
 #include <memory>
 
-#include "main.h"
 #include "systems/expressions.h"
 #include "systems/nes/nes_expressions.h"
 #include "systems/nes/nes_label.h"

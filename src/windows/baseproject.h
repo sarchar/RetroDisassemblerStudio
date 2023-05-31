@@ -5,7 +5,6 @@
 #include <memory>
 #include <string>
 
-#include "main.h"
 #include "signals.h"
 #include "util.h"
 

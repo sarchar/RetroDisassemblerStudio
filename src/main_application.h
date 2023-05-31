@@ -14,22 +14,22 @@
 
 class BaseProject;
 
-#define GetApplication() MyApp::Instance()
+#define GetApplication() MainApplication::Instance()
 
-class MyApp : public Application {
+class MainApplication : public Application {
 public:
-    static MyApp* Instance(int argc = 0, char** argv = nullptr) {
-        static MyApp* instance = nullptr;
+    static MainApplication* Instance(int argc = 0, char** argv = nullptr) {
+        static MainApplication* instance = nullptr;
         if(instance == nullptr) {
-            instance = new MyApp(argc, argv);
+            instance = new MainApplication(argc, argv);
         }
         return instance;
     }
 
     // singleton helper
-    MyApp(MyApp const& other) = delete;
-    void operator=(MyApp const&) = delete;
-    virtual ~MyApp();
+    MainApplication(MainApplication const& other) = delete;
+    void operator=(MainApplication const&) = delete;
+    virtual ~MainApplication();
 
     // Windows
     std::shared_ptr<Windows::BaseWindow> CreateMainWindow() override;
@@ -39,7 +39,7 @@ public:
     // Signals
 
 protected:
-    MyApp(int argc, char* argv[]);
+    MainApplication(int argc, char* argv[]);
 
     bool Update(double deltaTime) override;
     bool OnPlatformReady() override;

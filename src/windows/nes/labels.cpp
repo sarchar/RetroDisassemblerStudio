@@ -6,7 +6,6 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include "main.h"
 #include "windows/nes/emulator.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/labels.h"

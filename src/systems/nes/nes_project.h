@@ -3,6 +3,10 @@
 #include <string>
 
 #include "windows/baseproject.h"
+#include "windows/main.h"
+
+#define GetCurrentProject() dynamic_pointer_cast<Systems::NES::Project>(GetMainWindow()->GetCurrentProject())
+#define GetSystem()         dynamic_pointer_cast<Systems::NES::System>(GetCurrentProject()->GetSystem<Systems::NES::System>())
 
 namespace Systems::NES {
 
@@ -72,10 +76,4 @@ private:
 
 }
 
-inline std::shared_ptr<Systems::NES::Project> GetCurrentProject() {
-    return dynamic_pointer_cast<Systems::NES::Project>(GetMainWindow()->GetCurrentProject());
-}
 
-inline std::shared_ptr<Systems::NES::System> GetSystem() {
-    return dynamic_pointer_cast<Systems::NES::System>(GetCurrentProject()->GetSystem<Systems::NES::System>());
-}

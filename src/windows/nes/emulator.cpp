@@ -10,7 +10,6 @@
 #include "imgui_stdlib.h"
 #include "magic_enum.hpp"
 
-#include "main.h"
 #include "util.h"
 
 #include "systems/nes/nes_apu_io.h"

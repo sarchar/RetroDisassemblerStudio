@@ -2,7 +2,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include "main.h"
+#include "windows/nes/emulator.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/regions.h"
 #include "systems/nes/nes_memory.h"
@@ -77,7 +77,7 @@ void MemoryRegions::Render()
                 }
 
                 if(ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
-                    if(auto wnd = GetMainWindow()->FindMostRecentChildWindow<Listing>()) {
+                    if(auto wnd = GetMySystemInstance()->GetMostRecentListingWindow()) {
                         // build an address from the bank info
                         GlobalMemoryLocation loc;
                         memory_region->GetGlobalMemoryLocation(0, &loc);

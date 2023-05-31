@@ -5,7 +5,6 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include "main.h"
 #include "windows/nes/defines.h"
 #include "windows/nes/references.h"
 #include "systems/nes/nes_defines.h"

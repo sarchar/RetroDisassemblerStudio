@@ -6,8 +6,6 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include "main.h"
-
 #include "systems/nes/nes_defines.h"
 #include "systems/nes/nes_label.h"
 #include "systems/nes/nes_memory.h"

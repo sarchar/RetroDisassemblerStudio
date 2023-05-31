@@ -41,10 +41,9 @@ add_executable(${PROJECT_NAME}
     libs/ImGuiFileDialog/ImGuiFileDialog.cpp
     
     src/application.cpp
-    src/systems/expressions.cpp
-    src/main.cpp
-    src/system_clock.cpp
+    src/main_application.cpp
     
+    src/systems/expressions.cpp
     src/systems/system.cpp
     src/systems/nes/nes_apu_io.cpp
     src/systems/nes/nes_cartridge.cpp

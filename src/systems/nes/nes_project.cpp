@@ -7,13 +7,13 @@
 #include "imgui.h"
 #include "imgui_stdlib.h"
 
-#include "main.h"
+#include "util.h"
+
 #include "systems/nes/nes_cartridge.h"
 #include "systems/nes/nes_defines.h"
 #include "systems/nes/nes_label.h"
 #include "systems/nes/nes_project.h"
 #include "systems/nes/nes_system.h"
-#include "util.h"
 #include "windows/nes/defines.h"
 #include "windows/nes/emulator.h"
 #include "windows/nes/labels.h"

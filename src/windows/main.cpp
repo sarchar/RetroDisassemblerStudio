@@ -10,12 +10,8 @@
 #include "ImGuiFileDialog.h"
 #include "dirent/dirent.h"
 
-#include "../main.h"
-//#include "systems/nes/nes_expressions.h"
-//#include "systems/nes/nes_label.h"
-//#include "systems/nes/nes_memory.h"
-//#include "systems/nes/nes_project.h"
-//#include "systems/nes/nes_system.h"
+#include "../main_application.h"
+
 #include "windows/baseproject.h"
 #include "windows/main.h"
 #include "windows/rom_loader.h"
@@ -24,8 +20,6 @@
 #include "windows/nes/labels.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/regions.h"
-
-//!#include "systems/expressions.h" // TODO temp
 
 using namespace std;
 
@@ -330,7 +324,7 @@ void MainWindow::OpenROMInfosPane()
         bool valid;
     } rom_info = { 0, };
 
-    ImGui::PushFont(static_cast<ImFont*>(MyApp::Instance()->GetBoldFont()));
+    ImGui::PushFont(static_cast<ImFont*>(GetApplication()->GetBoldFont()));
     ImGui::Text("ROM info");
     ImGui::PopFont();
 

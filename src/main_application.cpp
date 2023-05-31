@@ -1,45 +1,45 @@
 #include "config.h"
 
 #include <filesystem>
-#include <iostream>
-#include <locale>
-#include <sstream>
-#include <vector>
-
-#include <GL/gl3w.h>
-#include <GLFW/glfw3.h>
+//#include <iostream>
+//#include <locale>
+//#include <sstream>
+//#include <vector>
+//
+//#include <GL/gl3w.h>
+//#include <GLFW/glfw3.h>
 
 #include "cfgpath.h"
 
 #include "imgui.h"
-#include "imgui_internal.h"
-#include "imgui_stdlib.h"
+//#include "imgui_internal.h"
+//#include "imgui_stdlib.h"
+//
+//#define USE_IMGUI_TABLES
+//#include "ImGuiFileDialog.h"
+//#include "dirent/dirent.h"
 
-#define USE_IMGUI_TABLES
-#include "ImGuiFileDialog.h"
-#include "dirent/dirent.h"
-
-#include "main.h"
+#include "main_application.h"
+#include "systems/expressions.h"
 #include "systems/nes/nes_expressions.h"
-#include "systems/nes/nes_label.h"
-#include "systems/nes/nes_memory.h"
+//#include "systems/nes/nes_label.h"
+//#include "systems/nes/nes_memory.h"
 #include "systems/nes/nes_project.h"
-#include "systems/nes/nes_system.h"
+//#include "systems/nes/nes_system.h"
 #include "windows/baseproject.h"
-#include "windows/rom_loader.h"
-#include "windows/nes/defines.h"
-#include "windows/nes/emulator.h"
-#include "windows/nes/labels.h"
-#include "windows/nes/listing.h"
-#include "windows/nes/regions.h"
-
-#include "systems/expressions.h" // TODO temp
+//#include "windows/rom_loader.h"
+//#include "windows/nes/defines.h"
+//#include "windows/nes/emulator.h"
+//#include "windows/nes/labels.h"
+//#include "windows/nes/listing.h"
+//#include "windows/nes/regions.h"
+//
 
 #undef DISABLE_IMGUI_SAVE_LOAD_LAYOUT
 
 using namespace std;
 
-MyApp::MyApp(int, char*[])
+MainApplication::MainApplication(int, char*[])
     : Application("Retro Disassembler Studio", 1800, 1200),
       request_exit(false)
 {
@@ -56,11 +56,11 @@ MyApp::MyApp(int, char*[])
 #   undef REGISTER_WINDOW_TYPE
 }
 
-MyApp::~MyApp()
+MainApplication::~MainApplication()
 {
 }
 
-std::shared_ptr<Windows::BaseWindow> MyApp::CreateMainWindow()
+std::shared_ptr<Windows::BaseWindow> MainApplication::CreateMainWindow()
 {
     auto main_window = Windows::MainWindow::CreateWindow();
 
@@ -71,7 +71,7 @@ std::shared_ptr<Windows::BaseWindow> MyApp::CreateMainWindow()
     return main_window;
 }
 
-bool MyApp::OnPlatformReady()
+bool MainApplication::OnPlatformReady()
 {
     // initialize the glClear color for the platform
     clear_color[0] = 0.9375;
@@ -92,7 +92,7 @@ bool MyApp::OnPlatformReady()
     io.IniFilename = layout_file.c_str();
 #endif
 
-    cout << "[MyApp] ImGui layout file is " << io.IniFilename << endl;
+    cout << "[MainApplication] ImGui layout file is " << io.IniFilename << endl;
 
     // Connect handlers for ImGui to store layout data
 //!    SetupINIHandlers();
@@ -103,13 +103,13 @@ bool MyApp::OnPlatformReady()
 
     main_font = io.Fonts->AddFontFromFileTTF("ext/iosevka-regular.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
     if(main_font == nullptr) {
-        cout << "[MyApp] Warning: unable to load iosevka-regular.ttf. Using default font." << endl;
+        cout << "[MainApplication] Warning: unable to load iosevka-regular.ttf. Using default font." << endl;
         main_font = default_font;
     }
 
     main_font_bold = io.Fonts->AddFontFromFileTTF("ext/iosevka-heavy.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
     if(main_font_bold == nullptr) { 
-        cout << "[MyApp] Warning: unable to load iosevka-bold.ttf. Using default font." << endl;
+        cout << "[MainApplication] Warning: unable to load iosevka-bold.ttf. Using default font." << endl;
         main_font_bold = default_font;
     }
 
@@ -141,7 +141,7 @@ bool MyApp::OnPlatformReady()
     return true;
 }
 
-void MyApp::SetupINIHandlers()
+void MainApplication::SetupINIHandlers()
 {
 //!    ImGuiSettingsHandler ini_handler;
 //!
@@ -156,7 +156,7 @@ void MyApp::SetupINIHandlers()
 //!    ini_handler.ReadOpenFn = [](ImGuiContext*, ImGuiSettingsHandler*, char const* name) -> void* {
 //!        // name contains the value in the second set of []. we don't use it, we just assume
 //!        // the order is correct, and if it isn't, it really isn't a big deal
-//!        WindowFromINI* wfini = MyApp::Instance()->NewINIWindow();
+//!        WindowFromINI* wfini = MainApplication::Instance()->NewINIWindow();
 //!        return (void*)wfini;
 //!    };
 //!
@@ -175,14 +175,14 @@ void MyApp::SetupINIHandlers()
 //!
 //!    ini_handler.ApplyAllFn = [](ImGuiContext*, ImGuiSettingsHandler*) {
 //!        // after the entire ini file is loaded, this function is called and we create the windows
-//!        MyApp::Instance()->CreateINIWindows();
+//!        MainApplication::Instance()->CreateINIWindows();
 //!    };
 //!
 //!    ini_handler.WriteAllFn = [](ImGuiContext*, ImGuiSettingsHandler* handler, ImGuiTextBuffer* buf) {
 //!        // this function is called to output data to the ini file
 //!
 //!        // loop over all managed windows and add them to the ini file under their own heading
-//!        MyApp* instance = MyApp::Instance();
+//!        MainApplication* instance = MainApplication::Instance();
 //!        int window_index = 0;
 //!        for(auto &window : instance->managed_windows) {
 //!            buf->appendf("[%s][%d]\n", handler->TypeName, window_index);
@@ -198,21 +198,21 @@ void MyApp::SetupINIHandlers()
 //!    g.SettingsHandlers.push_back(ini_handler);
 }
 
-MyApp::WindowFromINI* MyApp::NewINIWindow()
+MainApplication::WindowFromINI* MainApplication::NewINIWindow()
 {
     shared_ptr<WindowFromINI> wfini = make_shared<WindowFromINI>();
     ini_windows.push_back(wfini);
     return wfini.get(); // considered unsafe, but I know it's not stored for use later
 }
 
-void MyApp::CreateINIWindows()
+void MainApplication::CreateINIWindows()
 {
 #if 0 // TODO temporarily disabling the creationg of the windows from the INI file.
       // later, we will want to recreate the last open project. or not? let the user pick.
     // loop over all the INI windows and create them
     for(auto& wfini : ini_windows) {
         if(!create_window_functions.contains(wfini->window_class)) {
-            cout << "[MyApp] warning: class type " << wfini->window_class << " from INI doesn't exist" << endl;
+            cout << "[MainApplication] warning: class type " << wfini->window_class << " from INI doesn't exist" << endl;
             continue;
         }
 
@@ -232,12 +232,12 @@ void MyApp::CreateINIWindows()
     ini_windows.clear();
 }
 
-bool MyApp::Update(double deltaTime)
+bool MainApplication::Update(double deltaTime)
 {
     return !request_exit;
 }
 
 int main(int argc, char* argv[])
 {
-    return MyApp::Instance(argc, argv)->Run();
+    return MainApplication::Instance(argc, argv)->Run();
 }

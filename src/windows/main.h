@@ -4,7 +4,7 @@
 #include <stack>
 #include <thread>
 
-#include "../main.h"
+#include "main_application.h"
 #include "signals.h"
 #include "windows/basewindow.h"
 

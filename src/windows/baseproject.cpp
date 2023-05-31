@@ -1,7 +1,6 @@
 #include <iostream>
 #include <memory>
 
-#include "../main.h"
 #include "windows/baseproject.h"
 #include "windows/main.h"
 
@@ -43,7 +42,7 @@ BaseProject::BaseProject(std::string const& title)
     create_new_project_progress = make_shared<create_new_project_progress_t>();
 
     // connect signals
-    auto main_window = MyApp::Instance()->GetMainWindow();
+    auto main_window = GetMainWindow();
     window_added_connection = 
         main_window->child_window_added->connect(std::bind(&BaseProject::_WindowAdded, this, placeholders::_1));
 

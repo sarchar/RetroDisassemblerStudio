@@ -7,7 +7,6 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include "main.h"
 #include "magic_enum.hpp"
 
 #include "windows/nes/listingitems.h"
