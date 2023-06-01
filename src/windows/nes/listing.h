@@ -31,6 +31,7 @@ public:
 
     void GoToAddress(GlobalMemoryLocation const&, bool save = true);
     void GoToAddress(u32);
+    void GoToCurrentInstruction();
     void Refocus(); // re focus on the current selection
     void Follow();
 
@@ -66,6 +67,8 @@ private:
     bool   adjust_columns = false;
 
     int    jump_to_selection    = 0;
+    bool   jump_to_pc           = false;
+
     char   new_label_buffer[64] = "";
 
     bool   editing_listing_item = false;

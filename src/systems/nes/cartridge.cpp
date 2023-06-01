@@ -327,19 +327,16 @@ MIRRORING CartridgeView::GetNametableMirroring()
     }
 }
 
-u8 CartridgeView::Read(u16 address)
+int CartridgeView::GetRomBank(u16 address)
 {
-    if(address < 0x8000) {
-        if(cartridge->header.has_sram) return sram[(address - 0x6000) & 0x1FFF];
-        return 0;
-    } 
+    assert(address & 0x8000);
 
     switch(cartridge->header.mapper) {
     case 0:
         if(!(address & 0x4000) || (cartridge->header.num_prg_rom_banks == 1)) {
-            return cartridge->ReadProgramRomRelative(0, address & 0x3FFF);
+            return 0;
         } else {
-            return cartridge->ReadProgramRomRelative((address & 0x4000) >> 14, address & 0x3FFF);
+            return (address & 0x4000) >> 14;
         }
         break;
 
@@ -352,19 +349,19 @@ u8 CartridgeView::Read(u16 address)
 
         case 2: // $8000 fixed, $C000 swappable
             if(address & 0x4000) {
-                return cartridge->ReadProgramRomRelative(mmc1.prg_rom_bank, address & 0x3FFF);
+                return mmc1.prg_rom_bank;
             } else {
                 // $8000 fixed at bank 0 or 16 for 512KiB carts
-                return cartridge->ReadProgramRomRelative(mmc1.prg_rom_bank & 0x10, address & 0x3FFF);
+                return mmc1.prg_rom_bank & 0x10;
             }
             break;
 
         case 3: // $8000 swappable, $C000 fixed
             if(address & 0x4000) {
                 // $C000 fixed at bank 15 or 31 for 512KiB carts
-                return cartridge->ReadProgramRomRelative(reset_vector_bank | (mmc1.prg_rom_bank & 0x10), address & 0x3FFF);
+                return reset_vector_bank | (mmc1.prg_rom_bank & 0x10);
             } else {
-                return cartridge->ReadProgramRomRelative(mmc1.prg_rom_bank, address & 0x3FFF);
+                return mmc1.prg_rom_bank;
             }
             break;
         }
@@ -372,8 +369,8 @@ u8 CartridgeView::Read(u16 address)
 
     case 2:
         // $8000 swappable, $C000 fixed to the last bank
-        if(address & 0x4000) return cartridge->ReadProgramRomRelative(cartridge->header.num_prg_rom_banks - 1, address & 0x3FFF);
-        else                 return cartridge->ReadProgramRomRelative(mmc2.prg_rom_bank                      , address & 0x3FFF);
+        if(address & 0x4000) return cartridge->header.num_prg_rom_banks - 1;
+        else                 return mmc2.prg_rom_bank;
 
     default:
         // don't know how to read this mapper yet
@@ -382,6 +379,16 @@ u8 CartridgeView::Read(u16 address)
     }
 
     return 0;
+}
+
+u8 CartridgeView::Read(u16 address)
+{
+    if(address < 0x8000) {
+        if(cartridge->header.has_sram) return sram[(address - 0x6000) & 0x1FFF];
+        return 0;
+    } 
+
+    return cartridge->ReadProgramRomRelative(GetRomBank(address), address & 0x3FFF);
 }
 
 void CartridgeView::Write(u16 address, u8 value)

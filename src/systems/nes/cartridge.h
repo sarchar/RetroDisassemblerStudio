@@ -66,6 +66,7 @@ public:
     ~CartridgeView();
 
     MIRRORING GetNametableMirroring();
+    int       GetRomBank(u16);
 
     u8 Read(u16) override;
     void Write(u16, u8) override;

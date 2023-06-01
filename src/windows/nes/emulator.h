@@ -31,11 +31,12 @@ class Listing;
 // Systems::NES::System is generic and doesn't contain instance specific state
 class SystemInstance : public BaseWindow {
 public:
-    using APU_IO     = Systems::NES::APU_IO;
-    using CPU        = Systems::NES::CPU;
-    using MemoryView = Systems::NES::MemoryView;
-    using PPU        = Systems::NES::PPU;
-    using System     = Systems::NES::System;
+    using APU_IO               = Systems::NES::APU_IO;
+    using CPU                  = Systems::NES::CPU;
+    using GlobalMemoryLocation = Systems::NES::GlobalMemoryLocation;
+    using MemoryView           = Systems::NES::MemoryView;
+    using PPU                  = Systems::NES::PPU;
+    using System               = Systems::NES::System;
 
     enum class State {
         INIT,
@@ -67,6 +68,7 @@ public:
     std::shared_ptr<PPU>        const& GetPPU()        { return ppu; }
     u32                         const* GetFramebuffer() const { return framebuffer; }
     std::shared_ptr<MemoryView> const& GetMemoryView() { return memory_view; }
+    void GetCurrentInstructionAddress(GlobalMemoryLocation*);
 
     // signals
 
@@ -107,6 +109,7 @@ private:
 
     std::shared_ptr<MemoryView> memory_view;
 
+    bool        step_instruction_done = false;
     std::string run_to_address_str = "";
     int         run_to_address = -1;
     int         cpu_shift = 0;

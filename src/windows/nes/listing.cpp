@@ -23,7 +23,9 @@
 #include "windows/nes/listingitems.h"
 #include "windows/nes/project.h"
 
-#define JUMP_TO_SELECTION_START_VALUE 3
+// Was 3, which was working nicely but increased by 1 because I added an extra frame to check
+// if the selection is visible
+#define JUMP_TO_SELECTION_START_VALUE 4
 
 using namespace std;
 
@@ -107,6 +109,19 @@ void Listing::Follow()
             GoToAddress(memory_object->hval);
         }
     }
+}
+
+void Listing::GoToCurrentInstruction()
+{
+    GetMySystemInstance()->GetCurrentInstructionAddress(&current_selection);
+
+    if(auto memory_object = current_system->GetMemoryObject(current_selection)) {
+        current_selection_listing_item = memory_object->primary_listing_item_index;
+    }
+
+    has_end_selection = false;
+
+    Refocus();
 }
 
 void Listing::Refocus()
@@ -391,8 +406,11 @@ void Listing::Render()
         // Need the program rom bank that is currently in the listing
         auto memory_region = current_system->GetMemoryRegion(current_selection);
 
-        ImGuiTableFlags outer_table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoBordersInBody;
+        // Grab the current CPU instruction address
+        GlobalMemoryLocation pc_address;
+        GetMySystemInstance()->GetCurrentInstructionAddress(&pc_address);
 
+        ImGuiTableFlags outer_table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoBordersInBody;
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
 
@@ -407,9 +425,11 @@ void Listing::Render()
             clipper.Begin(total_listing_items);
             
             // Force the clipper to include a range that also includes the row we want to jump to
-            // we have a buffer of 100 lines so ImGui can calculate row heights
+            // we have a buffer of 25 lines before and after so ImGui can calculate row heights
+            // but don't do it on the first frame so we get a chance to see if the object is already
+            // visible
             u32 listing_item_index = memory_region->GetListingIndexByAddress(current_selection) + current_selection_listing_item;
-            if(jump_to_selection > 0) {
+            if(jump_to_selection > 0 && jump_to_selection != JUMP_TO_SELECTION_START_VALUE) {
                 clipper.ForceDisplayRangeByIndices(listing_item_index - 25, listing_item_index + 25);
             }
 
@@ -422,9 +442,9 @@ void Listing::Render()
             }
 
             auto system_instance = GetMySystemInstance();
+            bool did_scroll = false;
             while(clipper.Step()) {
                 auto listing_item_iterator = memory_region->GetListingItemIterator(clipper.DisplayStart);
-                bool did_scroll = false;
 
                 //cout << "DisplayStart = " << hex << clipper.DisplayStart << " - " << clipper.DisplayEnd << endl;
                 for(int row = clipper.DisplayStart; row < clipper.DisplayEnd && listing_item_iterator; ++row, ++*listing_item_iterator) {
@@ -441,15 +461,27 @@ void Listing::Render()
                     bool selected = has_end_selection ? (row >= listing_item_index && row <= end_listing_item_index) : (listing_item_index == row);
                     bool hovered  = (hovered_listing_item_index == row) && !was_editing; // Don't show hovered items when editing something
 
+                    // only Primary items are highlightable for the debugger
+                    bool is_primary = (bool)dynamic_pointer_cast<ListingItemPrimary>(listing_item);
+                    bool at_pc    = (current_address == pc_address) && is_primary;
+
                     // Begin a new row and next column
                     ImGui::TableNextRow();
 
                     // set the background color
-                    ImU32 const row_color = ImGui::GetColorU32(hovered ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
-                    if(selected || hovered) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, row_color);
+                    auto row_color_type = ImGuiCol_Header;
+                    if(hovered) row_color_type = ImGuiCol_HeaderHovered;
+
+                    ImU32 row_color;
+                    if(at_pc && is_primary) row_color = IM_COL32(232, 217, 132, 200);
+                    else row_color = ImGui::GetColorU32(row_color_type);
+
+                    if(selected || hovered || at_pc) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, row_color);
 
                     ImGui::TableNextColumn(); // start the content of the listing item
                     listing_item->Render(system_instance, current_system, current_address, adjust_columns, focused, selected, hovered, changes); // render the content
+                    bool item_visible = ImGui::IsItemVisible();
+                    bool item_hovered = ImGui::IsItemHovered();
 
                     // if the item has determined to be editing something, take note
                     if(listing_item->IsEditing()) {
@@ -460,7 +492,7 @@ void Listing::Render()
                     }
 
                     // update the currently hovered and selected row
-                    if(ImGui::IsItemHovered()) {
+                    if(item_hovered) {
                         hovered_listing_item_index = row;
 
                         // if the mouse was clicked on this row, change the selection as well
@@ -488,13 +520,22 @@ void Listing::Render()
                     // Only after the row has been rendered and it was the last element in the table,
                     // we can use ScrollToItem() to get the item focused in the middle of the view.
                     if(jump_to_selection > 0 && current_address.address == current_selection.address && !did_scroll) {
-                        ImGui::ScrollToItem(ImGuiScrollFlags_AlwaysCenterY);
+                        // short circuit the jump if the item is currently visible
+                        if(item_visible) {
+                            jump_to_selection = 0;
+                        } else {
+                            ImGui::ScrollToItem(ImGuiScrollFlags_KeepVisibleCenterY);
+                            did_scroll = true;
+                        }
+
                         jump_to_selection -= 1;
-                        did_scroll = true;
                     }
                 }
             }
             ImGui::EndTable();
+
+            // when the target is offscreen, the first frame of jump_to_selection won't scroll
+            if(jump_to_selection == JUMP_TO_SELECTION_START_VALUE && !did_scroll) jump_to_selection -= 1;
         }
 
         ImGui::PopStyleVar(2);

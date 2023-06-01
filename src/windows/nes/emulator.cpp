@@ -194,6 +194,13 @@ void SystemInstance::Update(double deltaTime)
 {
     UpdateTitle();
 
+    if(step_instruction_done) {
+        if(auto listing = dynamic_pointer_cast<Listing>(most_recent_listing_window)) {
+            listing->GoToCurrentInstruction();
+        }
+        step_instruction_done = false;
+    }
+
     // check for global keystrokes that should work in all windows
     bool is_current_instance = (GetSystemInstance().get() == this);
     if(is_current_instance) {
@@ -349,6 +356,22 @@ void SystemInstance::Reset()
     current_state = saved_state;
 }
 
+void SystemInstance::GetCurrentInstructionAddress(GlobalMemoryLocation* out)
+{
+    out->is_chr = false;
+    out->address = cpu->GetOpcodePC();
+    if(!(out->address & 0x8000)) out->address = cpu->GetPC(); // for reset/times when opcode PC isn't set
+
+    auto system_view = dynamic_pointer_cast<Systems::NES::SystemView>(memory_view);
+    assert(system_view);
+
+    out->prg_rom_bank = system_view->GetCartridgeView()->GetRomBank(out->address);
+
+    int offset = 0;
+    current_system->GetMemoryObject(*out, &offset);
+    out->address -= offset;
+}
+
 bool SystemInstance::StepCPU()
 {
     // TODO DMC DMA has priority over OAM DMA
@@ -451,6 +474,9 @@ void SystemInstance::EmulationThread()
 
             // always go to paused after a step instruction
             current_state = State::PAUSED;
+
+            // notify main thread that step instruction is done
+            step_instruction_done = true;
 
             running = false;
             break;
