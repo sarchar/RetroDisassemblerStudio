@@ -157,6 +157,8 @@ void BaseExpressionNodeCreator::RegisterBaseExpressionNodes()
     RegisterBaseExpressionNode<BaseExpressionNodes::FunctionCall>();
     RegisterBaseExpressionNode<BaseExpressionNodes::ExpressionList>();
 
+    RegisterBaseExpressionNode<BaseExpressionNodes::Parens>();
+
     // any node registered after this point is a subclassed node. using an ID
     // offset lets us add new base nodes without corrupting the subnode indexes in save files
 #define SUBCLASS_NODE_ID_OFFSET 128
