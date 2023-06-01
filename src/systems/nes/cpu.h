@@ -27,7 +27,7 @@ public:
     inline void DmaStep() { cycle_count++; }
     inline void Nmi() { state.nmi = 1; }
 
-    inline u64 GetNextUC()     const { auto ptr = state.ops; if(!ptr) return (u64)-1; else return *ptr; }
+    inline s64 GetNextUC()     const { auto ptr = state.ops; if(!ptr) return (u64)-1; else return *ptr; }
     inline u16 GetOpcode()     const { return state.opcode; }
     inline u16 GetOpcodePC()   const { return state.inst_pc; }
     inline int GetIStep()      const { return state.istep; }

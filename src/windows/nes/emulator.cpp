@@ -203,6 +203,12 @@ void SystemInstance::Update(double deltaTime)
             }
         }
 
+        if(ImGui::IsKeyPressed(ImGuiKey_F10)) {
+            if(current_state == State::PAUSED) {
+                current_state = State::STEP_INSTRUCTION;
+            }
+        }
+
         if(ImGui::IsKeyPressed(ImGuiKey_Escape) && ImGui::IsKeyPressed(ImGuiKey_LeftCtrl)) {
             cout << GetTitle() << " got ESCAPE" << endl;
         }
@@ -453,7 +459,13 @@ void SystemInstance::EmulationThread()
             running = true;
             while(!exit_thread && current_state == State::RUNNING) {
                 SingleCycle();
-                if(run_to_address == cpu->GetOpcodePC()) {
+
+                if(cpu->GetNextUC() < 0) {
+                    // perform one more cycle just to print out invalid opcode message
+                    cpu->Step();
+                    current_state = State::CRASHED;
+                    break;
+                } else if(run_to_address == cpu->GetOpcodePC()) {
                     current_state = State::PAUSED;
                     break;
                 }
@@ -462,6 +474,9 @@ void SystemInstance::EmulationThread()
             break;
 
         case State::CRASHED:
+            running = false;
+            break;
+
         default:
             assert(false);
             break;

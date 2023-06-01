@@ -347,20 +347,22 @@ u8 CartridgeView::Read(u16 address)
         switch(mmc1.prg_rom_bank_mode) {
         case 0: // 32KiB banks selected at $8000
         case 1:
-            assert(false);
+            assert(false); // TODO
             return 0;
 
         case 2: // $8000 fixed, $C000 swappable
             if(address & 0x4000) {
                 return cartridge->ReadProgramRomRelative(mmc1.prg_rom_bank, address & 0x3FFF);
             } else {
-                return cartridge->ReadProgramRomRelative(0, address & 0x3FFF);
+                // $8000 fixed at bank 0 or 16 for 512KiB carts
+                return cartridge->ReadProgramRomRelative(mmc1.prg_rom_bank & 0x10, address & 0x3FFF);
             }
             break;
 
         case 3: // $8000 swappable, $C000 fixed
             if(address & 0x4000) {
-                return cartridge->ReadProgramRomRelative(reset_vector_bank, address & 0x3FFF);
+                // $C000 fixed at bank 15 or 31 for 512KiB carts
+                return cartridge->ReadProgramRomRelative(reset_vector_bank | (mmc1.prg_rom_bank & 0x10), address & 0x3FFF);
             } else {
                 return cartridge->ReadProgramRomRelative(mmc1.prg_rom_bank, address & 0x3FFF);
             }
@@ -418,15 +420,28 @@ void CartridgeView::Write(u16 address, u8 value)
                         break;
 
                     case 0xA000: // CHR bank 0
+                        if(mmc1.chr_rom_bank_mode == 0) mmc1.shift_register &= ~0x01; // low bit ignored in 8KiB mode
                         mmc1.chr_rom_bank = mmc1.shift_register;
+
+                        // 512KiB carts with MMC1 can swap 256KiB (16 banks) at a time
+                        if((mmc1.shift_register & 0x10) && cartridge->header.num_prg_rom_banks == 32) { 
+                            mmc1.prg_rom_bank |= 0x10;
+                        } else {
+                            mmc1.prg_rom_bank &= ~0x10;
+                        }
                         break;
 
                     case 0xC000: // CHR bank 1
-                        mmc1.chr_rom_bank_high = mmc1.shift_register;
+                        if(mmc1.chr_rom_bank_mode == 1) { // this write is completely ignored in 8KiB mode
+                            mmc1.chr_rom_bank_high = mmc1.shift_register;
+                        }
                         break;
 
                     case 0xE000: // PRG bank
-                        mmc1.prg_rom_bank = mmc1.shift_register & 0x0F;
+                        if(!(mmc1.prg_rom_bank_mode & 0x02)) { // low bit ignored when swapping 32KiB banks
+                            mmc1.shift_register &= ~0x01;
+                        }
+                        mmc1.prg_rom_bank = (mmc1.prg_rom_bank & 0x10) | (mmc1.shift_register & 0x0F);
                         break;
                     }
                 }
