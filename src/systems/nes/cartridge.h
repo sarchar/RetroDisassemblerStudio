@@ -94,6 +94,10 @@ private:
             u8 chr_rom_bank_mode;
             MIRRORING mirroring;
         } mmc1;
+
+        struct {
+            u8 prg_rom_bank;
+        } mmc2;
     };
 
     u8  sram[0x2000];

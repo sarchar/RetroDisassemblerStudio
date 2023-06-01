@@ -299,6 +299,10 @@ CartridgeView::CartridgeView(std::shared_ptr<Cartridge> const& _cartridge)
         mmc1.chr_rom_bank_mode    = 0;
         mmc1.mirroring = cartridge->header.mirroring;
         break;
+
+    case 2:
+        mmc2.prg_rom_bank = 0;
+        break;
     }
 }
 
@@ -310,6 +314,7 @@ MIRRORING CartridgeView::GetNametableMirroring()
 {
     switch(cartridge->header.mapper) {
     case 0:
+    case 2:
         return cartridge->header.mirroring;
 
     case 1:
@@ -362,6 +367,11 @@ u8 CartridgeView::Read(u16 address)
             break;
         }
         break;
+
+    case 2:
+        // $8000 swappable, $C000 fixed to the last bank
+        if(address & 0x4000) return cartridge->ReadProgramRomRelative(cartridge->header.num_prg_rom_banks - 1, address & 0x3FFF);
+        else                 return cartridge->ReadProgramRomRelative(mmc2.prg_rom_bank                      , address & 0x3FFF);
 
     default:
         // don't know how to read this mapper yet
@@ -423,6 +433,16 @@ void CartridgeView::Write(u16 address, u8 value)
             }
             break;
 
+        case 2: // MMC2
+            // https://www.nesdev.org/wiki/UxROM
+            // technically only the bottom 3 or 4 bits are used to set the rom bank but we can use the whole
+            // value to be compatible with multiple versions of the chip?
+            mmc2.prg_rom_bank = value;
+            if(mmc2.prg_rom_bank >= cartridge->header.num_prg_rom_banks) {
+                mmc2.prg_rom_bank = cartridge->header.num_prg_rom_banks - 1;
+            }
+            break;
+
         default:
             cout << "[CartridgeView::Write] unhandled write $" << hex << uppercase << setw(2) << setfill('0') << (int)value
                  << " to $" << setw(4) << address << endl;
@@ -453,6 +473,7 @@ int CartridgeView::SelectCHRRomBankForAddress(u16& address)
 
     switch(cartridge->header.mapper) {
     case 0:
+    case 2:
         // One 8KiB bank at $0000-$1FFF
         address &= 0x1FFF;
         chr_bank = 0;
