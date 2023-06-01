@@ -668,7 +668,11 @@ shared_ptr<Label> System::EditLabel(GlobalMemoryLocation const& where, string co
     if(auto memory_object = GetMemoryObject(where)) {
         if(nth < memory_object->labels.size()) {
             auto label = memory_object->labels.at(nth);
+            // remove label from the database
+            label_database.erase(label->GetString());
+            // change the label name and add the new reference to the db
             label->SetString(label_str);
+            label_database[label_str] = label;
             return label;
         }
     }
