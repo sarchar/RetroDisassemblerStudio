@@ -1,3 +1,4 @@
+#include <bitset>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -1160,6 +1161,13 @@ Watch::Watch()
     : BaseWindow("Windows::NES::Watch")
 {
     SetTitle("Watch");
+
+    // TODO delete me someday
+    CreateWatch("*$00");
+    CreateWatch("*$01");
+    CreateWatch("*$02");
+    CreateWatch("*$03");
+    CreateWatch("*$04");
 }
 
 Watch::~Watch()
@@ -1173,9 +1181,8 @@ void Watch::CheckInput()
     }
 
     if(ImGui::IsKeyPressed(ImGuiKey_Delete)) {
-        if(selected_row >= 0 && selected_row < sorted_watches.size()) {
-            auto watch_index = sorted_watches[selected_row];
-            watches.erase(watches.begin() + watch_index, watches.begin() + watch_index + 1);
+        if(selected_row >= 0 && selected_row < watches.size()) {
+            watches.erase(watches.begin() + selected_row, watches.begin() + selected_row + 1);
 
             // gotta re-fill the sorted_watches array
             sorted_watches.clear();
@@ -1284,10 +1291,15 @@ void Watch::Render()
                     editing = -1;
                 }
             } else {
-                if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                    editing = row;
-                    edit_string = watch_data->expression_string;
-                    started_editing = true;
+                if(ImGui::IsItemHovered()) {
+                    if(ImGui::IsMouseDoubleClicked(0)) {
+                        editing = row;
+                        edit_string = watch_data->expression_string;
+                        started_editing = true;
+                    } else if(ImGui::IsMouseClicked(1)) {
+                        selected_row = watch_index;
+                        ImGui::OpenPopup("watch_context_menu");
+                    }
                 }
 
                 ImGui::Text("%s", watch_data->expression_string.c_str());
@@ -1299,14 +1311,52 @@ void Watch::Render()
             string errmsg;
             if(watch_data->expression->Evaluate(&result, errmsg)) {
                 watch_data->last_value = result;
+
                 char const* fmt = nullptr;
 
-                if(watch_data->base == 10) {
-                    fmt = "%d";
+                if(watch_data->base == 2) {
+                    stringstream ss;
+                    switch(watch_data->data_type) {
+                    case WatchData::DataType::BYTE:
+                        ss << bitset<8>(result);
+                        break;
+
+                    case WatchData::DataType::WORD:
+                        ss << bitset<16>(result);
+                        break;
+
+                    case WatchData::DataType::LONG:
+                    case WatchData::DataType::FLOAT32:
+                        ss << bitset<32>(result);
+                        break;
+                    }
+
+                    auto str = ss.str();
+                    // drop leading 0s if pad is disabled
+                    if(!watch_data->pad) str.erase(0, str.find_first_not_of('0'));
+                    ImGui::Text("%%%s", str.c_str());
+                } else if(watch_data->base == 10) {
+                    if(watch_data->data_type == WatchData::DataType::FLOAT32) {
+                        float fval = *(float*)&result;
+                        ImGui::Text("%f", fval);
+                    } else {
+                        fmt = "%d";
+                    }
                 } else if(watch_data->base == 16) {
                     switch(watch_data->data_type) {
                     case WatchData::DataType::BYTE:
                         if(watch_data->pad) fmt = "$%02X";
+                        else                fmt = "$%X";
+                        break;
+
+                    case WatchData::DataType::WORD:
+                        if(watch_data->pad) fmt = "$%04X";
+                        else                fmt = "$%X";
+                        break;
+
+                    case WatchData::DataType::LONG:
+                    case WatchData::DataType::FLOAT32:
+                        if(watch_data->pad) fmt = "$%08X";
                         else                fmt = "$%X";
                         break;
 
@@ -1343,8 +1393,69 @@ void Watch::Render()
 
     ImGui::PopStyleVar(2);
 
+    if(ImGui::BeginPopupContextItem("watch_context_menu")) {
+        if(selected_row >= 0 && selected_row < watches.size()) {
+            auto& watch_data = watches[selected_row];
+            if(ImGui::BeginMenu("Display")) {
+                if(ImGui::MenuItem("Byte", nullptr, watch_data->data_type == WatchData::DataType::BYTE)) {
+                    watch_data->data_type = WatchData::DataType::BYTE;
+                    SetDereferenceOp(watch_data);
+                }
+                if(ImGui::MenuItem("Word", nullptr, watch_data->data_type == WatchData::DataType::WORD)) {
+                    watch_data->data_type = WatchData::DataType::WORD;
+                    SetDereferenceOp(watch_data);
+                }
+                if(ImGui::MenuItem("Long", nullptr, watch_data->data_type == WatchData::DataType::LONG)) {
+                    watch_data->data_type = WatchData::DataType::LONG;
+                    SetDereferenceOp(watch_data);
+                }
+                if(ImGui::MenuItem("Float", nullptr, watch_data->data_type == WatchData::DataType::FLOAT32)) {
+                    watch_data->data_type = WatchData::DataType::FLOAT32;
+                    SetDereferenceOp(watch_data);
+                }
+                if(ImGui::MenuItem("User TODO", nullptr, false)) {
+                }
+                ImGui::EndMenu();
+            }
+            if(ImGui::BeginMenu("Format")) {
+                if(ImGui::MenuItem("Binary", nullptr, watch_data->base == 2)) {
+                    watch_data->base = 2;
+                }
+                if(ImGui::MenuItem("Decimal", nullptr, watch_data->base == 10)) {
+                    watch_data->base = 10;
+                }
+                if(ImGui::MenuItem("Octal", nullptr, watch_data->base == 8)) {
+                    watch_data->base = 8;
+                }
+                if(ImGui::MenuItem("Hexadecimal", nullptr, watch_data->base == 16)) {
+                    watch_data->base = 16;
+                }
+                ImGui::EndMenu();
+            }
+            if(ImGui::MenuItem("Pad display", nullptr, watch_data->pad)) {
+                watch_data->pad = !watch_data->pad;
+            }
+        }
+        ImGui::EndPopup();
+    }
+
     // try setting the watch or inform the user of errors
     if(do_set_watch) SetWatch();
+}
+
+void Watch::CreateWatch(string const& expression_string)
+{
+    // create a new empty expression and start editing it. place it at the end of the sorted list but don't re-sort yet
+    auto watch_data = make_shared<WatchData>();
+    watch_data->expression = make_shared<Systems::NES::Expression>();
+    
+    watches.push_back(watch_data);
+    sorted_watches.push_back(watches.size() - 1);
+    
+    editing = sorted_watches.size() - 1;
+    edit_string = expression_string;
+    
+    SetWatch();
 }
 
 void Watch::SetWatch()
@@ -1364,15 +1475,8 @@ void Watch::SetWatch()
             // expression was valid from a grammar point of view, now apply semantics
             // allow labels, defines, derefs, but not addressing modes
             if(GetSystem()->FixupExpression(expr, errmsg, true, true, true, false)) {
-                ExploreData ed = {
-                    .errmsg = errmsg,
-                    .watch_data = watch_data
-                };
-
                 // Expression contained valid elements, now DereferenceOp nodes need evaluation functions set
-                // and we can use Explore() to find them
-                auto cb = std::bind(&Watch::ExploreCallback, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
-                if(expr->Explore(cb, (void*)&ed)) {
+                if(SetDereferenceOp(watch_data)) {
                     // success, done editing and re-sort after adding
                     do_set_watch = false;
                     editing = -1;
@@ -1403,6 +1507,17 @@ void Watch::SetWatch()
     }
 }
 
+bool Watch::SetDereferenceOp(std::shared_ptr<WatchData> const& watch_data)
+{
+    ExploreData ed = {
+        .watch_data = watch_data
+    };
+
+    // DereferenceOp nodes need evaluation functions set and we can use Explore() to find them
+    auto cb = std::bind(&Watch::ExploreCallback, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
+    return watch_data->expression->Explore(cb, (void*)&ed);
+}
+
 bool Watch::ExploreCallback(shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void* userdata)
 {
     ExploreData* ed = (ExploreData*)userdata;
@@ -1413,6 +1528,13 @@ bool Watch::ExploreCallback(shared_ptr<BaseExpressionNode>& node, shared_ptr<Bas
         switch(ed->watch_data->data_type) {
         case WatchData::DataType::BYTE:
             f = std::bind(&Watch::DereferenceByte, this, placeholders::_1, placeholders::_2, placeholders::_3);
+            break;
+        case WatchData::DataType::WORD:
+            f = std::bind(&Watch::DereferenceWord, this, placeholders::_1, placeholders::_2, placeholders::_3);
+            break;
+        case WatchData::DataType::LONG:
+        case WatchData::DataType::FLOAT32:
+            f = std::bind(&Watch::DereferenceLong, this, placeholders::_1, placeholders::_2, placeholders::_3);
             break;
         default:
             assert(false); // TODO WORD, custom types with treenodes
@@ -1439,6 +1561,32 @@ bool Watch::DereferenceByte(s64 in, s64* out, string& errmsg)
     *out = memory_view->Peek(in);
     return true;
 }
+
+bool Watch::DereferenceWord(s64 in, s64* out, string& errmsg)
+{
+    auto memory_view = GetMySystemInstance()->GetMemoryView();
+    if(!memory_view) {
+        errmsg = "Internal error";
+        return false;
+    }
+
+    *out = (u16)memory_view->Peek(in) | ((u16)memory_view->Peek(in + 1) << 8);
+    return true;
+}
+
+bool Watch::DereferenceLong(s64 in, s64* out, string& errmsg)
+{
+    auto memory_view = GetMySystemInstance()->GetMemoryView();
+    if(!memory_view) {
+        errmsg = "Internal error";
+        return false;
+    }
+
+    *out = (u32)memory_view->Peek(in) | ((u32)memory_view->Peek(in + 1) << 8)
+           | ((u32)memory_view->Peek(in + 2) << 16)| ((u32)memory_view->Peek(in + 3) << 24);
+    return true;
+}
+
 
 } // namespace Windows::NES
 

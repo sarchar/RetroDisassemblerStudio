@@ -218,6 +218,8 @@ public:
     static char const * const GetWindowClassStatic() { return "NES::Watch"; }
     static std::shared_ptr<Watch> CreateWindow();
 
+    void CreateWatch(std::string const&);
+
 protected:
     void CheckInput() override;
     void Update(double deltaTime) override;
@@ -242,24 +244,27 @@ private:
 
     // DereferenceOp functions
     bool DereferenceByte(s64, s64*, std::string&);
+    bool DereferenceWord(s64, s64*, std::string&);
+    bool DereferenceLong(s64, s64*, std::string&);
 
     struct WatchData {
         enum class DataType {
-            BYTE, WORD
+            BYTE, WORD, LONG, FLOAT32
         };
 
         std::shared_ptr<BaseExpression> expression;
         std::string                     expression_string = "";
         s64                             last_value        = 0;
         DataType                        data_type         = DataType::BYTE;
-        bool                            pad               = false;
+        bool                            pad               = true;
         int                             base              = 16; // number base for display
     };
 
     struct ExploreData {
-        std::string&               errmsg;
         std::shared_ptr<WatchData> watch_data;
     };
+
+    bool SetDereferenceOp(std::shared_ptr<WatchData> const&);
 
     std::vector<std::shared_ptr<WatchData>> watches;
     std::vector<int> sorted_watches;
