@@ -3,8 +3,11 @@
 #include <memory>
 #include <stack>
 #include <thread>
+#include <unordered_map>
+#include <variant>
 
 #include "signals.h"
+#include "systems/nes/memory.h"
 #include "windows/basewindow.h"
 
 // GetMySystemInstance only available in some windows
@@ -29,6 +32,20 @@ namespace Windows::NES {
 
 class Listing;
 
+struct BreakpointInfo {
+    Systems::NES::GlobalMemoryLocation address;
+    bool enabled = true;
+
+    // these could be a single int but separate bools work better with ImGui
+    bool break_read = false;
+    bool break_write = false;
+    bool break_execute = false;
+
+    bool operator==(BreakpointInfo const& other) {
+        return address == other.address;
+    }
+};
+
 // Windows::NES::SystemInstance is home to everything you need about an instance of a NES system.  
 // You can have multiple SystemInstances and they contain their own system state. 
 // Systems::NES::System is generic and doesn't contain instance specific state
@@ -40,6 +57,9 @@ public:
     using MemoryView           = Systems::NES::MemoryView;
     using PPU                  = Systems::NES::PPU;
     using System               = Systems::NES::System;
+
+    typedef std::variant<GlobalMemoryLocation> breakpoint_key_t;
+    typedef std::vector<std::shared_ptr<BreakpointInfo>> breakpoint_list_t;
 
     enum class State {
         INIT,
@@ -72,6 +92,38 @@ public:
     u32                         const* GetFramebuffer() const { return framebuffer; }
     std::shared_ptr<MemoryView> const& GetMemoryView() { return memory_view; }
     void GetCurrentInstructionAddress(GlobalMemoryLocation*);
+
+    inline void SetBreakpoint(std::shared_ptr<BreakpointInfo> const& breakpoint_info) {
+        breakpoints[breakpoint_info->address].push_back(breakpoint_info);
+    }
+
+    inline void ClearBreakpoint(std::shared_ptr<BreakpointInfo> const& breakpoint_info) {
+        if(!breakpoints.contains(breakpoint_info->address)) return;
+
+        auto breakpoint_list = breakpoints[breakpoint_info->address];
+        auto it = std::find(breakpoint_list.begin(), breakpoint_list.end(), breakpoint_info);
+        if(it == breakpoint_list.end()) return;
+
+        breakpoint_list.erase(it);
+        if(breakpoint_list.size() != 0) return;
+
+        breakpoints.erase(breakpoint_info->address);
+    }
+
+    inline breakpoint_list_t const& GetBreakpointsAt(GlobalMemoryLocation const& where) {
+        static SystemInstance::breakpoint_list_t empty_list;
+        if(breakpoints.contains(where)) return breakpoints[where];
+        return empty_list;
+    }
+
+    template<typename T>
+    inline void IterateBreakpoints(T const& func) {
+        for(auto& bplistpair : breakpoints) {
+            for(auto& bpi : bplistpair.second) {
+                func(bpi);
+            }
+        }
+    }
 
     // signals
 
@@ -113,8 +165,6 @@ private:
     std::shared_ptr<MemoryView> memory_view;
 
     bool        step_instruction_done = false;
-    std::string run_to_address_str = "";
-    int         run_to_address = -1;
     int         cpu_shift = 0;
 
     u64 last_cycle_count = 0;
@@ -140,6 +190,9 @@ private:
     bool                         dma_halt_cycle_done;
 
     signal_connection            oam_dma_callback_connection;
+
+    // breakpoints
+    std::unordered_map<breakpoint_key_t, breakpoint_list_t> breakpoints;
 };
 
 class Screen : public BaseWindow {
@@ -269,5 +322,24 @@ private:
     std::vector<std::shared_ptr<WatchData>> watches;
     std::vector<int> sorted_watches;
 };
+
+class Breakpoints : public BaseWindow {
+public:
+    Breakpoints();
+    virtual ~Breakpoints();
+
+    virtual char const * const GetWindowClass() { return Breakpoints::GetWindowClassStatic(); }
+    static char const * const GetWindowClassStatic() { return "NES::Breakpoints"; }
+    static std::shared_ptr<Breakpoints> CreateWindow();
+
+protected:
+    void CheckInput() override;
+    void Update(double deltaTime) override;
+    void Render() override;
+
+private:
+    int selected_row = -1;
+};
+
 
 } //namespace Windows::NES

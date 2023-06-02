@@ -150,8 +150,10 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
         edit_mode = EDIT_NONE;
     }
 
+    float bp_size = ImGui::GetTextLineHeight();
 
-    if(ImGui::BeginTable("listing_item_primary", 6, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+    if(ImGui::BeginTable("listing_item_primary", 7, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
+        ImGui::TableSetupColumn("##Break", ImGuiTableColumnFlags_WidthFixed, bp_size);
         ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Raw", ImGuiTableColumnFlags_WidthFixed);
@@ -161,6 +163,46 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
 
         ImGui::TableNextRow();
     
+        ImGui::TableNextColumn();   // same color as the address field
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200, (selected || hovered) ? 128 : 255));
+        {
+            auto bplist = system_instance->GetBreakpointsAt(where);
+            bool show_disabled_bp = false;
+            std::shared_ptr<BreakpointInfo> bpi = nullptr;
+
+            for(auto& bpiter : bplist) {
+                if(bpiter->enabled && bpiter->break_execute) {
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(232, 0, 0, (selected || hovered) ? 128 : 255));
+                    ImGui::Text(" X");
+                    show_disabled_bp = false;
+                    bpi = bpiter;
+                    break;
+                } else {
+                    show_disabled_bp = true;
+                }
+            }
+
+            if(show_disabled_bp) {
+                bpi = bplist[0];
+                ImGui::TextDisabled(" X");
+            } else if(bplist.size() == 0) {
+                ImGui::Text("  ");
+            }
+
+            if((ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) || (focused && selected && ImGui::IsKeyPressed(ImGuiKey_F9))) {
+                if(bpi) {
+                    system_instance->ClearBreakpoint(bpi);
+                } else {
+                    // create new breakpoint here
+                    bpi = make_shared<BreakpointInfo>();
+                    bpi->address = where;
+                    bpi->enabled = true;
+                    bpi->break_execute = true;
+                    system_instance->SetBreakpoint(bpi);
+                }
+            }
+        }
+
         ImGui::TableNextColumn();
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200, (selected || hovered) ? 128 : 255));
         ImGui::Text("$%02X:0x%04X", where.prg_rom_bank, where.address);

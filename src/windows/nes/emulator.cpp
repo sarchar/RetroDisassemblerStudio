@@ -131,11 +131,23 @@ SystemInstance::~SystemInstance()
 
 void SystemInstance::CreateDefaultWorkspace()
 {
+    Systems::NES::GlobalMemoryLocation where = {
+        .address = 0xFD86,
+        .is_chr = false,
+        .prg_rom_bank = 3,
+    };
+    auto bpi = make_shared<BreakpointInfo>();
+    bpi->address = where;
+    bpi->enabled = true;
+    bpi->break_execute = true;
+    SetBreakpoint(bpi);
+
     CreateNewWindow("Labels");
     CreateNewWindow("Defines");
     CreateNewWindow("Regions");
     CreateNewWindow("Listing");
     CreateNewWindow("Screen");
+    CreateNewWindow("Breakpoints");
     CreateNewWindow("Watch");
     CreateNewWindow("PPUState");
     CreateNewWindow("CPUState");
@@ -167,6 +179,9 @@ void SystemInstance::CreateNewWindow(string const& window_type)
         wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
     } else if(window_type == "Watch") {
         wnd = Watch::CreateWindow();
+        wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
+    } else if(window_type == "Breakpoints") {
+        wnd = Breakpoints::CreateWindow();
         wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
     }
 
@@ -328,21 +343,9 @@ void SystemInstance::RenderMenuBar()
 
 void SystemInstance::Render()
 {
-//!    ImGui::SameLine();
-//!    if(ImGui::InputText("Run-to", &run_to_address_str, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-//!        stringstream ss;
-//!        ss << hex << run_to_address_str;
-//!        ss >> run_to_address;
-//!        current_state = State::RUNNING;
-//!    }
-//!
-//!    ImGui::Image(framebuffer_texture, ImVec2(512, 512));
-//!
 //!    ImGui::Image(ram_texture, ImVec2(256, 256));
 //!    ImGui::SameLine();
 //!    ImGui::Image(nametable_texture, ImVec2(256, 256));
-//!
-//!    ImGui::EndChild();
 }
 
 void SystemInstance::CheckInput()
@@ -371,12 +374,15 @@ void SystemInstance::GetCurrentInstructionAddress(GlobalMemoryLocation* out)
 {
     out->is_chr = false;
     out->address = cpu->GetOpcodePC();
+    out->prg_rom_bank = 0;
     if(!(out->address & 0x8000)) out->address = cpu->GetPC(); // for reset/times when opcode PC isn't set
 
     auto system_view = dynamic_pointer_cast<Systems::NES::SystemView>(memory_view);
     assert(system_view);
 
-    out->prg_rom_bank = system_view->GetCartridgeView()->GetRomBank(out->address);
+    if(out->address & 0x8000) {
+        out->prg_rom_bank = system_view->GetCartridgeView()->GetRomBank(out->address);
+    }
 
     int offset = 0;
     current_system->GetMemoryObject(*out, &offset);
@@ -495,6 +501,7 @@ void SystemInstance::EmulationThread()
         case State::RUNNING:
             running = true;
             while(!exit_thread && current_state == State::RUNNING) {
+                auto last_pc = cpu->GetOpcodePC();
                 SingleCycle();
 
                 if(cpu->GetNextUC() < 0) {
@@ -502,9 +509,25 @@ void SystemInstance::EmulationThread()
                     cpu->Step();
                     current_state = State::CRASHED;
                     break;
-                } else if(run_to_address == cpu->GetOpcodePC()) {
-                    current_state = State::PAUSED;
-                    break;
+                } else if(cpu->GetOpcodePC() != last_pc) { // when PC changes, check instruction breakpoints
+                    GlobalMemoryLocation current_pc = {
+                        .address = cpu->GetOpcodePC(),
+                        .is_chr = 0,
+                        .prg_rom_bank = 0,
+                    };
+
+                    if(current_pc.address & 0x8000) { // determine bank when in bankable space
+                        auto system_view = dynamic_pointer_cast<Systems::NES::SystemView>(memory_view);
+                        current_pc.prg_rom_bank = system_view->GetCartridgeView()->GetRomBank(current_pc.address);
+                    }
+
+                    auto bplist = GetBreakpointsAt(current_pc);
+                    for(auto& bpiter : bplist) {
+                        if(bpiter->enabled && bpiter->break_execute) {
+                            current_state = State::PAUSED;
+                            break;
+                        }
+                    }
                 }
             }
             running = false;
@@ -1587,6 +1610,98 @@ bool Watch::DereferenceLong(s64 in, s64* out, string& errmsg)
     return true;
 }
 
+std::shared_ptr<Breakpoints> Breakpoints::CreateWindow()
+{
+    return make_shared<Breakpoints>();
+}
+
+Breakpoints::Breakpoints()
+    : BaseWindow("Windows::NES::Breakpoints")
+{
+    SetTitle("Breakpoints");
+
+}
+
+Breakpoints::~Breakpoints()
+{
+}
+
+void Breakpoints::CheckInput()
+{
+}
+
+void Breakpoints::Update(double deltaTime)
+{
+}
+
+void Breakpoints::Render()
+{
+    ImGuiTableFlags table_flags = ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoBordersInBodyUntilResize
+        | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable
+        | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+
+    // We use nested tables so that each row can have its own layout. This will be useful when we can render
+    // things like plate comments, labels, etc
+    if(ImGui::BeginTable("breakpoints_table", 4, table_flags)) {
+        ImGui::TableSetupColumn("##En"      , ImGuiTableColumnFlags_None);
+        ImGui::TableSetupColumn("Type"      , ImGuiTableColumnFlags_None);
+        ImGui::TableSetupColumn("Location"  , ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Condition" , ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableHeadersRow();
+
+        int row = 0;
+        GetMySystemInstance()->IterateBreakpoints([&](shared_ptr<BreakpointInfo> const& bpi) {
+            ImGui::PushID(row);
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+
+            // show selection even when editing
+            ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
+            if(ImGui::Selectable("##selectable", selected_row == row, selectable_flags)) selected_row = row;
+
+            // when the user activates a breakpoint, go to it in the listing window
+            if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                if(auto listing = GetMyListing()) {
+                    listing->GoToAddress(bpi->address);
+                }
+            }
+
+            ImGui::SameLine();
+            ImGui::Checkbox("", &bpi->enabled);
+
+            ImGui::TableNextColumn();
+            ImGui::Text(bpi->address.is_chr ? "CHR:" : "CPU:");
+
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
+            if(!bpi->address.is_chr) {
+                ImGui::SameLine(); ImGuiFlagButton(&bpi->break_read   , "R", "Break on read");
+                ImGui::SameLine(); ImGuiFlagButton(&bpi->break_write  , "W", "Break on write");
+                ImGui::SameLine(); ImGuiFlagButton(&bpi->break_execute, "X", "Break on execute");
+            }
+            ImGui::PopStyleVar(1);
+
+            ImGui::TableNextColumn();
+            stringstream ss;
+            bpi->address.FormatAddress(ss);
+            ImGui::Text(ss.str().c_str());
+
+            ImGui::TableNextColumn();
+            ImGui::Text("cpu.X==3");
+            ImGui::PopID();
+
+            row++;
+        });
+
+        ImGui::EndTable();
+    }
+
+    ImGui::PopStyleVar(3);
+}
 
 } // namespace Windows::NES
 
