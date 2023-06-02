@@ -48,6 +48,7 @@ public:
     APU_IO_View(std::shared_ptr<APU_IO> const&);
     virtual ~APU_IO_View();
 
+    u8 Peek(u16) override;
     u8 Read(u16) override;
     void Write(u16, u8) override;
 

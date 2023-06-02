@@ -245,6 +245,7 @@ public:
     u8 Read(u16) override;
     void Write(u16, u8) override;
 
+    u8 PeekPPU(u16) override;
     u8 ReadPPU(u16) override;
     void WritePPU(u16, u8) override;
 

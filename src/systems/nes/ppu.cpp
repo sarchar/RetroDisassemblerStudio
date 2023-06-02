@@ -85,6 +85,24 @@ public:
         : ppu(_ppu) {}
     virtual ~PPUView() {}
 
+    u8 Peek(u16 address) override {
+        u16 reg = address & 0x07;
+        u8 ret = latch_value;
+
+        switch(reg) {
+        case 0x00: return ppu->ppucont;
+        case 0x01: return ppu->ppumask;
+        case 0x02: return ppu->ppustat;
+        case 0x03: return ppu->primary_oam_address;
+        case 0x04: return ppu->primary_oam[ppu->primary_oam_address];
+        case 0x05: return 0; // PPUSCRL ambiguous
+        case 0x06: return 0; // PPUADDR ambiguous
+        case 0x07: return PeekPPU(ppu->vram_address_v & 0x3FFF);
+        }
+
+        return 0;
+    }
+
     u8 Read(u16 address) override {
         u16 reg = address & 0x07;
         u8 ret = latch_value;
@@ -204,6 +222,17 @@ public:
         }
     }
 
+    u8 PeekPPU(u16 address) override {
+        address &= 0x3FFF;
+        
+        // internal to the PPU is palette ram
+        if((address & 0x3F00) == 0x3F00) {
+            return ppu->palette_ram[address & 0x1F];
+        } else {
+            return ppu->Peek(address);
+        }
+    }
+
     // map these to the PPU bus
     u8 ReadPPU(u16 address) override {
         address &= 0x3FFF;
@@ -237,8 +266,8 @@ private:
     u8              latch_value;
 };
 
-PPU::PPU(nmi_function_t const& nmi_function, read_func_t const& read_func, write_func_t const& write_func)
-    : nmi(nmi_function), Read(read_func), Write(write_func)
+PPU::PPU(nmi_function_t const& nmi_function, read_func_t const& peek_func, read_func_t const& read_func, write_func_t const& write_func)
+    : nmi(nmi_function), Peek(peek_func), Read(read_func), Write(write_func)
 {
 }
 

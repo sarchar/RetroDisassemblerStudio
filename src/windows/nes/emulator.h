@@ -224,8 +224,11 @@ protected:
     void Render() override;
 
 private:
+    void Resort();
     bool need_resort = false;
+    int  sort_column = -1;
     int  selected_row = -1;
+    bool reverse_sort = false;
 
     void SetWatch();
     int  editing = -1; // -1 means not editing  
@@ -234,13 +237,32 @@ private:
     bool wait_dialog = false;
     std::string edit_string;
     std::string set_watch_error_message;
+
     bool ExploreCallback(std::shared_ptr<BaseExpressionNode>&, std::shared_ptr<BaseExpressionNode> const&, int, void*);
 
     // DereferenceOp functions
     bool DereferenceByte(s64, s64*, std::string&);
 
-    std::vector<std::shared_ptr<BaseExpression>> watches;
-    std::vector<std::shared_ptr<BaseExpression>> sorted_watches;
+    struct WatchData {
+        enum class DataType {
+            BYTE, WORD
+        };
+
+        std::shared_ptr<BaseExpression> expression;
+        std::string                     expression_string = "";
+        s64                             last_value        = 0;
+        DataType                        data_type         = DataType::BYTE;
+        bool                            pad               = false;
+        int                             base              = 16; // number base for display
+    };
+
+    struct ExploreData {
+        std::string&               errmsg;
+        std::shared_ptr<WatchData> watch_data;
+    };
+
+    std::vector<std::shared_ptr<WatchData>> watches;
+    std::vector<int> sorted_watches;
 };
 
 } //namespace Windows::NES

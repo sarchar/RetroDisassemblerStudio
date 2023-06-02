@@ -17,7 +17,7 @@ public:
     typedef std::function<u8(u16)> read_func_t;
     typedef std::function<void(u16, u8)> write_func_t;
 
-    PPU(nmi_function_t const&, read_func_t const& read_func, write_func_t const& write_func);
+    PPU(nmi_function_t const&, read_func_t const& peek_func, read_func_t const& read_func, write_func_t const& write_func);
     ~PPU();
 
     void Reset();
@@ -109,6 +109,7 @@ private:
     int vram_address_latch;
 
     // PPU bus (the System module handles the VRAM connection)
+    read_func_t Peek;
     read_func_t Read;
     write_func_t Write;
 

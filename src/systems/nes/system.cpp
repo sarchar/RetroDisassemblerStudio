@@ -1135,6 +1135,31 @@ void SystemView::Write(u16 address, u8 value)
     }
 }
 
+u8 SystemView::PeekPPU(u16 address)
+{
+    //cout << "[SystemView::ReadPPU] read from $" << hex << address << endl;
+    if(address < 0x2000) {
+        // read cartridge CHR-ROM/RAM
+        return cartridge_view->PeekPPU(address);
+    } else if(address < 0x4000) {
+        // see the note below in WritePPU on why the funky math is performed on horizontal mirroring
+        switch(cartridge_view->GetNametableMirroring()) {
+        case MIRRORING_VERTICAL:
+            address &= ~0x800;
+            break;
+
+        case MIRRORING_HORIZONTAL: 
+            address = ((address & 0x800) >> 1) | (address & ~0xC00);
+            break;
+        }
+
+        return VRAM[address & 0x7FF];
+    } else {
+        assert(false);
+        return 0;
+    }
+}
+
 u8 SystemView::ReadPPU(u16 address)
 {
     //cout << "[SystemView::ReadPPU] read from $" << hex << address << endl;

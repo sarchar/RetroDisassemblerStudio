@@ -49,6 +49,27 @@ APU_IO_View::~APU_IO_View()
 }
 
 
+u8 APU_IO_View::Peek(u16 address)
+{
+    u8 ret = 0x00;
+
+    switch(address) {
+    case 0x16:
+        ret = apu_io->joy1_state_latched & 0x01;
+        break;
+
+    case 0x17:
+        ret = apu_io->joy2_state_latched & 0x01;
+        break;
+
+    default:
+        //cout << "[APU_IO_View::Read] unhandled peek from $" << hex << address << endl;
+        break;
+    }
+
+    return ret;
+}
+
 u8 APU_IO_View::Read(u16 address)
 {
     u8 ret = 0x00;

@@ -83,6 +83,9 @@ SystemInstance::SystemInstance()
                 cpu->Nmi();
             },
             [this, &mv](u16 address)->u8 { // capturing the reference means the pointer can change after this initialization
+                return memory_view->PeekPPU(address & 0x3FFF);
+            },
+            [this, &mv](u16 address)->u8 { 
                 return memory_view->ReadPPU(address & 0x3FFF);
             },
             [this, &mv](u16 address, u8 value)->void {
@@ -1168,10 +1171,54 @@ void Watch::CheckInput()
     if(ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         cout << WindowPrefix() << "CheckInput" << endl;
     }
+
+    if(ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        if(selected_row >= 0 && selected_row < sorted_watches.size()) {
+            auto watch_index = sorted_watches[selected_row];
+            watches.erase(watches.begin() + watch_index, watches.begin() + watch_index + 1);
+
+            // gotta re-fill the sorted_watches array
+            sorted_watches.clear();
+            for(int i = 0; i < watches.size(); i++) {
+                sorted_watches.push_back(i);
+            }
+            need_resort = true;
+        }
+    }
 }
 
 void Watch::Update(double deltaTime)
 {
+    if(need_resort) {
+        Resort();
+        need_resort = false;
+    }
+}
+
+void Watch::Resort()
+{
+    if(sort_column == -1) { // no sort!
+        sort(sorted_watches.begin(), sorted_watches.end());
+        return;
+    }
+
+    // otherwise, special sort!
+    sort(sorted_watches.begin(), sorted_watches.end(), [&](int const& a, int const& b)->bool {
+        bool diff;
+
+        auto ap = watches[a];
+        auto bp = watches[b];
+
+        if(sort_column == 0) {
+            if(reverse_sort) diff = bp->expression_string <= ap->expression_string;
+            else             diff = ap->expression_string <= bp->expression_string;
+        } else {
+            if(reverse_sort) diff = bp->last_value <= ap->last_value;
+            else             diff = ap->last_value <= bp->last_value;
+        } 
+
+        return diff;
+    });
 }
 
 void Watch::Render()
@@ -1179,7 +1226,7 @@ void Watch::Render()
     ImGuiTableFlags table_flags = ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoBordersInBodyUntilResize
         | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable
         | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchSame
-        | ImGuiTableFlags_SortTristate;
+        | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortTristate;
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
@@ -1187,17 +1234,41 @@ void Watch::Render()
     // We use nested tables so that each row can have its own layout. This will be useful when we can render
     // things like plate comments, labels, etc
     if(ImGui::BeginTable("watch_table", 2, table_flags)) {
-        ImGui::TableSetupColumn("Expression", ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_DefaultSort);
-        ImGui::TableSetupColumn("Value"     , ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Expression", ImGuiTableColumnFlags_WidthStretch, 0.0f, 0);
+        ImGui::TableSetupColumn("Value"     , ImGuiTableColumnFlags_WidthStretch, 0.0f, 1);
         ImGui::TableHeadersRow();
 
+        // Sort our data (on the next frame) if sort specs have been changed!
+        if(ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs(); sort_specs && sort_specs->SpecsDirty) {
+            if(auto spec = &sort_specs->Specs[0]) {
+                sort_column = spec->ColumnUserID;
+                reverse_sort = (spec->SortDirection == ImGuiSortDirection_Descending);
+            } else { // no sort!
+                sort_column = -1;
+                reverse_sort = false;
+            }
+
+            need_resort = true;
+            sort_specs->SpecsDirty = false;
+        }
+
         for(int row = 0; row < sorted_watches.size(); row++) {
-            auto& expr = sorted_watches[row];
+            auto watch_index = sorted_watches[row];
+            auto& watch_data = watches[watch_index];
 
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
 
-            if(editing >= 0 && expr == watches[editing]) {
+            // show selection even when editing
+            ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
+            char buf[32];
+            sprintf(buf, "##watch_selectable_row%d", row);
+            if(ImGui::Selectable(buf, selected_row == watch_index, selectable_flags)) {
+                selected_row = watch_index;
+            }
+
+            ImGui::SameLine();
+            if(editing == row) {
                 ImGui::PushItemWidth(-FLT_MIN);
                 if(ImGui::InputText("", &edit_string, ImGuiInputTextFlags_EnterReturnsTrue)) {
                     do_set_watch = true;
@@ -1213,39 +1284,41 @@ void Watch::Render()
                     editing = -1;
                 }
             } else {
-                // TODO cache this string in the sorted_watches list as a struct with
-                // the string and display flags
-                stringstream ss;
-                ss << *expr;
-
-                ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
-                char buf[32];
-                sprintf(buf, "##watch_selectable_row%d", row);
-                if(ImGui::Selectable(buf, selected_row == row, selectable_flags)) {
-                    selected_row = row;
-                }
-
                 if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                    // find the index of expr in the unsorted list watches
-                    auto it = find(watches.begin(), watches.end(), expr);
-                    assert(it != watches.end());
-                    editing = it - watches.begin();
-                    edit_string = ss.str();
+                    editing = row;
+                    edit_string = watch_data->expression_string;
                     started_editing = true;
                 }
 
-                ImGui::SameLine();
-                ImGui::Text("%s", ss.str().c_str());
+                ImGui::Text("%s", watch_data->expression_string.c_str());
             }
 
-            // try evaluating the expression. don't cache this as expression values will change as system state changes
+            // evaluate and display the expression, caching the value for sort only
             ImGui::TableNextColumn();
             s64 result;
             string errmsg;
-            if(expr->Evaluate(&result, errmsg)) {
-                ImGui::Text("$%X", result);
+            if(watch_data->expression->Evaluate(&result, errmsg)) {
+                watch_data->last_value = result;
+                char const* fmt = nullptr;
+
+                if(watch_data->base == 10) {
+                    fmt = "%d";
+                } else if(watch_data->base == 16) {
+                    switch(watch_data->data_type) {
+                    case WatchData::DataType::BYTE:
+                        if(watch_data->pad) fmt = "$%02X";
+                        else                fmt = "$%X";
+                        break;
+
+                    default:
+                        fmt = nullptr;
+                    }
+                }
+
+                if(fmt != nullptr) ImGui::Text(fmt, result);
             } else {
                 ImGui::TextDisabled("%s", errmsg.c_str());
+                watch_data->last_value = 0;
             }
         }
 
@@ -1253,13 +1326,14 @@ void Watch::Render()
         ImGui::TableNextColumn();
         ImGui::TextDisabled("<New>");
         if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-            // create a new empty expression and start editing it. place it at the end of the sorted list
-            // but don't resort yet
-            auto new_expr = make_shared<Systems::NES::Expression>();
-            watches.push_back(new_expr);
-            sorted_watches.push_back(new_expr);
+            // create a new empty expression and start editing it. place it at the end of the sorted list but don't re-sort yet
+            auto watch_data = make_shared<WatchData>();
+            watch_data->expression = make_shared<Systems::NES::Expression>();
 
-            editing = watches.size() - 1;
+            watches.push_back(watch_data);
+            sorted_watches.push_back(watches.size() - 1);
+
+            editing = sorted_watches.size() - 1;
             edit_string = "";
             started_editing = true;
         }
@@ -1276,7 +1350,9 @@ void Watch::Render()
 void Watch::SetWatch()
 {
     if(!wait_dialog) {
-        auto& expr = watches[editing];
+        auto& watch_index = sorted_watches[editing];
+        auto& watch_data = watches[watch_index];
+        auto& expr = watch_data->expression;
 
         string errmsg;
         int errloc;
@@ -1288,14 +1364,22 @@ void Watch::SetWatch()
             // expression was valid from a grammar point of view, now apply semantics
             // allow labels, defines, derefs, but not addressing modes
             if(GetSystem()->FixupExpression(expr, errmsg, true, true, true, false)) {
+                ExploreData ed = {
+                    .errmsg = errmsg,
+                    .watch_data = watch_data
+                };
+
                 // Expression contained valid elements, now DereferenceOp nodes need evaluation functions set
                 // and we can use Explore() to find them
                 auto cb = std::bind(&Watch::ExploreCallback, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
-                if(expr->Explore(cb, (void*)&errmsg)) {
+                if(expr->Explore(cb, (void*)&ed)) {
                     // success, done editing and re-sort after adding
                     do_set_watch = false;
                     editing = -1;
                     need_resort = true;
+
+                    // cache the expression string
+                    watch_data->expression_string = edit_string;
                 }
             }
         }
@@ -1321,11 +1405,20 @@ void Watch::SetWatch()
 
 bool Watch::ExploreCallback(shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void* userdata)
 {
-    string* errmsg = (string*)userdata;
+    ExploreData* ed = (ExploreData*)userdata;
 
     if(auto deref = dynamic_pointer_cast<BaseExpressionNodes::DereferenceOp>(node)) {
-        BaseExpressionNodes::DereferenceOp::dereference_func_t f = 
-            std::bind(&Watch::DereferenceByte, this, placeholders::_1, placeholders::_2, placeholders::_3);
+        BaseExpressionNodes::DereferenceOp::dereference_func_t f;
+
+        switch(ed->watch_data->data_type) {
+        case WatchData::DataType::BYTE:
+            f = std::bind(&Watch::DereferenceByte, this, placeholders::_1, placeholders::_2, placeholders::_3);
+            break;
+        default:
+            assert(false); // TODO WORD, custom types with treenodes
+            break;
+        }
+
         deref->SetDereferenceFunction(f);
     }
 

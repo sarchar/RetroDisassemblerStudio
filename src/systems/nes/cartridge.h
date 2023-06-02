@@ -68,6 +68,8 @@ public:
     MIRRORING GetNametableMirroring();
     int       GetRomBank(u16);
 
+    // Peek can be mapped to Read()
+    // since CartridgeView doesn't have side-effects currently
     u8 Read(u16) override;
     void Write(u16, u8) override;
 
