@@ -76,6 +76,8 @@ private:
     // signal connections
     signal_connection label_created_connection;
     signal_connection disassembly_stopped_connection;
+    signal_connection window_parented_connection;
+    signal_connection breakpoint_hit_connection;
 
     struct {
         struct {

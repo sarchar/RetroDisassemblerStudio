@@ -48,8 +48,9 @@ SystemInstance::SystemInstance()
     SetShowMenuBar(true);
     SetIsDockSpace(true);
 
+    breakpoint_hit = make_shared<breakpoint_hit_t>();
     *child_window_added += std::bind(&SystemInstance::ChildWindowAdded, this, placeholders::_1);
-
+    
     // allocate cpu_quick_breakpoints
     auto size = 0x10000 / (8 * sizeof(u32)); // one bit for 64KiB memory space
     cout << WindowPrefix() << "allocated " << dec << size << " bytes for CPU breakpoint cache" << endl;
@@ -571,9 +572,7 @@ void SystemInstance::CheckBreakpoints(u16 address, CheckBreakpointMode mode)
         auto break_write   = bp->break_write   && (mode == CheckBreakpointMode::WRITE);
         if(bp->enabled && (break_read || break_write || break_execute)) {
             current_state = State::PAUSED;
-            if(auto listing = GetMostRecentListingWindow()) {
-                listing->GoToAddress(where);
-            }
+            breakpoint_hit->emit(bp);
             return true;
         }
         return false;

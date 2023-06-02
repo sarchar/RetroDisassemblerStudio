@@ -96,6 +96,9 @@ public:
     typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> child_window_removed_t;
     std::shared_ptr<child_window_removed_t> child_window_removed;
 
+    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> window_parented_t;
+    std::shared_ptr<window_parented_t> window_parented;
+
 protected:
     // Implemented by derived class
     virtual void Update(double deltaTime) {};

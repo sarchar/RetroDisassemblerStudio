@@ -53,6 +53,14 @@ Listing::Listing()
         disassembly_stopped_connection = 
             current_system->disassembly_stopped->connect(std::bind(&Listing::DisassemblyStopped, this, placeholders::_1));
 
+        // my code is silly .. set breakpoint_hit_connection after we have a parent system instance
+        window_parented_connection = window_parented->connect([&](shared_ptr<BaseWindow> const&) {
+            breakpoint_hit_connection =
+                GetMySystemInstance()->breakpoint_hit->connect([&](shared_ptr<BreakpointInfo> const& bp) {
+                    GoToAddress(bp->address);
+                });
+            });
+
         // initialize the first selection to the entry point of the program
         // TODO save last location as well as location history?
         current_system->GetEntryPoint(&current_selection);

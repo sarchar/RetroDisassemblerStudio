@@ -50,6 +50,7 @@ BaseWindow::BaseWindow(string const& tag)
     window_closed = make_shared<window_closed_t>();
     child_window_added = make_shared<child_window_added_t>();
     child_window_removed = make_shared<child_window_removed_t>();
+    window_parented = make_shared<window_parented_t>();
 
     SetTitle("##Untitled");
 }
@@ -102,6 +103,7 @@ void BaseWindow::AddChildWindow(shared_ptr<BaseWindow> const& window)
     cout << WindowPrefix() << "Added child window \"" << window->window_tag << "\" (managed window count = " << child_windows.size() << ")" << endl;
     *window->window_closed += std::bind(&BaseWindow::ChildWindowClosedHandler, this, placeholders::_1);
     queued_windows_for_add.push_back(window);
+    window->window_parented->emit(shared_from_this());
 }
 
 void BaseWindow::ChildWindowClosedHandler(std::shared_ptr<BaseWindow> const& window)
