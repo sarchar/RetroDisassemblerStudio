@@ -69,7 +69,7 @@ bool CPU::Step()
         Write(address, data);
     } else {
         // put Read on the wire
-        data = Read(address);
+        data = Read(address, op == OPCODE_FETCH);
     }
 
     // check inc PC

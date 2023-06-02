@@ -95,6 +95,8 @@ public:
 
     inline void SetBreakpoint(std::shared_ptr<BreakpointInfo> const& breakpoint_info) {
         breakpoints[breakpoint_info->address].push_back(breakpoint_info);
+        // set cpu_quick_breakpoints bit
+        cpu_quick_breakpoints[breakpoint_info->address.address >> 5] |= (1 << (breakpoint_info->address.address & 0x1F));
     }
 
     inline void ClearBreakpoint(std::shared_ptr<BreakpointInfo> const& breakpoint_info) {
@@ -108,6 +110,8 @@ public:
         if(breakpoint_list.size() != 0) return;
 
         breakpoints.erase(breakpoint_info->address);
+        // unset cpu_quick_breakpoints bit when there are no bp at this address
+        cpu_quick_breakpoints[breakpoint_info->address.address >> 5] &= ~(1 << (breakpoint_info->address.address & 0x1F));
     }
 
     inline breakpoint_list_t const& GetBreakpointsAt(GlobalMemoryLocation const& where) {
@@ -124,6 +128,9 @@ public:
             }
         }
     }
+
+    enum class CheckBreakpointMode { READ, WRITE, EXECUTE };
+    void CheckBreakpoints(u16 address, CheckBreakpointMode mode);
 
     // signals
 
@@ -193,6 +200,7 @@ private:
 
     // breakpoints
     std::unordered_map<breakpoint_key_t, breakpoint_list_t> breakpoints;
+    u32* cpu_quick_breakpoints;
 };
 
 class Screen : public BaseWindow {

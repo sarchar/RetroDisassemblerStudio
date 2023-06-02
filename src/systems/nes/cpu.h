@@ -16,7 +16,7 @@ namespace Systems::NES {
 
 class CPU {
 public:
-    typedef std::function<u8(u16)> read_func_t;
+    typedef std::function<u8(u16, bool)> read_func_t;
     typedef std::function<void(u16, u8)> write_func_t;
 
     CPU(read_func_t const& read_func, write_func_t const& write_func);

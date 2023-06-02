@@ -50,6 +50,12 @@ SystemInstance::SystemInstance()
 
     *child_window_added += std::bind(&SystemInstance::ChildWindowAdded, this, placeholders::_1);
 
+    // allocate cpu_quick_breakpoints
+    auto size = 0x10000 / (8 * sizeof(u32)); // one bit for 64KiB memory space
+    cout << WindowPrefix() << "allocated " << dec << size << " bytes for CPU breakpoint cache" << endl;
+    cpu_quick_breakpoints = new u32[size];
+    memset(cpu_quick_breakpoints, 0, size);
+
     // allocate storage for framebuffers
     framebuffer = (u32*)new u8[4 * 256 * 256];
     ram_framebuffer = (u32*)new u8[4 * 256 * 256];
@@ -100,8 +106,18 @@ SystemInstance::SystemInstance()
         memory_view = current_system->CreateMemoryView(ppu->CreateMemoryView(), apu_io->CreateMemoryView());
 
         cpu = make_shared<CPU>(
-            std::bind(&MemoryView::Read, memory_view, placeholders::_1),
-            std::bind(&MemoryView::Write, memory_view, placeholders::_1, placeholders::_2)
+            [this](u16 address, bool opcode_fetch)->u8 {
+                [[unlikely]] if(cpu_quick_breakpoints[address >> 5] & (1 << (address & 0x1F))) {
+                    CheckBreakpoints(address, opcode_fetch ? CheckBreakpointMode::EXECUTE : CheckBreakpointMode::READ);
+                }
+                return memory_view->Read(address);
+            },
+            [this](u16 address, u8 value)->void {
+                [[unlikely]] if(cpu_quick_breakpoints[address >> 5] & (1 << (address & 0x1F))) {
+                    CheckBreakpoints(address, CheckBreakpointMode::WRITE);
+                }
+                memory_view->Write(address, value);
+            }
         );
 
         // start the emulation thread
@@ -127,6 +143,8 @@ SystemInstance::~SystemInstance()
 
     delete [] (u8*)framebuffer;
 //!    delete [] (u8*)ram_framebuffer;
+
+    delete [] cpu_quick_breakpoints;
 }
 
 void SystemInstance::CreateDefaultWorkspace()
@@ -501,7 +519,6 @@ void SystemInstance::EmulationThread()
         case State::RUNNING:
             running = true;
             while(!exit_thread && current_state == State::RUNNING) {
-                auto last_pc = cpu->GetOpcodePC();
                 SingleCycle();
 
                 if(cpu->GetNextUC() < 0) {
@@ -509,25 +526,6 @@ void SystemInstance::EmulationThread()
                     cpu->Step();
                     current_state = State::CRASHED;
                     break;
-                } else if(cpu->GetOpcodePC() != last_pc) { // when PC changes, check instruction breakpoints
-                    GlobalMemoryLocation current_pc = {
-                        .address = cpu->GetOpcodePC(),
-                        .is_chr = 0,
-                        .prg_rom_bank = 0,
-                    };
-
-                    if(current_pc.address & 0x8000) { // determine bank when in bankable space
-                        auto system_view = dynamic_pointer_cast<Systems::NES::SystemView>(memory_view);
-                        current_pc.prg_rom_bank = system_view->GetCartridgeView()->GetRomBank(current_pc.address);
-                    }
-
-                    auto bplist = GetBreakpointsAt(current_pc);
-                    for(auto& bpiter : bplist) {
-                        if(bpiter->enabled && bpiter->break_execute) {
-                            current_state = State::PAUSED;
-                            break;
-                        }
-                    }
                 }
             }
             running = false;
@@ -552,6 +550,34 @@ void SystemInstance::WriteOAMDMA(u8 page)
     oam_dma_source = (page << 8);
     oam_dma_rw = 0;
     dma_halt_cycle_done = false;
+}
+
+void SystemInstance::CheckBreakpoints(u16 address, CheckBreakpointMode mode)
+{
+    GlobalMemoryLocation where = {
+        .address      = address,
+        .is_chr       = 0,
+        .prg_rom_bank = 0,
+    };
+
+    [[likely]] if(where.address & 0x8000) { // determine bank when in bankable space
+        auto system_view = dynamic_pointer_cast<Systems::NES::SystemView>(memory_view);
+        where.prg_rom_bank = system_view->GetCartridgeView()->GetRomBank(where.address);
+    }
+
+    auto bplist = GetBreakpointsAt(where);
+    [[unlikely]] for(auto& bpiter : bplist) {
+        auto break_execute = bpiter->break_execute && (mode == CheckBreakpointMode::EXECUTE);
+        auto break_read    = bpiter->break_read    && (mode == CheckBreakpointMode::READ);
+        auto break_write   = bpiter->break_write   && (mode == CheckBreakpointMode::WRITE);
+        if(bpiter->enabled && (break_read || break_write || break_execute)) {
+            current_state = State::PAUSED;
+            if(auto listing = GetMostRecentListingWindow()) {
+                listing->GoToAddress(where);
+            }
+            break;
+        }
+    }
 }
 
 std::shared_ptr<Screen> Screen::CreateWindow()
