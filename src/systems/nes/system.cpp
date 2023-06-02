@@ -247,7 +247,6 @@ bool System::ExploreExpressionNodeCallback(shared_ptr<BaseExpressionNode>& node,
         if(strl == "x" || strl == "y" || strl == "a") {
             // we may see them as indexed values at Layer 1, but only if the parent is an expression list
             // we check length of list and position within the list later
-            assert(parent);
             auto parent_list = dynamic_pointer_cast<BaseExpressionNodes::ExpressionList>(parent);
             if(!explore_data->allow_modes || !parent_list || depth > 1) {
                 stringstream ss;
@@ -337,6 +336,13 @@ bool System::ExploreExpressionNodeCallback(shared_ptr<BaseExpressionNode>& node,
         }
     }
 
+    if(auto deref = dynamic_pointer_cast<BaseExpressionNodes::DereferenceOp>(node)) {
+        if(!explore_data->allow_deref) {
+            explore_data->errmsg = "Dereference not valid in this context";
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -354,16 +360,8 @@ bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<
         return false;
     }
 
-    ExploreExpressionNodeData explore_data {
-        .errmsg        = errmsg,
-        .allow_modes   = true,
-        .allow_labels  = true,
-        .allow_defines = true
-    };
-
     // Loop over every node (and change them to system nodes if necessary), validating some things along the way
-    auto cb = std::bind(&System::ExploreExpressionNodeCallback, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
-    if(!expr->Explore(cb, &explore_data)) return false;
+    if(!FixupExpression(expr, errmsg, true, true, false, true)) return false;
 
     // Now we need to do one more thing: determine the addressing mode of the expression and match it to
     // the addressing mode of the current opcode. the size of the operand is encoded into the addressing mode
@@ -544,6 +542,22 @@ bool System::DetermineAddressingMode(shared_ptr<Expression>& expr, ADDRESSING_MO
     }
 }
 
+bool System::FixupExpression(shared_ptr<BaseExpression> const& expr, string& errmsg,
+        bool allow_labels, bool allow_defines, bool allow_deref, bool allow_addressing_modes)
+{
+    ExploreExpressionNodeData explore_data {
+        .errmsg        = errmsg,
+        .allow_modes   = allow_addressing_modes,
+        .allow_labels  = allow_labels,
+        .allow_defines = allow_defines,
+        .allow_deref   = allow_deref
+    };
+
+    // Loop over every node (and change them to system nodes if necessary), validating some things along the way
+    auto cb = std::bind(&System::ExploreExpressionNodeCallback, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
+    return expr->Explore(cb, &explore_data);
+}
+
 shared_ptr<Define> System::AddDefine(string const& name, string const& expression_string, string& errmsg)
 {
     int errloc;
@@ -572,7 +586,8 @@ shared_ptr<Define> System::AddDefine(string const& name, string const& expressio
         .errmsg        = errmsg,
         .allow_modes   = false,
         .allow_labels  = false,
-        .allow_defines = true
+        .allow_defines = true,
+        .allow_deref   = false
     };
 
     auto cb = std::bind(&System::ExploreExpressionNodeCallback, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
@@ -1079,6 +1094,19 @@ SystemView::SystemView(shared_ptr<BaseSystem> const& _system, shared_ptr<MemoryV
 
 SystemView::~SystemView()
 {
+}
+
+u8 SystemView::Peek(u16 address)
+{
+    if(address < 0x2000) {
+        return RAM[address & 0x7FF];
+    } else if(address < 0x4000) {
+        return ppu_view->Peek(address & 0x1FFF);
+    } else if(address < 0x6000) {
+        return apu_io_view->Peek(address & 0x1FFF);
+    } else {
+        return cartridge_view->Peek(address);
+    }
 }
 
 u8 SystemView::Read(u16 address)

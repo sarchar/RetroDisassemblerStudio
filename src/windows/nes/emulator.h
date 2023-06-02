@@ -13,6 +13,9 @@
 // return the most recent 
 #define GetMyListing() (GetMySystemInstance() ? GetMySystemInstance()->GetMostRecentListingWindow() : nullptr)
 
+class BaseExpression;
+class BaseExpressionNode;
+
 namespace Systems::NES {
     class APU_IO;
     class CPU;
@@ -206,5 +209,38 @@ private:
     bool  show_scroll_window = true;
 };
 
+class Watch : public BaseWindow {
+public:
+    Watch();
+    virtual ~Watch();
+
+    virtual char const * const GetWindowClass() { return Watch::GetWindowClassStatic(); }
+    static char const * const GetWindowClassStatic() { return "NES::Watch"; }
+    static std::shared_ptr<Watch> CreateWindow();
+
+protected:
+    void CheckInput() override;
+    void Update(double deltaTime) override;
+    void Render() override;
+
+private:
+    bool need_resort = false;
+    int  selected_row = -1;
+
+    void SetWatch();
+    int  editing = -1; // -1 means not editing  
+    bool started_editing = false;
+    bool do_set_watch = false;
+    bool wait_dialog = false;
+    std::string edit_string;
+    std::string set_watch_error_message;
+    bool ExploreCallback(std::shared_ptr<BaseExpressionNode>&, std::shared_ptr<BaseExpressionNode> const&, int, void*);
+
+    // DereferenceOp functions
+    bool DereferenceByte(s64, s64*, std::string&);
+
+    std::vector<std::shared_ptr<BaseExpression>> watches;
+    std::vector<std::shared_ptr<BaseExpression>> sorted_watches;
+};
 
 } //namespace Windows::NES

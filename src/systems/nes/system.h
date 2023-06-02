@@ -9,6 +9,7 @@
 #include "systems/nes/defs.h"
 #include "systems/nes/memory.h"
 
+class BaseExpression;
 class BaseExpressionNode;
 
 namespace Systems::NES {
@@ -89,7 +90,18 @@ public:
     void MarkMemoryAsUndefined(GlobalMemoryLocation const&, u32 byte_count);
     void MarkMemoryAsWords(GlobalMemoryLocation const&, u32 byte_count);
     void MarkMemoryAsString(GlobalMemoryLocation const&, u32 byte_count);
+
+    // Convert units like Names into defines and labels 
+    bool FixupExpression(std::shared_ptr<BaseExpression> const&, std::string&,
+            bool allow_labels = true,
+            bool allow_defines = true,
+            bool allow_deref = true,
+            bool allow_addressing_modes = false);
+
+    // Set the operand_expression at a memory location. System::SetOperandExpression performs a FixupExpression and
+    // checks the addressing mode. Calling MemoryRegion::SetOperandExpression bypasses this
     bool SetOperandExpression(GlobalMemoryLocation const&, std::shared_ptr<Expression>&, std::string& errmsg);
+
 
     int GetSortableMemoryLocation(GlobalMemoryLocation const& s) {
         int ret = s.address;
@@ -212,6 +224,7 @@ private:
         bool allow_defines;   // allow looking up Defines
         std::vector<std::shared_ptr<Define>> defines;
 
+        bool allow_deref;    // allow dereference nodes
         std::vector<std::string> undefined_names; // All other Names that were not labels or defines
     };
 
@@ -228,6 +241,7 @@ public:
             std::shared_ptr<MemoryView> const& _ppu_view, std::shared_ptr<MemoryView> const& _apu_io_view);
     virtual ~SystemView();
 
+    u8 Peek(u16) override;
     u8 Read(u16) override;
     void Write(u16, u8) override;
 

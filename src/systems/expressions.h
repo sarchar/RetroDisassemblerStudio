@@ -356,6 +356,57 @@ namespace BaseExpressionNodes {
     inline s64 _logical_not_op(s64 a) { return (s64)!(bool)a; }
     using LogicalNotOp = UnaryOp<_logical_not_op>;
 
+    class DereferenceOp : public BaseExpressionNode {
+    public:
+        typedef std::function<bool(s64 in, s64* out, std::string& errmsg)> dereference_func_t;
+
+        DereferenceOp(std::string const& _display, std::shared_ptr<BaseExpressionNode>& _value)
+            : display(_display), value(_value)
+        {
+            assert(value);
+        }
+
+        virtual ~DereferenceOp() {}
+
+        static int base_expression_node_id;
+        int GetExpressionNodeType() const override { return DereferenceOp::base_expression_node_id; }
+
+        template<typename T>
+        void SetDereferenceFunction(T const& func) { dereference_func = func; }
+
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            s64 evaluated;
+            if(!value->Evaluate(&evaluated, errmsg)) return false;
+            if(!dereference_func) {
+                errmsg = "Dereference function not specified";
+                return false;
+            }
+            if(!dereference_func(evaluated, result, errmsg)) return false;
+            return true;
+        }
+
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            // depth first into the expression tree
+            if(!value->Explore(explore_callback, depth + 1, userdata)) return false; 
+            // and then evaluate the node
+            if(!explore_callback(value, shared_from_this(), depth, userdata)) return false;
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
+            ostream << display << *value;
+        }
+
+        bool Save(std::ostream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>) override;
+        static std::shared_ptr<DereferenceOp> Load(std::istream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>&);
+
+    private:
+        std::shared_ptr<BaseExpressionNode> value;
+        std::string display;
+        dereference_func_t dereference_func;
+    };
+
+
     class FunctionCall : public BaseExpressionNode {
     public:
 
@@ -562,6 +613,10 @@ public:
         return std::make_shared<BaseExpressionNodes::LogicalNotOp>(display, right);
     }
 
+    BN CreateDereferenceOp(std::string const& display, BN& right) {
+        return std::make_shared<BaseExpressionNodes::DereferenceOp>(display, right);
+    }
+
     virtual bool Save(std::shared_ptr<BaseExpressionNode> const&, std::ostream&, std::string&);
     virtual BN Load(std::istream&, std::string&);
 
@@ -586,7 +641,7 @@ public:
 
     bool Evaluate(s64* result, std::string& errmsg) { 
         if(!root) {
-            errmsg = "No root expression";
+            errmsg = "No expression set";
             return false;
         }
         return root->Evaluate(result, errmsg); 

@@ -159,10 +159,13 @@ void BaseExpressionNodeCreator::RegisterBaseExpressionNodes()
 
     RegisterBaseExpressionNode<BaseExpressionNodes::Parens>();
 
+    RegisterBaseExpressionNode<BaseExpressionNodes::DereferenceOp>();
+
     // any node registered after this point is a subclassed node. using an ID
     // offset lets us add new base nodes without corrupting the subnode indexes in save files
+    // subtract the list size to make the next element equal to SUBCLASS_NODE_ID_OFFSET
 #define SUBCLASS_NODE_ID_OFFSET 128
-    expression_node_id_offset = SUBCLASS_NODE_ID_OFFSET;
+    expression_node_id_offset = SUBCLASS_NODE_ID_OFFSET - BaseExpressionNodeCreator::expression_nodes.size();
 }
 
 bool BaseExpressionNodeCreator::Save(shared_ptr<BaseExpressionNode> const& node, ostream& os, string& errmsg)
@@ -181,7 +184,7 @@ std::shared_ptr<BaseExpressionNode> BaseExpressionNodeCreator::Load(std::istream
     }
 
     // subtract out subclass node id offset
-    if(node_type >= SUBCLASS_NODE_ID_OFFSET) node_type -= SUBCLASS_NODE_ID_OFFSET;
+    if(node_type >= SUBCLASS_NODE_ID_OFFSET) node_type -= expression_node_id_offset;
 
     if(node_type >= expression_nodes.size()) {
         errmsg = "Invalid expression node type";
@@ -569,6 +572,7 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParsePowerExpression(shared_ptr<T
 //     |        MINUS primary
 //     |        TILDE primary
 //     |        BANG primary
+//     |        ASTERISK primary
 //     |        primary
 //     ;
 shared_ptr<BaseExpressionNode> BaseExpression::ParseUnaryExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
@@ -605,6 +609,14 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseUnaryExpression(shared_ptr<T
         auto rhs = ParsePrimaryExpression(tenderizer, node_creator, errmsg, errloc);
         if(!rhs) return nullptr;
         return node_creator->CreateLogicalNotOp(display, rhs);
+    }
+
+    case Tenderizer::Meat::ASTERISK:
+    {
+        tenderizer->Gobble();
+        auto rhs = ParsePrimaryExpression(tenderizer, node_creator, errmsg, errloc);
+        if(!rhs) return nullptr;
+        return node_creator->CreateDereferenceOp(display, rhs);
     }
 
     default:
@@ -742,6 +754,7 @@ template <s64 (*T)(s64)>
 int UnaryOp<T>::base_expression_node_id = 0;
 int FunctionCall::base_expression_node_id = 0;
 int ExpressionList::base_expression_node_id = 0;
+int DereferenceOp::base_expression_node_id = 0;
 
 bool Parens::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
 {
@@ -863,6 +876,28 @@ std::shared_ptr<UnaryOp<T>> UnaryOp<T>::Load(std::istream& is, std::string& errm
     if(!right) return nullptr;
 
     return std::make_shared<UnaryOp<T>>(display, right);
+}
+
+bool DereferenceOp::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 
+{
+    WriteString(os, display);
+    if(!creator->Save(value, os, errmsg)) return false;
+    return true;
+}
+
+std::shared_ptr<DereferenceOp> DereferenceOp::Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>& creator) 
+{
+    string display;
+    ReadString(is, display);
+    if(!is.good()) {
+        errmsg = "Could not load DereferenceOp";
+        return nullptr;
+    }
+
+    auto right = creator->Load(is, errmsg);
+    if(!right) return nullptr;
+
+    return std::make_shared<DereferenceOp>(display, right);
 }
 
 bool FunctionCall::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator> creator) 

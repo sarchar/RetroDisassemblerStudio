@@ -16,6 +16,7 @@
 #include "systems/nes/cartridge.h"
 #include "systems/nes/cpu.h"
 #include "systems/nes/disasm.h"
+#include "systems/nes/expressions.h"
 #include "systems/nes/ppu.h"
 #include "systems/nes/system.h"
 
@@ -131,6 +132,7 @@ void SystemInstance::CreateDefaultWorkspace()
     CreateNewWindow("Regions");
     CreateNewWindow("Listing");
     CreateNewWindow("Screen");
+    CreateNewWindow("Watch");
     CreateNewWindow("PPUState");
     CreateNewWindow("CPUState");
 }
@@ -158,6 +160,9 @@ void SystemInstance::CreateNewWindow(string const& window_type)
         wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
     } else if(window_type == "PPUState") {
         wnd = PPUState::CreateWindow();
+        wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
+    } else if(window_type == "Watch") {
+        wnd = Watch::CreateWindow();
         wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
     }
 
@@ -217,7 +222,9 @@ void SystemInstance::Update(double deltaTime)
         }
 
         if(ImGui::IsKeyPressed(ImGuiKey_Escape) && ImGui::IsKeyPressed(ImGuiKey_LeftCtrl)) {
-            cout << GetTitle() << " got ESCAPE" << endl;
+            if(current_state == State::RUNNING) {
+                current_state = State::PAUSED;
+            }
         }
     }
 
@@ -1139,6 +1146,205 @@ void PPUState::UpdateNametableTexture()
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 512, 512, GL_RGBA, GL_UNSIGNED_BYTE, nametable_framebuffer);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
+}
+
+std::shared_ptr<Watch> Watch::CreateWindow()
+{
+    return make_shared<Watch>();
+}
+
+Watch::Watch()
+    : BaseWindow("Windows::NES::Watch")
+{
+    SetTitle("Watch");
+}
+
+Watch::~Watch()
+{
+}
+
+void Watch::CheckInput()
+{
+    if(ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        cout << WindowPrefix() << "CheckInput" << endl;
+    }
+}
+
+void Watch::Update(double deltaTime)
+{
+}
+
+void Watch::Render()
+{
+    ImGuiTableFlags table_flags = ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoBordersInBodyUntilResize
+        | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable
+        | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchSame
+        | ImGuiTableFlags_SortTristate;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
+
+    // We use nested tables so that each row can have its own layout. This will be useful when we can render
+    // things like plate comments, labels, etc
+    if(ImGui::BeginTable("watch_table", 2, table_flags)) {
+        ImGui::TableSetupColumn("Expression", ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_DefaultSort);
+        ImGui::TableSetupColumn("Value"     , ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableHeadersRow();
+
+        for(int row = 0; row < sorted_watches.size(); row++) {
+            auto& expr = sorted_watches[row];
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+
+            if(editing >= 0 && expr == watches[editing]) {
+                ImGui::PushItemWidth(-FLT_MIN);
+                if(ImGui::InputText("", &edit_string, ImGuiInputTextFlags_EnterReturnsTrue)) {
+                    do_set_watch = true;
+                }
+
+                // if we just started editing, focus on the input text item
+                if(started_editing) {
+                    ImGui::SetKeyboardFocusHere(-1);
+                    // wait until item is activated
+                    if(ImGui::IsItemActive()) started_editing = false;
+                } else if(!do_set_watch && !ImGui::IsItemActive()) { // check if item lost activation
+                    // stop editing without saving
+                    editing = -1;
+                }
+            } else {
+                // TODO cache this string in the sorted_watches list as a struct with
+                // the string and display flags
+                stringstream ss;
+                ss << *expr;
+
+                ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
+                char buf[32];
+                sprintf(buf, "##watch_selectable_row%d", row);
+                if(ImGui::Selectable(buf, selected_row == row, selectable_flags)) {
+                    selected_row = row;
+                }
+
+                if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                    // find the index of expr in the unsorted list watches
+                    auto it = find(watches.begin(), watches.end(), expr);
+                    assert(it != watches.end());
+                    editing = it - watches.begin();
+                    edit_string = ss.str();
+                    started_editing = true;
+                }
+
+                ImGui::SameLine();
+                ImGui::Text("%s", ss.str().c_str());
+            }
+
+            // try evaluating the expression. don't cache this as expression values will change as system state changes
+            ImGui::TableNextColumn();
+            s64 result;
+            string errmsg;
+            if(expr->Evaluate(&result, errmsg)) {
+                ImGui::Text("$%X", result);
+            } else {
+                ImGui::TextDisabled("%s", errmsg.c_str());
+            }
+        }
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled("<New>");
+        if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+            // create a new empty expression and start editing it. place it at the end of the sorted list
+            // but don't resort yet
+            auto new_expr = make_shared<Systems::NES::Expression>();
+            watches.push_back(new_expr);
+            sorted_watches.push_back(new_expr);
+
+            editing = watches.size() - 1;
+            edit_string = "";
+            started_editing = true;
+        }
+
+        ImGui::EndTable();
+    }
+
+    ImGui::PopStyleVar(2);
+
+    // try setting the watch or inform the user of errors
+    if(do_set_watch) SetWatch();
+}
+
+void Watch::SetWatch()
+{
+    if(!wait_dialog) {
+        auto& expr = watches[editing];
+
+        string errmsg;
+        int errloc;
+
+        // try parsing the expression first
+        if(expr->Set(edit_string, errmsg, errloc, false)) {
+            errloc = -1;
+
+            // expression was valid from a grammar point of view, now apply semantics
+            // allow labels, defines, derefs, but not addressing modes
+            if(GetSystem()->FixupExpression(expr, errmsg, true, true, true, false)) {
+                // Expression contained valid elements, now DereferenceOp nodes need evaluation functions set
+                // and we can use Explore() to find them
+                auto cb = std::bind(&Watch::ExploreCallback, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
+                if(expr->Explore(cb, (void*)&errmsg)) {
+                    // success, done editing and re-sort after adding
+                    do_set_watch = false;
+                    editing = -1;
+                    need_resort = true;
+                }
+            }
+        }
+
+        // if we didn't finish editing there was an error...
+        if(editing != -1) {
+            stringstream ss;
+            ss << "There was a problem parsing the expression: " << errmsg;
+            if(errloc >= 0) ss << " (at offset " << errloc << ")";
+            set_watch_error_message = ss.str();
+            wait_dialog = true;
+        }
+    } 
+
+    if(wait_dialog) {
+        if(GetMainWindow()->OKPopup("Expression error", set_watch_error_message)) {
+            wait_dialog = false;
+            do_set_watch = false;
+            started_editing = true; // re-edit the expression
+        }
+    }
+}
+
+bool Watch::ExploreCallback(shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void* userdata)
+{
+    string* errmsg = (string*)userdata;
+
+    if(auto deref = dynamic_pointer_cast<BaseExpressionNodes::DereferenceOp>(node)) {
+        BaseExpressionNodes::DereferenceOp::dereference_func_t f = 
+            std::bind(&Watch::DereferenceByte, this, placeholders::_1, placeholders::_2, placeholders::_3);
+        deref->SetDereferenceFunction(f);
+    }
+
+    return true;
+}
+
+bool Watch::DereferenceByte(s64 in, s64* out, string& errmsg)
+{
+    auto memory_view = GetMySystemInstance()->GetMemoryView();
+    if(!memory_view) {
+        errmsg = "Internal error";
+        return false;
+    }
+
+    // TODO would be cool to support banks within the address itself
+    // shouldn't be too difficult. Overload Peek() to take a GlobalMemoryLocation
+    // and build the memory location here
+    *out = memory_view->Peek(in);
+    return true;
 }
 
 } // namespace Windows::NES

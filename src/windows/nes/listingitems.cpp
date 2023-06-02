@@ -450,7 +450,6 @@ bool ListingItemPrimary::ParseOperandExpression(shared_ptr<System>& system, Glob
             wait_dialog = false;
             do_parse_operand_expression = false;
             started_editing = true; // re-edit the expression
-            cout << "OKPopup closed" << endl;
         }
     }
 
