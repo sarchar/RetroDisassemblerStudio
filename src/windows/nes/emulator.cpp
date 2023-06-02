@@ -158,7 +158,7 @@ void SystemInstance::CreateDefaultWorkspace()
     bpi->address = where;
     bpi->enabled = true;
     bpi->break_execute = true;
-    SetBreakpoint(bpi);
+    SetBreakpoint(where, bpi);
 
     CreateNewWindow("Labels");
     CreateNewWindow("Defines");
@@ -565,18 +565,29 @@ void SystemInstance::CheckBreakpoints(u16 address, CheckBreakpointMode mode)
         where.prg_rom_bank = system_view->GetCartridgeView()->GetRomBank(where.address);
     }
 
-    auto bplist = GetBreakpointsAt(where);
-    [[unlikely]] for(auto& bpiter : bplist) {
-        auto break_execute = bpiter->break_execute && (mode == CheckBreakpointMode::EXECUTE);
-        auto break_read    = bpiter->break_read    && (mode == CheckBreakpointMode::READ);
-        auto break_write   = bpiter->break_write   && (mode == CheckBreakpointMode::WRITE);
-        if(bpiter->enabled && (break_read || break_write || break_execute)) {
+    auto check_bp = [&](shared_ptr<BreakpointInfo> const& bp)->bool {
+        auto break_execute = bp->break_execute && (mode == CheckBreakpointMode::EXECUTE);
+        auto break_read    = bp->break_read    && (mode == CheckBreakpointMode::READ);
+        auto break_write   = bp->break_write   && (mode == CheckBreakpointMode::WRITE);
+        if(bp->enabled && (break_read || break_write || break_execute)) {
             current_state = State::PAUSED;
             if(auto listing = GetMostRecentListingWindow()) {
                 listing->GoToAddress(where);
             }
-            break;
+            return true;
         }
+        return false;
+    };
+
+    // check both bank-specific and non-bank specific addresses
+    auto bplist = GetBreakpointsAt(where);
+    [[likely]] for(auto& bpiter : bplist) {
+        if(check_bp(bpiter)) return;
+    }
+
+    bplist = GetBreakpointsAt(address);
+    [[unlikely]] for(auto& bpiter : bplist) {
+        if(check_bp(bpiter)) return;
     }
 }
 
@@ -1718,8 +1729,8 @@ void Breakpoints::Render()
 
             ImGui::TableNextColumn();
             ImGui::Text("cpu.X==3");
-            ImGui::PopID();
 
+            ImGui::PopID();
             row++;
         });
 

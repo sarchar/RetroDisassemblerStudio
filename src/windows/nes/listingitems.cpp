@@ -191,14 +191,14 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
 
             if((ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) || (focused && selected && ImGui::IsKeyPressed(ImGuiKey_F9))) {
                 if(bpi) {
-                    system_instance->ClearBreakpoint(bpi);
+                    system_instance->ClearBreakpoint(where, bpi);
                 } else {
                     // create new breakpoint here
                     bpi = make_shared<BreakpointInfo>();
                     bpi->address = where;
                     bpi->enabled = true;
                     bpi->break_execute = true;
-                    system_instance->SetBreakpoint(bpi);
+                    system_instance->SetBreakpoint(where, bpi);
                 }
             }
         }

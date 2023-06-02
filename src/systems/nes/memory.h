@@ -23,17 +23,13 @@ class System;
 // SystemMemoryLocation dials into a specific byte within the system. It has enough information to select which
 // segment of the system (RAM, SRAM, etc) as well as which ROM bank, overlay or any psuedo location that may exist.
 struct GlobalMemoryLocation {
-    // 0x00-0xFF: zero page
-    // 0x100-0x1FF: stack
-    // 0x200-0x7FF: RAM
-    // 0x6000-7FFF: SRAM
-    // 0x8000-FFFF: ROM
+    // 16-bit address space
     u16 address = 0;
 
     // set to true if we're reading CHR-RAM
     bool is_chr = false;
 
-    // used only for ROM
+    // used only for PRG
     u16 prg_rom_bank = 0;
 
     // used only for CHR

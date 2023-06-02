@@ -58,7 +58,7 @@ public:
     using PPU                  = Systems::NES::PPU;
     using System               = Systems::NES::System;
 
-    typedef std::variant<GlobalMemoryLocation> breakpoint_key_t;
+    typedef std::variant<GlobalMemoryLocation, u16> breakpoint_key_t;
     typedef std::vector<std::shared_ptr<BreakpointInfo>> breakpoint_list_t;
 
     enum class State {
@@ -93,16 +93,16 @@ public:
     std::shared_ptr<MemoryView> const& GetMemoryView() { return memory_view; }
     void GetCurrentInstructionAddress(GlobalMemoryLocation*);
 
-    inline void SetBreakpoint(std::shared_ptr<BreakpointInfo> const& breakpoint_info) {
-        breakpoints[breakpoint_info->address].push_back(breakpoint_info);
+    inline void SetBreakpoint(breakpoint_key_t const& key, std::shared_ptr<BreakpointInfo> const& breakpoint_info) {
+        breakpoints[key].push_back(breakpoint_info);
         // set cpu_quick_breakpoints bit
         cpu_quick_breakpoints[breakpoint_info->address.address >> 5] |= (1 << (breakpoint_info->address.address & 0x1F));
     }
 
-    inline void ClearBreakpoint(std::shared_ptr<BreakpointInfo> const& breakpoint_info) {
-        if(!breakpoints.contains(breakpoint_info->address)) return;
+    inline void ClearBreakpoint(breakpoint_key_t const& key, std::shared_ptr<BreakpointInfo> const& breakpoint_info) {
+        if(!breakpoints.contains(key)) return;
 
-        auto breakpoint_list = breakpoints[breakpoint_info->address];
+        auto breakpoint_list = breakpoints[key];
         auto it = std::find(breakpoint_list.begin(), breakpoint_list.end(), breakpoint_info);
         if(it == breakpoint_list.end()) return;
 
@@ -110,11 +110,12 @@ public:
         if(breakpoint_list.size() != 0) return;
 
         breakpoints.erase(breakpoint_info->address);
+
         // unset cpu_quick_breakpoints bit when there are no bp at this address
         cpu_quick_breakpoints[breakpoint_info->address.address >> 5] &= ~(1 << (breakpoint_info->address.address & 0x1F));
     }
 
-    inline breakpoint_list_t const& GetBreakpointsAt(GlobalMemoryLocation const& where) {
+    inline breakpoint_list_t const& GetBreakpointsAt(breakpoint_key_t const& where) {
         static SystemInstance::breakpoint_list_t empty_list;
         if(breakpoints.contains(where)) return breakpoints[where];
         return empty_list;
