@@ -274,8 +274,9 @@ private:
     void RenderPalettes(std::shared_ptr<PPU> const&);
     void RenderSprites(std::shared_ptr<PPU> const&);
 
-    int display_mode = 0;
+    int   display_mode = 0;
     bool  show_scroll_window = true;
+    int   hovered_palette_index = -1;
 
     void  UpdateNametableTexture();
     u32*  nametable_framebuffer;

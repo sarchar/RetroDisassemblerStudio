@@ -1138,7 +1138,76 @@ void PPUState::RenderNametables(std::shared_ptr<PPU> const& ppu)
 
 void PPUState::RenderPalettes(std::shared_ptr<PPU> const& ppu)
 {
-    ImGui::Text("Palettes TODO");
+    u8 bg_palette[0x10];
+    ppu->CopyPaletteRAM(bg_palette, false);
+
+    u8 obj_palette[0x10];
+    ppu->CopyPaletteRAM(obj_palette, true);
+
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    auto size = ImGui::GetWindowSize();
+    size.x *= 0.667;
+    if(ImGui::BeginChild("left", size)) {
+        ImGuiTableFlags table_flags = ImGuiTableFlags_NoBordersInBodyUntilResize
+            | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchSame;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
+
+        // We use nested tables so that each row can have its own layout. This will be useful when we can render
+        // things like plate comments, labels, etc
+        if(ImGui::BeginTable("palette_table", 4, table_flags)) {
+            ImGui::TableSetupColumn("0", ImGuiTableColumnFlags_WidthStretch, 0.0f, 0);
+            ImGui::TableSetupColumn("1", ImGuiTableColumnFlags_WidthStretch, 0.0f, 1);
+            ImGui::TableSetupColumn("2", ImGuiTableColumnFlags_WidthStretch, 0.0f, 1);
+            ImGui::TableSetupColumn("3", ImGuiTableColumnFlags_WidthStretch, 0.0f, 1);
+            ImGui::TableHeadersRow();
+
+            for(int i = 0; i < 8; i++) {
+                ImGui::TableNextRow();
+                for(int j = 0; j < 4; j++) {
+                    u8 color = (i < 4) ? bg_palette[i * 4 + j] : obj_palette[(i - 4) * 4 + j];
+                    ImU32 im_color = 0xFF000000 | Systems::NES::rgb_palette_map[color];
+
+                    ImGui::TableNextColumn();
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, im_color);
+
+                    ImGui::Selectable(" ", false, 0);
+                    if(ImGui::IsItemHovered()) {
+                        // show display ab
+                        hovered_palette_index = (i * 4) + j;
+                        cout << "selecting " << hovered_palette_index << endl;
+                    }
+                }
+            }
+
+            ImGui::EndTable();
+        }
+        ImGui::PopStyleVar(2);
+
+    }
+    ImGui::EndChild();
+
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    ImGui::SameLine();
+    if(ImGui::BeginChild("right", size, true)) {
+        u8 color = (hovered_palette_index < 0x10) ? bg_palette[hovered_palette_index] : obj_palette[hovered_palette_index - 0x10];
+        int rgb_color = Systems::NES::rgb_palette_map[color];
+        ImGui::Text("[$3F%02X]=$%02X", hovered_palette_index, color);
+        ImGui::Text("");
+        int red = (rgb_color & 0xFF);
+        ImGui::Text("R: %d (0x%02X)", red, red);
+        int green = (rgb_color & 0xFF00) >> 8;
+        ImGui::Text("G: %d (0x%02X)", green, green);
+        int blue = (rgb_color & 0xFF0000) >> 16;
+        ImGui::Text("B: %d (0x%02X)", blue, blue);
+
+        char buf[12];
+        sprintf(buf, "#%02X%02X%02X", red, green, blue);
+        ImGui::Text("HTML: %s", buf);
+    }
+    ImGui::EndChild();
+
 }
 
 void PPUState::RenderSprites(std::shared_ptr<PPU> const& ppu)
