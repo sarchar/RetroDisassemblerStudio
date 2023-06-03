@@ -83,6 +83,17 @@ void MainWindow::ChildWindowRemoved(std::shared_ptr<BaseWindow> const& window)
 
 void MainWindow::Update(double deltaTime)
 {
+    ImGuiIO& io = ImGui::GetIO();
+
+    bool no_mods = !(io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper);
+    bool shift_only = !(io.KeyCtrl || io.KeyAlt || io.KeySuper) && io.KeyShift;
+    bool ctrl_only = !(io.KeyShift || io.KeyAlt || io.KeySuper) && io.KeyCtrl;
+
+    if(ctrl_only) {
+        if(ImGui::IsKeyPressed(ImGuiKey_S)) {
+            StartSave();
+        }
+    }
 }
 
 void MainWindow::CheckInput()
@@ -144,6 +155,40 @@ void MainWindow::PostRender()
 //    ImGui::PopStyleVar(3);
 }
 
+void MainWindow::StartSave()
+{
+    if(project_file_path.size() == 0) { // if no file is specified as the project file, prompt the user
+        StartSaveAs();
+    } else {
+        popups.save_project.show = true;
+    }
+}
+
+void MainWindow::StartSaveAs()
+{
+    std::string default_file = current_project->GetRomFileName(); // current loaded file name
+
+    // get only the base filename
+    auto i = default_file.rfind("/");
+    if(i != std::string::npos) {
+        default_file = default_file.substr(i + 1);
+    }
+    i = default_file.rfind("\\");
+    if(i != std::string::npos) {
+        default_file = default_file.substr(i + 1);
+    }
+
+    // append .rdsproj
+    i = default_file.find(L'.');
+    if(i != std::string::npos) {
+        default_file = default_file.substr(0, i);
+    }
+    default_file = default_file + ".rdsproj";
+
+    ImGuiFileDialog::Instance()->OpenDialog("SaveProjectFileDialog", "Save Project", "Project Files (*.rdsproj){.rdsproj}", "./roms/", default_file.c_str(), 
+                                           1, nullptr, ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_ConfirmOverwrite);
+}
+
 void MainWindow::RenderMenuBar()
 {
     //if(!ImGui::BeginMainMenuBar()) return;
@@ -165,36 +210,12 @@ void MainWindow::RenderMenuBar()
                                                    1, nullptr, ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_ReadOnlyFileNameField);
         }
 
-        bool do_save_as = false;
         if(ImGui::MenuItem("Save Project", "ctrl+s", nullptr, (bool)current_project)) {
-            if(project_file_path.size() == 0) do_save_as = true;
-            else {
-                popups.save_project.show = true;
-            }
+            StartSave();
         }
 
-        if(do_save_as || ImGui::MenuItem("Save Project As...", "", nullptr, (bool)current_project)) {
-            std::string default_file = current_project->GetRomFileName(); // current loaded file name
-
-            // get only the base filename
-            auto i = default_file.rfind("/");
-            if(i != std::string::npos) {
-                default_file = default_file.substr(i + 1);
-            }
-            i = default_file.rfind("\\");
-            if(i != std::string::npos) {
-                default_file = default_file.substr(i + 1);
-            }
-
-            // append .rdsproj
-            i = default_file.find(L'.');
-            if(i != std::string::npos) {
-                default_file = default_file.substr(0, i);
-            }
-            default_file = default_file + ".rdsproj";
-
-            ImGuiFileDialog::Instance()->OpenDialog("SaveProjectFileDialog", "Save Project", "Project Files (*.rdsproj){.rdsproj}", "./roms/", default_file.c_str(), 
-                                                   1, nullptr, ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_ConfirmOverwrite);
+        if(ImGui::MenuItem("Save Project As...", "", nullptr, (bool)current_project)) {
+            StartSaveAs();
         }
 
         if(ImGui::MenuItem("Close Project", "", nullptr, (bool)current_project)) {

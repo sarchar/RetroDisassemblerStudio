@@ -126,6 +126,9 @@ private:
         } load_project;
     } popups;
 
+    void StartSave();
+    void StartSaveAs();
+
     std::string current_popup_title;
 
     std::shared_ptr<BaseProject> current_project;
