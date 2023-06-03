@@ -459,6 +459,17 @@ void MainWindow::OpenROMInfosPane()
     }
 }
 
+void MainWindow::UpdateApplicationTitle()
+{
+    stringstream ss;
+    ss << "Retro Disassembler Studio";
+    if(current_project) {
+        ss << " :: " << ((project_file_path.size() == 0) ? "Untitled" : project_file_path) 
+            << " [" << current_project->GetRomFileName() << "]";
+    }
+    GetApplication()->SetTitle(ss.str());
+}
+
 void MainWindow::CreateNewProject(string const& file_path_name)
 {
     cout << WindowPrefix() << "CreateNewProject(" << file_path_name << ")" << endl;
@@ -487,8 +498,9 @@ void MainWindow::ProjectCreatedHandler(std::shared_ptr<BaseWindow> project_creat
 
     // create the default workspace for the new system
     current_project->CreateSystemInstance();
-}
 
+    UpdateApplicationTitle();
+}
 
 void MainWindow::CloseProject()
 {
@@ -498,6 +510,8 @@ void MainWindow::CloseProject()
     // Drop the reference to the project, which should free everything from memory
     current_project = nullptr;
     project_file_path = "";
+
+    UpdateApplicationTitle();
 
     // temp
     BaseWindow::ResetWindowIDs();
@@ -682,6 +696,7 @@ void MainWindow::LoadProjectPopup()
             if(!popups.load_project.errored) {
                 AddChildWindow(current_project);
                 current_project->CreateSystemInstance();
+                UpdateApplicationTitle();
             }
 
             ImGui::CloseCurrentPopup();
@@ -732,7 +747,7 @@ void MainWindow::SaveProjectPopup()
             popups.save_project.thread->join();
             popups.save_project.thread = nullptr;
             ImGui::CloseCurrentPopup();
-
+            UpdateApplicationTitle();
         }
 
         ImGui::EndPopup();

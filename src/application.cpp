@@ -118,6 +118,13 @@ int Application::Run()
     return 0;
 }
 
+void Application::SetTitle(std::string const& s)
+{
+    window_title = s;
+    GLFWwindow* glfw_window = (GLFWwindow*)_glfw_window;
+    glfwSetWindowTitle(glfw_window, window_title.c_str());
+}
+
 int Application::CreatePlatformWindow()
 {
     // Setup window

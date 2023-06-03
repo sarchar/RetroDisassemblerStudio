@@ -86,6 +86,7 @@ private:
     void ChildWindowAdded(std::shared_ptr<BaseWindow> const&);
     void ChildWindowRemoved(std::shared_ptr<BaseWindow> const&);
 
+    void UpdateApplicationTitle();
     void CreateNewProject(std::string const&);
     void ProjectCreatedHandler(std::shared_ptr<BaseWindow>, std::shared_ptr<BaseProject>);
 
