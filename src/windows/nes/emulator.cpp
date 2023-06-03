@@ -607,6 +607,9 @@ bool SystemInstance::SaveWindow(std::ostream& os, std::string& errmsg)
     WriteVarInt(os, next_system_id); // every instance of SystemInstance will save and write the same value, but whatever...
     WriteVarInt(os, system_id);
 
+    // TODO serialize CPU, PPU, APU_IO, DMA
+    // TODO serialize Watches, Breakpoints
+
     current_state = last_state;
     return true;
 }
@@ -1240,6 +1243,28 @@ void PPUState::UpdateNametableTexture()
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 512, 512, GL_RGBA, GL_UNSIGNED_BYTE, nametable_framebuffer);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
+}
+
+bool PPUState::SaveWindow(std::ostream& os, std::string& errmsg)
+{
+    WriteVarInt(os, display_mode);
+    WriteVarInt(os, (int)show_scroll_window);
+    if(!os.good()) {
+        errmsg = "Error in " + WindowPrefix();
+        return false;
+    }
+    return true;
+}
+
+bool PPUState::LoadWindow(std::istream& is, std::string& errmsg)
+{
+    display_mode = ReadVarInt<int>(is);
+    show_scroll_window = (bool)ReadVarInt<int>(is);
+    if(!is.good()) {
+        errmsg = "Error in " + WindowPrefix();
+        return false;
+    }
+    return true;
 }
 
 std::shared_ptr<Watch> Watch::CreateWindow()

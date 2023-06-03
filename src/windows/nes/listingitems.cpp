@@ -154,12 +154,22 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
 
     if(ImGui::BeginTable("listing_item_primary", 7, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
         ImGui::TableSetupColumn("##Break", ImGuiTableColumnFlags_WidthFixed, bp_size);
-        ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Raw", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed , 92); // some saner default sizes, taken from the printout below
+        ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed, 31);
+        ImGui::TableSetupColumn("Raw", ImGuiTableColumnFlags_WidthFixed     , 88);
+        ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed, 63);
+        ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed , 257);
         ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthStretch); // stretch comment to EOL
+
+        // uncomment to print out column widths. TODO allow user to decide to save the widths as a global default
+        //!if(selected && ImGui::IsMouseClicked(0)) {
+        //!    ImGuiTable* table = ImGui::GetCurrentTable();
+        //!    for(int i = 0; i < table->ColumnsCount; i++) {
+        //!        ImGuiTableColumn& col = table->Columns[i];
+        //!        cout << (float)col.WidthGiven << " ";
+        //!    }
+        //!    cout << endl;
+        //!}
 
         ImGui::TableNextRow();
     

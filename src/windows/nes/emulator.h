@@ -264,6 +264,9 @@ protected:
     void Update(double deltaTime) override;
     void Render() override;
 
+    bool SaveWindow(std::ostream&, std::string&) override;
+    bool LoadWindow(std::istream&, std::string&) override;
+
 private:
     void RenderRegisters(std::shared_ptr<PPU> const&);
     void RenderNametables(std::shared_ptr<PPU> const&);
