@@ -115,6 +115,7 @@ public:
         case 0x02: // PPUSTAT
             ret = ppu->ppustat;
             ppu->vblank = 0;
+            ppu->nmi(0);
 
             // race condition - if a read occurs to $2002 at near the same time an NMI is generated, the NMI is skipped for that frame
             if(ppu->scanline == 241 && ppu->cycle == 1) ppu->prevent_nmi_this_frame = true;
@@ -157,7 +158,11 @@ public:
         case 0x00: // PPUCONT
             // if the PPU is currentinly in vblank (and the PPUSTAT vblank flag is still set to 1),
             // changing the NMI enable flag from 0 to 1 triggers NMI immediately
-            if(ppu->vblank && !ppu->enable_nmi && (value & 0x80)) ppu->nmi();
+            if(ppu->vblank && !ppu->enable_nmi && (value & 0x80)) {
+                ppu->nmi(1);
+            } else if(!(value & 0x80)) {
+                ppu->nmi(0);
+            }
 
             ppu->ppucont = value;
 
@@ -321,8 +326,11 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
             }
 
             if(cycle < 257) {   // cycles 1..256
-                vblank = 0; // doesn't hurt to set this every cycle, but the first time it'll matter is (scanline=261,cycle=1) when it should first be cleared
-                prevent_nmi_this_frame = false;
+                if(scanline == 261) {
+                    vblank = 0; // doesn't hurt to set this every cycle, but the first time it'll matter is (scanline=261,cycle=1) when it should first be cleared
+                    nmi(0);
+                    prevent_nmi_this_frame = false;
+                }
                 color = InternalStep(false);
             } else if(cycle < 321) {   // cycles 257..320 (hblank up until bg tile prefetch)
                 if(cycle == 257) { // start of hblank
@@ -373,7 +381,7 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
         if(cycle == 1) {
             if(!prevent_nmi_this_frame) {
                 vblank = 1;
-                if(enable_nmi) nmi();
+                if(enable_nmi) nmi(1);
             }
         }
     }

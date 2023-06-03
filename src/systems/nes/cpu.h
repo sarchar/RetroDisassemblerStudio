@@ -25,7 +25,7 @@ public:
     void Reset();
     bool Step(); // return true on instruction decode cycle 
     inline void DmaStep() { cycle_count++; }
-    inline void Nmi() { state.nmi = 1; }
+    inline void Nmi(int high) { state.nmi = high; }
 
     inline s64 GetNextUC()     const { auto ptr = state.ops; if(!ptr) return (u64)-1; else return *ptr; }
     inline u16 GetOpcode()     const { return state.opcode; }
@@ -49,6 +49,9 @@ private:
 
     struct {
         u8         nmi;
+        u8         nmi_detected;
+        u8         do_nmi;
+        u8         did_nmi;
         u8         istep;
         u8         opcode;
         u8         intermediate;

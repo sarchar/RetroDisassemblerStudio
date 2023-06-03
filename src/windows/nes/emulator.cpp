@@ -87,8 +87,8 @@ SystemInstance::SystemInstance()
         auto& mv = memory_view;
 
         ppu = make_shared<PPU>(
-            [this]() {
-                cpu->Nmi();
+            [this](int high) {
+                cpu->Nmi(high);
             },
             [this, &mv](u16 address)->u8 { // capturing the reference means the pointer can change after this initialization
                 return memory_view->PeekPPU(address & 0x3FFF);

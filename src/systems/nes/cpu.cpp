@@ -335,11 +335,15 @@ bool CPU::Step()
     state.istep++;
     cycle_count++;
 
+    // internal NMI signal goes high in the cycle AFTER the cycle where the edge was detected
+    if(!state.do_nmi) state.did_nmi = false;
+    state.do_nmi = state.nmi_detected;
+    state.nmi_detected = state.nmi;
+
+    // TODO NMI can hijack BRK if done before cycle 4 of the PPU scanline
     // check for NMI before opcode fetch
-    // TODO look up when the NMI happens.. I think it's before opcode fetch, not after
-    // TODO NMI can hijack BRK if done before cycle 4
-    if(state.nmi && (state.ops && *state.ops == OPCODE_FETCH)) {
-        state.nmi     = 0;
+    if(state.do_nmi && !state.did_nmi && (state.ops && *state.ops == OPCODE_FETCH)) {
+        state.did_nmi = 1;
         state.eaddr   = 0xFFFA;
         state.ops     = CpuNMI;
         state.istep   = 0;

@@ -12,7 +12,7 @@ extern int const rgb_palette_map[];
 
 class PPU : public std::enable_shared_from_this<PPU> {
 public:
-    typedef std::function<void()> nmi_function_t;
+    typedef std::function<void(int)> nmi_function_t;
 
     typedef std::function<u8(u16)> read_func_t;
     typedef std::function<void(u16, u8)> write_func_t;
