@@ -636,16 +636,6 @@ Screen::Screen()
     SetNoScrollbar(true);
     SetTitle("Screen");
 
-    GLuint gl_texture;
-
-    glGenTextures(1, &gl_texture);
-    glBindTexture(GL_TEXTURE_2D, gl_texture);
-    // OpenGL requires at least one glTexImage2D to setup the texture
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    framebuffer_texture = (void*)(intptr_t)gl_texture;
-    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 Screen::~Screen()
@@ -673,12 +663,6 @@ void Screen::CheckInput()
 
 void Screen::Update(double deltaTime)
 {
-    if(auto framebuffer = GetMySystemInstance()->GetFramebuffer()) {
-        GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
-        glBindTexture(GL_TEXTURE_2D, gl_texture);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
-        glBindTexture(GL_TEXTURE_2D, 0);
-    }
 }
 
 void Screen::PreRender()
@@ -689,6 +673,26 @@ void Screen::PreRender()
 
 void Screen::Render()
 {
+    if(!valid_texture) {
+        GLuint gl_texture;
+        glGenTextures(1, &gl_texture);
+        glBindTexture(GL_TEXTURE_2D, gl_texture);
+        // OpenGL requires at least one glTexImage2D to setup the texture
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        framebuffer_texture = (void*)(intptr_t)gl_texture;
+        glBindTexture(GL_TEXTURE_2D, 0);
+        valid_texture = true;
+    }
+
+    if(auto framebuffer = GetMySystemInstance()->GetFramebuffer()) {
+        GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
+        glBindTexture(GL_TEXTURE_2D, gl_texture);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, framebuffer);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
     auto size = ImGui::GetWindowSize();
     float sz = min(size.x, size.y);
 
@@ -781,18 +785,6 @@ PPUState::PPUState()
     nametable_framebuffer = (u32*)new u8[sizeof(int) * 512 * 512];
     memset(nametable_framebuffer, 0, sizeof(int) * 512 * 512);
 
-    // generate the nametable GL texture
-    GLuint gl_texture;
-
-    glGenTextures(1, &gl_texture);
-    glBindTexture(GL_TEXTURE_2D, gl_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    nametable_texture = (void*)(intptr_t)gl_texture;
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-
 }
 
 PPUState::~PPUState()
@@ -809,6 +801,21 @@ void PPUState::CheckInput()
 
 void PPUState::Update(double deltaTime)
 {
+    if(!valid_texture) {
+        // generate the nametable GL texture
+        GLuint gl_texture;
+
+        glGenTextures(1, &gl_texture);
+        glBindTexture(GL_TEXTURE_2D, gl_texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        nametable_texture = (void*)(intptr_t)gl_texture;
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        valid_texture = true;
+    }
+
     if(display_mode == 1) {
         UpdateNametableTexture();
     }
@@ -823,11 +830,7 @@ void PPUState::Render()
     auto memory_view = si->GetMemoryView();
     if(!memory_view) return;
 
-    ImGui::RadioButton("Registers", &display_mode, 0); ImGui::SameLine();
-    ImGui::RadioButton("Nametables", &display_mode, 1); ImGui::SameLine();
-    ImGui::RadioButton("Palettes", &display_mode, 2); ImGui::SameLine();
-    ImGui::RadioButton("Sprites", &display_mode, 3);
-
+    ImGui::Combo("View", &display_mode, "Registers\0Nametables\0Palettes\0Sprites\0\0");
     ImGui::Separator();
 
     switch(display_mode) {

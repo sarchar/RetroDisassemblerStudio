@@ -228,6 +228,7 @@ protected:
 
 private:
     void* framebuffer_texture;
+    bool  valid_texture = false;
 };
  
 class CPUState : public BaseWindow {
@@ -274,11 +275,12 @@ private:
     void RenderSprites(std::shared_ptr<PPU> const&);
 
     int display_mode = 0;
+    bool  show_scroll_window = true;
 
     void  UpdateNametableTexture();
     u32*  nametable_framebuffer;
     void* nametable_texture;
-    bool  show_scroll_window = true;
+    bool  valid_texture = false;
 };
 
 class Watch : public BaseWindow {
