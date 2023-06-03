@@ -16,7 +16,9 @@ public:
     virtual ~ProjectCreatorWindow();
 
     virtual char const * const GetWindowClass() { return ProjectCreatorWindow::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "ProjectCreatorWindow"; }
+    static char const * const GetWindowClassStatic() { return "Windows::ProjectCreatorWindow"; }
+    static std::shared_ptr<ProjectCreatorWindow> CreateWindow();
+    static std::shared_ptr<ProjectCreatorWindow> CreateWindow(std::string const& _file_path_name);
 
     // signals
     typedef signal<std::function<void(std::shared_ptr<BaseWindow>, std::shared_ptr<BaseProject>)>> project_created_t;
@@ -51,8 +53,6 @@ private:
     bool        create_project_error;
     bool        create_project_done;
 
-public:
-    static std::shared_ptr<ProjectCreatorWindow> CreateWindow(std::string const& _file_path_name);
 
 };
 

@@ -31,13 +31,15 @@ using namespace std;
 
 namespace Windows::NES {
 
+REGISTER_WINDOW(Listing);
+
 shared_ptr<Listing> Listing::CreateWindow()
 {
     return make_shared<Listing>();
 }
 
 Listing::Listing()
-    : BaseWindow("NES::Listing"), current_selection_listing_item(0)
+    : BaseWindow(), current_selection_listing_item(0)
 {
     SetTitle("Listing");
     SetNoScrollbar(true);

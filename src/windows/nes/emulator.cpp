@@ -34,13 +34,20 @@ namespace Windows::NES {
 
 int SystemInstance::next_system_id = 1;
 
+REGISTER_WINDOW(SystemInstance);
+REGISTER_WINDOW(Screen);
+REGISTER_WINDOW(Watch);
+REGISTER_WINDOW(Breakpoints);
+REGISTER_WINDOW(CPUState);
+REGISTER_WINDOW(PPUState);
+
 std::shared_ptr<SystemInstance> SystemInstance::CreateWindow()
 {
     return make_shared<SystemInstance>();
 }
 
 SystemInstance::SystemInstance()
-    : BaseWindow("NES::SystemInstance")
+    : BaseWindow()
 {
     system_id = next_system_id++;
     SetNav(false);
@@ -125,9 +132,10 @@ SystemInstance::SystemInstance()
         emulation_thread = make_shared<thread>(std::bind(&SystemInstance::EmulationThread, this));
 
         current_state = State::PAUSED;
-   }
+    }
 
-   Reset();
+    Reset();
+    UpdateTitle();
 }
 
 SystemInstance::~SystemInstance()
@@ -227,8 +235,6 @@ void SystemInstance::UpdateTitle()
 {
     stringstream ss;
     ss << "NES_" << system_id << " :: " << magic_enum::enum_name(current_state);
-    // append ImGui fixed ID, so as to ignore our title text
-    ss << "###NES_" << system_id;
     system_title = ss.str();
     SetTitle(system_title.c_str());
 }
@@ -590,13 +596,38 @@ void SystemInstance::CheckBreakpoints(u16 address, CheckBreakpointMode mode)
     }
 }
 
+bool SystemInstance::SaveWindow(std::ostream& os, std::string& errmsg)
+{
+    auto last_state = current_state;
+    if(current_state != State::PAUSED) {
+        current_state = State::PAUSED;
+        while(running) ; 
+    }
+
+    WriteVarInt(os, next_system_id); // every instance of SystemInstance will save and write the same value, but whatever...
+    WriteVarInt(os, system_id);
+
+    current_state = last_state;
+    return true;
+}
+
+bool SystemInstance::LoadWindow(std::istream& is, std::string& errmsg)
+{
+    assert(current_state == State::PAUSED); // should be the default initialization state
+
+    next_system_id = ReadVarInt<int>(is);
+    system_id = ReadVarInt<int>(is);
+
+    return true;
+}
+
 std::shared_ptr<Screen> Screen::CreateWindow()
 {
     return make_shared<Screen>();
 }
 
 Screen::Screen()
-    : BaseWindow("Windows::NES::Screen")
+    : BaseWindow()
 {
     SetNav(false);
     SetNoScrollbar(true);
@@ -669,7 +700,7 @@ std::shared_ptr<CPUState> CPUState::CreateWindow()
 }
 
 CPUState::CPUState()
-    : BaseWindow("Windows::NES::CPUState")
+    : BaseWindow()
 {
     SetTitle("CPU");
 }
@@ -739,7 +770,7 @@ std::shared_ptr<PPUState> PPUState::CreateWindow()
 }
 
 PPUState::PPUState()
-    : BaseWindow("Windows::NES::PPUState")
+    : BaseWindow()
 {
     SetTitle("PPU");
 
@@ -1217,7 +1248,7 @@ std::shared_ptr<Watch> Watch::CreateWindow()
 }
 
 Watch::Watch()
-    : BaseWindow("Windows::NES::Watch")
+    : BaseWindow()
 {
     SetTitle("Watch");
 
@@ -1652,7 +1683,7 @@ std::shared_ptr<Breakpoints> Breakpoints::CreateWindow()
 }
 
 Breakpoints::Breakpoints()
-    : BaseWindow("Windows::NES::Breakpoints")
+    : BaseWindow()
 {
     SetTitle("Breakpoints");
 

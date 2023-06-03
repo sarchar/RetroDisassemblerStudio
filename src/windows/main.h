@@ -11,7 +11,6 @@
 #include "windows/basewindow.h"
 
 #define GetMainWindow() GetApplication()->GetMainWindowAs<Windows::MainWindow>()
-#define GetSystemInstance() (assert(GetMainWindow()), GetMainWindow()->GetMostRecentSystemInstance())
 
 // Common flag buttons used in many windows
 inline void ImGuiFlagButton(bool* var, char const* text, char const* hover) {
@@ -68,9 +67,6 @@ public:
     // Project
     inline std::shared_ptr<BaseProject> GetCurrentProject() { return current_project; }
 
-    // System Instance
-    inline std::shared_ptr<BaseWindow> const& GetMostRecentSystemInstance() const { return most_recent_system_instance; }
-
 protected:
     void CheckInput() override;
     void Update(double deltaTime) override;
@@ -82,9 +78,6 @@ protected:
 
 private:
     bool show_imgui_demo;
-
-    void ChildWindowAdded(std::shared_ptr<BaseWindow> const&);
-    void ChildWindowRemoved(std::shared_ptr<BaseWindow> const&);
 
     void UpdateApplicationTitle();
     void CreateNewProject(std::string const&);
@@ -134,8 +127,6 @@ private:
 
     std::shared_ptr<BaseProject> current_project;
     std::string project_file_path;
-
-    std::shared_ptr<BaseWindow> most_recent_system_instance;
 };
 
 }

@@ -19,6 +19,7 @@
 #include "windows/nes/emulator.h"
 #include "windows/nes/labels.h"
 #include "windows/nes/listing.h"
+#include "windows/nes/project.h"
 #include "windows/nes/regions.h"
 
 using namespace std;
@@ -31,15 +32,16 @@ std::shared_ptr<MainWindow> MainWindow::CreateWindow()
 }
 
 MainWindow::MainWindow()
-    : BaseWindow("Windows::MainWindow"), show_imgui_demo(false)
+    : BaseWindow(), show_imgui_demo(false)
 {
+    SetWindowID("main"); // always have the same ID for the main window
     SetTitle("Retro Disassembler Studio");
 
     // disable frame, resize, etc
     SetMainWindow(true);
 
     // make this window dockable-into
-    SetIsDockSpace(true);
+    SetIsDockSpace(true, true);
 
     // and we can't be docked into other things
     SetDockable(false);
@@ -49,9 +51,6 @@ MainWindow::MainWindow()
 
     // show a status bar
     SetShowStatusBar(true);
-
-    *child_window_added += std::bind(&MainWindow::ChildWindowAdded, this, placeholders::_1);
-    *child_window_removed += std::bind(&MainWindow::ChildWindowRemoved, this, placeholders::_1);
 
     // register all the windows here
 #   define REGISTER_WINDOW_TYPE(className) \
@@ -63,22 +62,6 @@ MainWindow::MainWindow()
 
 MainWindow::~MainWindow()
 {
-}
-
-void MainWindow::ChildWindowAdded(std::shared_ptr<BaseWindow> const& window)
-{
-    if(auto system_instance = dynamic_pointer_cast<Windows::NES::SystemInstance>(window)) {
-        *window->window_activated += [this](shared_ptr<BaseWindow> const& _wnd) {
-            most_recent_system_instance = _wnd;
-        };
-    }
-}
-
-void MainWindow::ChildWindowRemoved(std::shared_ptr<BaseWindow> const& window)
-{
-    if(window == most_recent_system_instance) {
-        most_recent_system_instance = nullptr;
-    }
 }
 
 void MainWindow::Update(double deltaTime)
@@ -270,7 +253,7 @@ void MainWindow::RenderMenuBar()
                 current_project->CreateSystemInstance();
             }
 
-            if(auto si = dynamic_pointer_cast<Windows::NES::SystemInstance>(most_recent_system_instance)) {
+            if(auto si = GetSystemInstance()) {
                 if(ImGui::BeginMenu("Instance")) {
                     static char const * const window_types[] = {
                         "Defines", "Labels", "Listing", "Memory", "Screen"
@@ -512,9 +495,6 @@ void MainWindow::CloseProject()
     project_file_path = "";
 
     UpdateApplicationTitle();
-
-    // temp
-    BaseWindow::ResetWindowIDs();
 }
 
 
@@ -695,7 +675,7 @@ void MainWindow::LoadProjectPopup()
             // TODO this should go away once the workspace is saved in the project file
             if(!popups.load_project.errored) {
                 AddChildWindow(current_project);
-                current_project->CreateSystemInstance();
+                //!current_project->CreateSystemInstance();
                 UpdateApplicationTitle();
             }
 
@@ -783,7 +763,12 @@ void MainWindow::SaveProjectThread()
         out.write((char*)&flags, sizeof(flags));
 
         if(out.good()) {
+            // save the project data
             popups.save_project.errored = !current_project->Save(out, popups.save_project.errmsg);
+            if(!popups.save_project.errored) {
+                // current_project is the parent to all windows related to the project
+                popups.save_project.errored = !current_project->SaveWorkspace(out, popups.save_project.errmsg);
+            }
         } else {
             popups.save_project.errored = true;
             popups.save_project.errmsg = "Could not write to file";
@@ -829,6 +814,11 @@ void MainWindow::LoadProjectThread()
             current_project = BaseProject::StartLoadProject(is, popups.load_project.errmsg);
             if(current_project && !current_project->Load(is, popups.load_project.errmsg)) {
                 current_project = nullptr;
+            } else {
+                // continue loading the workspace
+                if(!current_project->LoadWorkspace(is, popups.load_project.errmsg)) {
+                    current_project = nullptr;
+                }
             }
             popups.load_project.errored = !current_project;
         }

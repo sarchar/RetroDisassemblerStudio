@@ -22,13 +22,15 @@ using namespace std;
 
 namespace Windows::NES {
 
+REGISTER_WINDOW(Labels);
+
 shared_ptr<Labels> Labels::CreateWindow()
 {
     return make_shared<Labels>();
 }
 
 Labels::Labels()
-    : BaseWindow("NES::Labels"), selected_row(-1), force_resort(true), force_reiterate(true), case_sensitive_sort(false), show_locals(false)
+    : BaseWindow(), selected_row(-1), force_resort(true), force_reiterate(true), case_sensitive_sort(false), show_locals(false)
 {
     SetTitle("Labels");
     SetNoScrollbar(true);

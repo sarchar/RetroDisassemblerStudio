@@ -5,10 +5,11 @@
 #include "windows/baseproject.h"
 #include "windows/main.h"
 
-#define GetCurrentProject() dynamic_pointer_cast<Systems::NES::Project>(GetMainWindow()->GetCurrentProject())
+#define GetCurrentProject() dynamic_pointer_cast<Windows::NES::Project>(GetMainWindow()->GetCurrentProject())
 #define GetSystem()         dynamic_pointer_cast<Systems::NES::System>(GetCurrentProject()->GetSystem<Systems::NES::System>())
+#define GetSystemInstance() (assert(GetCurrentProject()), dynamic_pointer_cast<Windows::NES::SystemInstance>(GetCurrentProject()->GetMostRecentSystemInstance()))
 
-namespace Systems::NES {
+namespace Windows::NES {
 
 
 struct CreateNewDefineData {};
@@ -16,6 +17,8 @@ struct CreateNewDefineData {};
 // TODO this needs to be in windows/nes/
 class Project : public Windows::BaseProject {
 public:
+    using System = Systems::NES::System;
+
     virtual char const * const GetWindowClass() { return Project::GetWindowClassStatic(); }
     static char const * const GetWindowClassStatic() { return "NES::Project"; }
 
@@ -33,6 +36,9 @@ public:
     static bool IsROMValid(std::string const&, std::istream&);
     static std::shared_ptr<BaseProject> CreateProject();
 
+    // System Instance
+    inline std::shared_ptr<BaseWindow> const& GetMostRecentSystemInstance() const { return most_recent_system_instance; }
+
     // Save and Load
     bool Save(std::ostream&, std::string&) override;
     bool Load(std::istream&, std::string&) override;
@@ -42,7 +48,8 @@ protected:
     void Render() override;
 
 private:
-    void WindowAdded(std::shared_ptr<BaseWindow> const&) override;
+    void ChildWindowAdded(std::shared_ptr<BaseWindow> const&) override;
+    void ChildWindowRemoved(std::shared_ptr<BaseWindow> const&) override;
 
     void CommonCommandHandler(std::shared_ptr<BaseWindow>&, std::string const&, void*);
 
@@ -72,6 +79,8 @@ private:
 
         std::string current_title = "";
     } popups;
+
+    std::shared_ptr<BaseWindow> most_recent_system_instance;
 };
 
 }

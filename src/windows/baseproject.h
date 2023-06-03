@@ -50,6 +50,9 @@ public:
     std::shared_ptr<create_new_project_progress_t> create_new_project_progress;
 
 protected:
+    virtual void ChildWindowAdded(std::shared_ptr<BaseWindow> const&) {}
+    virtual void ChildWindowRemoved(std::shared_ptr<BaseWindow> const&) {}
+
     std::shared_ptr<BaseSystem> current_system;
     std::string                 rom_file_name;
 
@@ -59,13 +62,6 @@ public:
     static Information const* GetProjectInformation(std::string const& abbreviation);
     static std::vector<Information const*> project_informations;
 
-private:
-    virtual void WindowAdded(std::shared_ptr<BaseWindow> const&) {}
-    virtual void WindowRemoved(std::shared_ptr<BaseWindow> const&) {}
-    void _WindowAdded(std::shared_ptr<BaseWindow> const& window) { WindowAdded(window); }
-    void _WindowRemoved(std::shared_ptr<BaseWindow> const& window) { WindowRemoved(window); }
-    signal_connection window_added_connection;
-    signal_connection window_removed_connection;
 };
 
 }

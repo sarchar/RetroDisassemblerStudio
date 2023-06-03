@@ -27,7 +27,8 @@ public:
     virtual ~Defines();
 
     virtual char const * const GetWindowClass() { return Defines::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "NES::Defines"; }
+    static char const * const GetWindowClassStatic() { return "Windows::NES::Defines"; }
+    static std::shared_ptr<Defines> CreateWindow();
 
     void Highlight(std::shared_ptr<Systems::NES::Define>&);
 
@@ -52,8 +53,6 @@ private:
 
     signal_connection define_created_connection;
 
-public:
-    static std::shared_ptr<Defines> CreateWindow();
 };
 
 } //namespace NES

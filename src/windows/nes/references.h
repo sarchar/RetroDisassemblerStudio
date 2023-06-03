@@ -33,11 +33,14 @@ public:
         std::shared_ptr<Define>,
         std::shared_ptr<Label>> reference_type;
 
+    References();
     References(reference_type const&);
     virtual ~References();
 
     virtual char const * const GetWindowClass() { return References::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "NES::References"; }
+    static char const * const GetWindowClassStatic() { return "Windows::NES::References"; }
+    static std::shared_ptr<References> CreateWindow();
+    static std::shared_ptr<References> CreateWindow(reference_type const&);
 
     // signals
 
@@ -65,9 +68,6 @@ private:
     void PopulateLocations();
     void PopulateDefineLocations(std::shared_ptr<Define>&);
     void PopulateLabelLocations(std::shared_ptr<Label>&);
-
-public:
-    static std::shared_ptr<References> CreateWindow(reference_type const&);
 };
 
 } //namespace Windows::NES

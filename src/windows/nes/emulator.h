@@ -74,7 +74,7 @@ public:
     virtual ~SystemInstance();
 
     virtual char const * const GetWindowClass() { return SystemInstance::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "NES::SystemInstance"; }
+    static char const * const GetWindowClassStatic() { return "Windows::NES::SystemInstance"; }
     static std::shared_ptr<SystemInstance> CreateWindow();
 
     // create a default workspace
@@ -145,6 +145,9 @@ protected:
     void Update(double deltaTime) override;
     void Render() override;
 
+    bool SaveWindow(std::ostream&, std::string&) override;
+    bool LoadWindow(std::istream&, std::string&) override;
+
 private:
     void ChildWindowAdded(std::shared_ptr<BaseWindow> const&);
     void ChildWindowRemoved(std::shared_ptr<BaseWindow> const&);
@@ -214,7 +217,7 @@ public:
     virtual ~Screen();
 
     virtual char const * const GetWindowClass() { return Screen::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "NES::Screen"; }
+    static char const * const GetWindowClassStatic() { return "Windows::NES::Screen"; }
     static std::shared_ptr<Screen> CreateWindow();
 
 protected:
@@ -233,7 +236,7 @@ public:
     virtual ~CPUState();
 
     virtual char const * const GetWindowClass() { return CPUState::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "NES::CPUState"; }
+    static char const * const GetWindowClassStatic() { return "Windows::NES::CPUState"; }
     static std::shared_ptr<CPUState> CreateWindow();
 
 protected:
@@ -253,7 +256,7 @@ public:
     virtual ~PPUState();
 
     virtual char const * const GetWindowClass() { return PPUState::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "NES::PPUState"; }
+    static char const * const GetWindowClassStatic() { return "Windows::NES::PPUState"; }
     static std::shared_ptr<PPUState> CreateWindow();
 
 protected:
@@ -281,7 +284,7 @@ public:
     virtual ~Watch();
 
     virtual char const * const GetWindowClass() { return Watch::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "NES::Watch"; }
+    static char const * const GetWindowClassStatic() { return "Windows::NES::Watch"; }
     static std::shared_ptr<Watch> CreateWindow();
 
     void CreateWatch(std::string const&);
@@ -342,7 +345,7 @@ public:
     virtual ~Breakpoints();
 
     virtual char const * const GetWindowClass() { return Breakpoints::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "NES::Breakpoints"; }
+    static char const * const GetWindowClassStatic() { return "Windows::NES::Breakpoints"; }
     static std::shared_ptr<Breakpoints> CreateWindow();
 
 protected:

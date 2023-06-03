@@ -24,7 +24,8 @@ public:
     virtual ~MemoryRegions();
 
     virtual char const * const GetWindowClass() { return MemoryRegions::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "NES::MemoryRegions"; }
+    static char const * const GetWindowClassStatic() { return "Windows::NES::MemoryRegions"; }
+    static std::shared_ptr<MemoryRegions> CreateWindow();
 
     // signals
 
@@ -36,8 +37,6 @@ private:
     std::weak_ptr<System>            current_system;
     int selected_row;
 
-public:
-    static std::shared_ptr<MemoryRegions> CreateWindow();
 };
 
 } //namespace Windows::NES

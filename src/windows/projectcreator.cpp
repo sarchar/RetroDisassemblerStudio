@@ -18,15 +18,20 @@ using namespace std;
 
 namespace Windows {
 
+REGISTER_WINDOW(ProjectCreatorWindow);
+
+shared_ptr<ProjectCreatorWindow> ProjectCreatorWindow::CreateWindow()
+{
+    return make_shared<ProjectCreatorWindow>("");
+}
+
 shared_ptr<ProjectCreatorWindow> ProjectCreatorWindow::CreateWindow(string const& _file_path_name)
 {
     return make_shared<ProjectCreatorWindow>(_file_path_name);
 }
 
 ProjectCreatorWindow::ProjectCreatorWindow(string const& _file_path_name)
-    : BaseWindow("project_creater"),
-      file_path_name(_file_path_name),
-      loader_state(LOADER_STATE_INIT)
+    : BaseWindow(), file_path_name(_file_path_name), loader_state(LOADER_STATE_INIT)
 {
     SetTitle("Project Creator");
     SetWindowless(true);

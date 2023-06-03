@@ -25,10 +25,9 @@ public:
         DOCK_BOTTOM
     };
 
-    BaseWindow(std::string const& title);
+    BaseWindow();
     virtual ~BaseWindow();
 
-    static void ResetWindowIDs();
     virtual char const * const GetWindowClass() = 0;
 
     // Utility
@@ -43,7 +42,7 @@ public:
     void SetWindowID(std::string const& wid);
     void SetShowStatusBar(bool enabled) { show_statusbar = false; /*enabled;*/ } // TODO statusbar no workie
     void SetShowMenuBar(bool enabled) { show_menubar = enabled; }
-    void SetIsDockSpace(bool _v) { is_dockspace = _v; }
+    void SetIsDockSpace(bool _v, bool _skip_builder = false) { is_dockspace = _v; skip_dockspace_builder = _skip_builder; }
     void SetDockable(bool _v) { is_dockable = _v; }
     void SetMainWindow(bool _v) { is_mainwindow = _v; }
 
@@ -80,6 +79,10 @@ public:
         return nullptr;
     }
 
+    // Saving and loading
+    bool SaveWorkspace(std::ostream&, std::string&);
+    bool LoadWorkspace(std::istream&, std::string&);
+
     // signals available in all windows
     typedef signal<std::function<void(std::shared_ptr<BaseWindow>&, std::string const&, void*)>> command_signal_t;
     std::shared_ptr<command_signal_t> command_signal;
@@ -111,13 +114,27 @@ protected:
 
     virtual void CheckInput() {};
 
+    // override if no_save is not set!
+    virtual bool SaveWindow(std::ostream&, std::string&) {
+        std::cout << WindowPrefix() << "SaveWindow()" << std::endl;
+        //assert(false);
+        //return false;
+        return true;
+    }
+
+    virtual bool LoadWindow(std::istream&, std::string&) {
+        std::cout << WindowPrefix() << "LoadWindow()" << std::endl;
+        //assert(false);
+        //return false;
+        return true;
+    }
+
     // Required in the derived class
     static std::string GetRandomID();
 
 private:
     std::string window_title;
     std::string base_title;
-    std::string window_tag; // window tag is used in ImGui window titles to keep the IDs unique
     std::string window_id;
     std::string dockspace_id;
     std::shared_ptr<BaseWindow> parent_window;
@@ -128,6 +145,8 @@ private:
     bool docked;
     bool activated;
 
+    bool no_save = false;
+
     bool windowless = false;
     bool enable_nav = true;
     bool no_scrollbar = false;
@@ -135,6 +154,7 @@ private:
     bool is_mainwindow = false;
 
     bool is_dockspace = false;
+    bool skip_dockspace_builder = false;
     bool is_dockable = true;
 
     bool show_statusbar = false;
@@ -168,7 +188,12 @@ private:
     void InternalRenderMenuBar();
     void InternalRenderStatusBar();
 
+    bool InternalSaveWindow(std::ostream&, std::string&);
+    bool InternalLoadWindow(std::istream&, std::string&);
+
     friend class Application;
+
+    bool print_id = true;
 };
 
 } // namespace Windows

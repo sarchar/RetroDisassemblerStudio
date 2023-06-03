@@ -27,7 +27,8 @@ public:
     virtual ~Listing();
 
     virtual char const * const GetWindowClass() { return Listing::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "NES::Listing"; }
+    static char const * const GetWindowClassStatic() { return "Windows::NES::Listing"; }
+    static std::shared_ptr<Listing> CreateWindow();
 
     void GoToAddress(GlobalMemoryLocation const&, bool save = true);
     void GoToAddress(u32);
@@ -110,9 +111,6 @@ private:
     } popups;
 
     void RenderPopups();
-
-public:
-    static std::shared_ptr<Listing> CreateWindow();
 };
 
 } // namespace Windows::NES

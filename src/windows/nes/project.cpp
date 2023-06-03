@@ -19,7 +19,7 @@
 
 using namespace std;
 
-namespace Systems::NES {
+namespace Windows::NES {
 
 Windows::BaseProject::Information const* Project::GetInformation()
 {
@@ -161,7 +161,7 @@ void Project::CreateSystemInstance()
 {
     auto system_instance = Windows::NES::SystemInstance::CreateWindow();
     system_instance->SetInitialDock(BaseWindow::DOCK_ROOT);
-    GetMainWindow()->AddChildWindow(system_instance);
+    AddChildWindow(system_instance);
     system_instance->CreateDefaultWorkspace();
 }
 
@@ -301,10 +301,21 @@ void Project::RenderCreateNewDefinePopup()
     }
 }
 
-void Project::WindowAdded(std::shared_ptr<BaseWindow> const& window)
+void Project::ChildWindowAdded(std::shared_ptr<BaseWindow> const& window)
 {
     if(auto wnd = dynamic_pointer_cast<Windows::NES::Defines>(window)) {
         *wnd->command_signal += std::bind(&Project::CommonCommandHandler, this, placeholders::_1, placeholders::_2, placeholders::_3);
+    } else if(auto system_instance = dynamic_pointer_cast<Windows::NES::SystemInstance>(window)) {
+        *window->window_activated += [this](shared_ptr<BaseWindow> const& _wnd) {
+            most_recent_system_instance = _wnd;
+        };
+    }
+}
+
+void Project::ChildWindowRemoved(std::shared_ptr<BaseWindow> const& window)
+{
+    if(window == most_recent_system_instance) {
+        most_recent_system_instance = nullptr;
     }
 }
 

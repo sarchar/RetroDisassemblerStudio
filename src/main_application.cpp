@@ -17,14 +17,24 @@
 
 using namespace std;
 
+WindowRegistration* WindowRegistration::head;
+
 MainApplication::MainApplication(int, char*[])
     : Application("Retro Disassembler Studio", 1800, 1200),
       request_exit(false)
 {
-    Windows::BaseProject::RegisterProjectInformation(Systems::NES::Project::GetInformationStatic());
+    Windows::BaseProject::RegisterProjectInformation(Windows::NES::Project::GetInformationStatic());
 
     BaseExpressionNodeCreator::RegisterBaseExpressionNodes();
     Systems::NES::ExpressionNodeCreator::RegisterExpressionNodes();
+
+    // loop over window registrations and create a hash table
+    WindowRegistration* cur = WindowRegistration::head;
+    while(cur) {
+        cout << "Found window class " << cur->window_class << endl;
+        window_classes[cur->window_class] = cur;
+        cur = cur->next;
+    }
 }
 
 MainApplication::~MainApplication()
@@ -40,6 +50,14 @@ std::shared_ptr<Windows::BaseWindow> MainApplication::CreateMainWindow()
     };
 
     return main_window;
+}
+
+shared_ptr<Windows::BaseWindow> MainApplication::CreateWindow(std::string const& window_class)
+{
+    if(window_classes.contains(window_class)) {
+        return window_classes[window_class]->create_func();
+    }
+    return nullptr;
 }
 
 bool MainApplication::OnPlatformReady()

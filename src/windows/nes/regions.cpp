@@ -16,13 +16,15 @@ using namespace std;
 
 namespace Windows::NES {
 
+REGISTER_WINDOW(MemoryRegions);
+
 shared_ptr<MemoryRegions> MemoryRegions::CreateWindow()
 {
     return make_shared<MemoryRegions>();
 }
 
 MemoryRegions::MemoryRegions()
-    : BaseWindow("NES::MemoryRegions"), selected_row(-1)
+    : BaseWindow(), selected_row(-1)
 {
     SetTitle("Memory Regions");
     

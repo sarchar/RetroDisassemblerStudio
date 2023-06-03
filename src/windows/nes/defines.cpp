@@ -17,13 +17,15 @@ using namespace std;
 
 namespace Windows::NES {
 
+REGISTER_WINDOW(Defines);
+
 shared_ptr<Defines> Defines::CreateWindow()
 {
     return make_shared<Defines>();
 }
 
 Defines::Defines()
-    : BaseWindow("NES::Defines"), selected_row(-1), force_resort(true), force_reiterate(true), case_sensitive_sort(false)
+    : BaseWindow(), selected_row(-1), force_resort(true), force_reiterate(true), case_sensitive_sort(false)
 {
     SetTitle("Defines");
     

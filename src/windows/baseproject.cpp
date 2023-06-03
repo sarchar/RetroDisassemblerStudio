@@ -34,20 +34,23 @@ BaseProject::Information const* BaseProject::GetProjectInformation(std::string c
 }
 
 BaseProject::BaseProject(std::string const& title)
-    : BaseWindow(title)
+    : BaseWindow()
 {
     SetWindowless(true);
+    SetTitle(title);
 
     // local signals
     create_new_project_progress = make_shared<create_new_project_progress_t>();
 
     // connect signals
     auto main_window = GetMainWindow();
-    window_added_connection = 
-        main_window->child_window_added->connect(std::bind(&BaseProject::_WindowAdded, this, placeholders::_1));
+    *child_window_added += [this](shared_ptr<BaseWindow> const& window) {
+        ChildWindowAdded(window);
+    };
 
-    window_removed_connection = 
-        main_window->child_window_removed->connect(std::bind(&BaseProject::_WindowRemoved, this, placeholders::_1));
+    *child_window_removed += [this](shared_ptr<BaseWindow> const& window) {
+        ChildWindowRemoved(window);
+    };
 }
 
 BaseProject::~BaseProject()

@@ -74,6 +74,19 @@ inline void ReadString(std::istream& is, std::string& s)
 }
 
 template<class T>
+inline void WriteEnum(std::ostream& os, T const& enum_value)
+{
+    WriteVarInt(os, static_cast<int>(enum_value));
+}
+
+template<class T>
+inline T ReadEnum(std::istream& is)
+{
+    int tmp = ReadVarInt<int>(is);
+    return static_cast<T>(tmp);
+}
+
+template<class T>
 inline void zero(T* mem) {
     memset(mem, 0, sizeof(T));
 }

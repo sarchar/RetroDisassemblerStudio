@@ -15,6 +15,7 @@ namespace Windows {
 }
 
 class BaseProject;
+class WindowRegistration;
 
 #define GetApplication() MainApplication::Instance()
 
@@ -35,7 +36,8 @@ public:
 
     // Windows
     std::shared_ptr<Windows::BaseWindow> CreateMainWindow() override;
-
+    std::shared_ptr<Windows::BaseWindow> CreateWindow(std::string const&);
+ 
     void* GetBoldFont() { return main_font_bold; }
 
     // Signals
@@ -69,4 +71,40 @@ private:
     WindowFromINI* NewINIWindow();
     void CreateINIWindows();
     std::vector<std::shared_ptr<WindowFromINI>> ini_windows;
+
+    std::unordered_map<std::string, WindowRegistration*> window_classes;
 };
+
+class WindowRegistration
+{
+public:
+    typedef std::shared_ptr<Windows::BaseWindow> (CreateWindowFunc)();
+    WindowRegistration(std::string const& _window_class, CreateWindowFunc* _create_func) 
+        : window_class(_window_class), create_func(_create_func) {
+        static WindowRegistration* _head = nullptr; // guaranteed to be initialized before anything else
+
+        next = _head;
+        _head = this;
+
+        head = _head;
+    }
+
+private:
+    WindowRegistration* next;
+    static WindowRegistration* head;
+
+    std::string window_class;
+    CreateWindowFunc* create_func;
+
+    friend class MainApplication;
+};
+
+#define REGISTER_WINDOW(cls) \
+    namespace __rw_##cls {     \
+        static std::shared_ptr<BaseWindow> _create_##cls() { \
+            return cls::CreateWindow();                      \
+        }                                                    \
+        static WindowRegistration \
+            window_registration(cls::GetWindowClassStatic(), &_create_##cls); \
+    }
+

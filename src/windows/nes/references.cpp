@@ -21,13 +21,20 @@ using namespace std;
 
 namespace Windows::NES {
 
+REGISTER_WINDOW(References);
+
+shared_ptr<References> References::CreateWindow()
+{
+    return make_shared<References>(shared_ptr<Label>(nullptr));
+}
+
 shared_ptr<References> References::CreateWindow(reference_type const& reference_to)
 {
     return make_shared<References>(reference_to);
 }
 
 References::References(reference_type const& _reference_to)
-    : BaseWindow("NES::References"), reference_to(_reference_to), selected_row(-1)
+    : BaseWindow(), reference_to(_reference_to), selected_row(-1)
 {
     SetNoScrollbar(true);
    

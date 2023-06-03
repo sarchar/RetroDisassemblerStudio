@@ -26,7 +26,8 @@ public:
     virtual ~Labels();
 
     virtual char const * const GetWindowClass() { return Labels::GetWindowClassStatic(); }
-    static char const * const GetWindowClassStatic() { return "NES::Labels"; }
+    static char const * const GetWindowClassStatic() { return "Windows::NES::Labels"; }
+    static std::shared_ptr<Labels> CreateWindow();
 
     // signals
 
@@ -52,9 +53,6 @@ private:
 
     signal_connection label_created_connection;
     signal_connection label_deleted_connection;
-
-public:
-    static std::shared_ptr<Labels> CreateWindow();
 };
 
 } //namespace Windows::NES
