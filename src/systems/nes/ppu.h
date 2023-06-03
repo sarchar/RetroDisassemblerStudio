@@ -88,6 +88,7 @@ private:
     };
 
     bool rendering_enabled;
+    bool prevent_nmi_this_frame;
 
     // NMI wire connected directly to the CP
     nmi_function_t nmi;

@@ -116,6 +116,9 @@ public:
             ret = ppu->ppustat;
             ppu->vblank = 0;
 
+            // race condition - if a read occurs to $2002 at near the same time an NMI is generated, the NMI is skipped for that frame
+            if(ppu->scanline == 241 && ppu->cycle == 1) ppu->prevent_nmi_this_frame = true;
+
             // reset the address latch
             ppu->vram_address_latch = 1;
             break;
@@ -288,6 +291,8 @@ void PPU::Reset()
 
     primary_oam_rw = 0;
     secondary_oam_rw = 0;
+
+    prevent_nmi_this_frame = false;
 }
 
 shared_ptr<MemoryView> PPU::CreateMemoryView()
@@ -317,6 +322,7 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
 
             if(cycle < 257) {   // cycles 1..256
                 vblank = 0; // doesn't hurt to set this every cycle, but the first time it'll matter is (scanline=261,cycle=1) when it should first be cleared
+                prevent_nmi_this_frame = false;
                 color = InternalStep(false);
             } else if(cycle < 321) {   // cycles 257..320 (hblank up until bg tile prefetch)
                 if(cycle == 257) { // start of hblank
@@ -365,8 +371,10 @@ int PPU::Step(bool& hblank_out, bool& vblank_out)
         }
     } else if(scanline == 241) {
         if(cycle == 1) {
-            vblank = 1;
-            if(enable_nmi) nmi();
+            if(!prevent_nmi_this_frame) {
+                vblank = 1;
+                if(enable_nmi) nmi();
+            }
         }
     }
 
