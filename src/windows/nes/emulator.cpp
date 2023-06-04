@@ -1845,6 +1845,8 @@ void Breakpoints::Update(double deltaTime)
 
 void Breakpoints::Render()
 {
+    bool has_context = false;
+
     ImGuiTableFlags table_flags = ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoBordersInBodyUntilResize
         | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable
         | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit;
@@ -1862,6 +1864,8 @@ void Breakpoints::Render()
         ImGui::TableSetupColumn("Condition" , ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableHeadersRow();
 
+        ////////////////////////////////////////////////////////////////////////////////////////////////////
+        // loop over the breakpoints and render a row for each
         int row = 0;
         GetMySystemInstance()->IterateBreakpoints([&](shared_ptr<BreakpointInfo> const& bpi) {
             ImGui::PushID(row);
@@ -1873,15 +1877,16 @@ void Breakpoints::Render()
             ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
             if(ImGui::Selectable("##selectable", selected_row == row, selectable_flags)) selected_row = row;
 
-            // when the user activates a breakpoint, go to it in the listing window
             if(ImGui::IsItemHovered()) {
+                // IsItemHovered() will only be true if the popup isn't open, so we can safely change context_breakpoint
+                context_breakpoint = bpi;
+                has_context = true;
+
+                // when the user activates a breakpoint, go to it in the listing window
                 if(ImGui::IsMouseDoubleClicked(0)) {
                     if(auto listing = GetMyListing()) {
                         listing->GoToAddress(bpi->address);
                     }
-                } else if(ImGui::IsMouseClicked(1)) {
-                    context_breakpoint = bpi;
-                    ImGui::OpenPopup("breakpoint_context_menu");
                 }
             }
 
@@ -1933,6 +1938,8 @@ void Breakpoints::Render()
             row++;
         });
 
+        ////////////////////////////////////////////////////////////////////////////////////////////////////
+        // render the <New> row...
         ImGui::PushID(row);
         ImGui::TableNextRow();
 
@@ -1981,7 +1988,7 @@ void Breakpoints::Render()
 
     ImGui::PopStyleVar(3);
 
-    if(ImGui::BeginPopupContextItem("breakpoint_context_menu")) {
+    if(context_breakpoint && ImGui::BeginPopupContextItem("breakpoint_context_menu")) {
         if(ImGui::MenuItem("Edit Condition")) {
             editing_breakpoint_info = context_breakpoint;
 
@@ -1996,11 +2003,17 @@ void Breakpoints::Render()
         ImGui::EndPopup();
     }
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // if there's no hovered item and the popup isn't open, clear context_breakpoint so we don't open the context
+    // menu on non-valid entries
+    if(!has_context && !ImGui::IsPopupOpen("breakpoint_context_menu")) {
+        context_breakpoint = nullptr;
+    }
+
     if(do_set_breakpoint) {
         if(editing == EditMode::ADDRESS) SetBreakpoint();
         else if(editing == EditMode::CONDITION) SetCondition();
     }
-
 }
 
 // Try to set the current edit_string as the breakpoint info's address
