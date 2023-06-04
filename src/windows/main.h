@@ -46,6 +46,10 @@ public:
     // Poups must be called every frame even if they're not open
     bool OKPopup(std::string const& title, std::string const& content, 
             bool resizeable = false);
+
+    bool OKCancelPopup(std::string const& title, std::string const& content, 
+            bool resizeable = false);
+
     int  InputNamePopup(std::string const& title, std::string const& label, std::string* buffer, 
             bool enter_returns_true = true, 
             bool resizeable = false);
@@ -98,6 +102,7 @@ private:
     void SaveProjectThread();
     void LoadProjectPopup();
     void LoadProjectThread();
+    void DeleteInstancePopup();
 
     // Global popups
     struct {
@@ -118,6 +123,12 @@ private:
             bool errored = false;
             std::string errmsg;
         } load_project;
+
+        struct {
+            std::string title = "Delete Instance...";
+            bool show = false;
+            std::shared_ptr<BaseWindow> instance;
+        } delete_instance;
     } popups;
 
     void StartSave();

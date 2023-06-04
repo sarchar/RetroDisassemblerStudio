@@ -83,6 +83,8 @@ public:
     static char const * const GetWindowClassStatic() { return "Windows::NES::SystemInstance"; }
     static std::shared_ptr<SystemInstance> CreateWindow();
 
+    std::string const& GetInstanceName() const { return instance_name; }
+
     // create a default workspace
     void CreateDefaultWorkspace();
     void CreateNewWindow(std::string const&);
@@ -172,6 +174,7 @@ private:
     static int  next_system_id;
     int         system_id;
     std::string system_title;
+    std::string instance_name;
 
     std::shared_ptr<BaseWindow>  most_recent_listing_window;
 

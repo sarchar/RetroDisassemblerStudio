@@ -81,6 +81,8 @@ private:
     } popups;
 
     std::shared_ptr<BaseWindow> most_recent_system_instance;
+
+    std::shared_ptr<BaseWindow> closed_instances;
 };
 
 }

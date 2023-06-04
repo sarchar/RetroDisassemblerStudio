@@ -91,6 +91,8 @@ SystemInstance::SystemInstance()
     SetShowMenuBar(true);
     SetIsDockSpace(true);
 
+    SetHideOnClose(true);
+
     breakpoint_hit = make_shared<breakpoint_hit_t>();
     *child_window_added += std::bind(&SystemInstance::ChildWindowAdded, this, placeholders::_1);
     
@@ -169,6 +171,16 @@ SystemInstance::SystemInstance()
 
         current_state = State::PAUSED;
     }
+
+    // when this window becomes hidden, we should stop the emulation
+    // TODO might be wise to exit the thread too, and then when the emulation starts again to recreate the thread
+    *window_hidden += [this](shared_ptr<BaseWindow> const&) {
+        if(current_state == State::RUNNING) {
+            current_state = State::PAUSED;
+            while(running) ;
+        }
+        UpdateTitle();
+    };
 
     Reset();
     UpdateTitle();
@@ -271,7 +283,9 @@ void SystemInstance::ChildWindowRemoved(shared_ptr<BaseWindow> const& window)
 void SystemInstance::UpdateTitle()
 {
     stringstream ss;
-    ss << "NES_" << system_id << " :: " << magic_enum::enum_name(current_state);
+    ss << "NES_" << system_id;
+    instance_name = ss.str();
+    ss << " :: " << magic_enum::enum_name(current_state);
     system_title = ss.str();
     SetTitle(system_title.c_str());
 }

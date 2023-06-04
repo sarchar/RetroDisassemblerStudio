@@ -32,7 +32,7 @@ string BaseWindow::GetRandomID()
 }
 
 BaseWindow::BaseWindow()
-    : open(true), focused(false), docked(false), initial_dock_position(DOCK_NONE)
+    : open(true), focused(false), docked(false), hidden(false), initial_dock_position(DOCK_NONE)
 {
     // create the signals
     command_signal = make_shared<command_signal_t>();
@@ -41,6 +41,7 @@ BaseWindow::BaseWindow()
     child_window_added = make_shared<child_window_added_t>();
     child_window_removed = make_shared<child_window_removed_t>();
     window_parented = make_shared<window_parented_t>();
+    window_hidden = make_shared<window_hidden_t>();
 
     window_id = GetRandomID();
 
@@ -124,6 +125,9 @@ void BaseWindow::ProcessQueuedChildWindowsForDelete()
 
 void BaseWindow::InternalUpdate(double deltaTime)
 {
+    // don't update if hidden
+    if(hidden) return;
+
     // Remove any windows queued for deletion
     ProcessQueuedChildWindowsForDelete();
 
@@ -143,11 +147,12 @@ void BaseWindow::InternalUpdate(double deltaTime)
     for(auto &window : child_windows) {
         window->InternalUpdate(deltaTime);
     }
-
 }
 
 void BaseWindow::InternalRender()
 {
+    if(hidden) return;
+
     InternalPreRender();
 
     // 'windowless' windows are essentially background tasks that have no GUI window associated with them
@@ -237,7 +242,14 @@ void BaseWindow::InternalRender()
         ImGui::End(); // always call end regardless of Begin()'s return value
 
         // close window if ImGui requested
-        if(!local_open) CloseWindow();
+        if(!local_open) {
+            if(hide_on_close) {
+                hidden = true;
+                window_hidden->emit(shared_from_this());
+            } else {
+                CloseWindow();
+            }
+        }
     }
 
     InternalPostRender();
@@ -448,6 +460,9 @@ bool BaseWindow::InternalSaveWindow(ostream& os, string& errmsg)
         return false;
     }
 
+    // save hidden state
+    WriteVarInt(os, (int)hidden);
+
     // save dockspace IDs since they're required to properly save window dock locations
     WriteVarInt(os, (int)is_dockspace);
     if(is_dockspace) {
@@ -475,6 +490,9 @@ bool BaseWindow::InternalLoadWindow(istream& is, string& errmsg)
     // update window_title
     SetTitle(base_title);
     cout << WindowPrefix() << "changed ID to " << window_title << endl;
+
+    // load hidden state
+    hidden = (bool)ReadVarInt<int>(is);
 
     // load dockspace IDs
     is_dockspace = (bool)ReadVarInt<int>(is);

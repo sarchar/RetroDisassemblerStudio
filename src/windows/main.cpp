@@ -248,27 +248,57 @@ void MainWindow::RenderMenuBar()
     }
 
     if(current_project) {
-        if(ImGui::BeginMenu("Windows")) {
-            if(ImGui::MenuItem("New Instance")) {
+        if(ImGui::BeginMenu("Instance")) {
+            if(ImGui::MenuItem("New instance")) {
                 current_project->CreateSystemInstance();
             }
 
             if(auto si = GetSystemInstance()) {
-                if(ImGui::BeginMenu("Instance")) {
-                    static char const * const window_types[] = {
-                        "Defines", "Labels", "Listing", "Memory", "Screen"
-                    };
+                if(ImGui::BeginMenu("Current instance")) {
+                    if(ImGui::BeginMenu("New Window")) {
+                        static char const * const window_types[] = {
+                            "Defines", "Regions", "Labels", "Listing", "Memory", "Screen", "PPUState", "CPUState", "Watch", "Breakpoints"
+                        };
 
-                    for(int i = 0; i < IM_ARRAYSIZE(window_types); i++) {
-                        if(ImGui::MenuItem(window_types[i])) {
-                            si->CreateNewWindow(window_types[i]);
+                        for(int i = 0; i < IM_ARRAYSIZE(window_types); i++) {
+                            if(ImGui::MenuItem(window_types[i])) {
+                                si->CreateNewWindow(window_types[i]);
+                            }
                         }
+
+                        ImGui::EndMenu();
                     }
 
                     ImGui::EndMenu();
                 }
             }
 
+            // hidden instances menu
+            if(ImGui::BeginMenu("Other instances")) {
+                bool no_other = true;
+
+                current_project->IterateChildWindows([this, &no_other](shared_ptr<BaseWindow> const& wnd) {
+                    if(auto si = dynamic_pointer_cast<Windows::NES::SystemInstance>(wnd); si && si->IsHidden()) {
+                        no_other = false;
+
+                        if(ImGui::BeginMenu(si->GetInstanceName().c_str())) {
+                            if(ImGui::MenuItem("Show")) {
+                                si->Show();
+                            }
+                            if(ImGui::MenuItem("Delete")) {
+                                popups.delete_instance.instance = wnd;
+                                popups.delete_instance.show = true;
+                            }
+                            ImGui::EndMenu();
+                        }
+                    }
+                });
+
+                // include at least one menu item in this menu
+                if(no_other) ImGui::MenuItem("<empty>", nullptr, false, false);
+
+                ImGui::EndMenu();
+            }
             ImGui::EndMenu();
         }
     }
@@ -568,6 +598,19 @@ bool MainWindow::OKPopup(std::string const& title, std::string const& content, b
     return EndPopup(ret, true, false, true, true);
 }
 
+bool MainWindow::OKCancelPopup(std::string const& title, std::string const& content, bool resizeable)
+{
+    int ret = 0;
+
+    // no further rendering if the dialog isn't visible
+    if(!StartPopup(title, resizeable)) return 0;
+
+    ImGui::Text("%s", content.c_str());
+
+    // Give the first button focus
+    return EndPopup(ret, true, true, true, false);
+}
+
 int MainWindow::InputNamePopup(std::string const& title, std::string const& label, std::string* buffer, bool enter_returns_true, bool resizeable)
 {
     int ret = 0;
@@ -643,6 +686,7 @@ void MainWindow::RenderPopups()
 {
     LoadProjectPopup();
     SaveProjectPopup();
+    DeleteInstancePopup();
 }
 
 void MainWindow::LoadProjectPopup()
@@ -745,6 +789,26 @@ void MainWindow::SaveProjectPopup()
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
+    }
+}
+
+void MainWindow::DeleteInstancePopup()
+{
+    if(!popups.delete_instance.show) return;
+
+    auto system_instance = dynamic_pointer_cast<Windows::NES::SystemInstance>(popups.delete_instance.instance);
+
+    stringstream ss;
+    ss << "You are about to delete instance \"" << system_instance->GetInstanceName()
+        << "\"? This action cannot be undone.";
+
+    // ret > 0 => user pressed OK
+    if(int ret = OKCancelPopup(popups.delete_instance.title, ss.str(), true)) {
+        if(ret > 0) {
+            popups.delete_instance.instance->CloseWindow();
+            popups.delete_instance.instance = nullptr;
+        }
+        popups.delete_instance.show = false;
     }
 }
 

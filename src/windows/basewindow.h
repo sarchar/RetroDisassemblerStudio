@@ -45,6 +45,7 @@ public:
     void SetIsDockSpace(bool _v, bool _skip_builder = false) { is_dockspace = _v; skip_dockspace_builder = _skip_builder; }
     void SetDockable(bool _v) { is_dockable = _v; }
     void SetMainWindow(bool _v) { is_mainwindow = _v; }
+    void SetHideOnClose(bool _v) { hide_on_close = _v; }
 
     template <class T>
     std::shared_ptr<T> As() { 
@@ -53,11 +54,21 @@ public:
 
     std::string WindowPrefix() { return std::string("[") + GetWindowClass() + std::string("] "); }
 
+    template<typename T>
+    void IterateChildWindows(T const& func) {
+        for(auto& wnd : child_windows) func(wnd);
+    }
+
+    void Show() { hidden = false; }
+
     void CloseWindow(); // emit window_closed and stop rendering
 
     bool IsFocused() const { return focused; }
     bool IsDocked() const { return docked; }
     bool WasActivated() const { return activated; }
+
+    // Hidden windows do not get rendered or updated, but are not deleted from memory
+    bool IsHidden() const { return hidden; }
 
     template<class T>
     std::shared_ptr<T> GetParentWindowAs() {
@@ -102,6 +113,9 @@ public:
     typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> window_parented_t;
     std::shared_ptr<window_parented_t> window_parented;
 
+    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> window_hidden_t;
+    std::shared_ptr<window_hidden_t> window_hidden;
+
 protected:
     // Implemented by derived class
     virtual void Update(double deltaTime) {};
@@ -144,6 +158,7 @@ private:
     bool focused;
     bool docked;
     bool activated;
+    bool hidden;
 
     bool no_save = false;
 
@@ -159,6 +174,8 @@ private:
 
     bool show_statusbar = false;
     bool show_menubar = false;
+
+    bool hide_on_close = false;
 
     bool dockspace_is_built = false;
     unsigned int imgui_dockspace_id;
