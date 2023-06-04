@@ -118,6 +118,7 @@ bool Label::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreat
     if(auto t = label.lock()) nth = t->GetIndex();
     WriteVarInt(os, nth);
     WriteString(os, display);
+    WriteVarInt(os, (int)long_mode);
     if(!os.good()) {
         errmsg = "Error saving label";
         return false;
@@ -135,12 +136,15 @@ shared_ptr<Label> Label::Load(istream& is, string& errmsg, shared_ptr<BaseExpres
     string display;
     ReadString(is, display);
 
+    bool long_mode = (bool)ReadVarInt<int>(is);
     if(!is.good()) {
         errmsg = "Error loading Label";
         return nullptr;
     }
 
-    return make_shared<Label>(where, nth, display);
+    auto ret = make_shared<Label>(where, nth, display);
+    ret->SetLongMode(long_mode);
+    return ret;
 }
 
 }

@@ -308,6 +308,9 @@ protected:
     void Update(double deltaTime) override;
     void Render() override;
 
+    bool SaveWindow(std::ostream&, std::string&) override;
+    bool LoadWindow(std::istream&, std::string&) override;
+
 private:
     void Resort();
     bool need_resort = false;
@@ -336,11 +339,13 @@ private:
         };
 
         std::shared_ptr<BaseExpression> expression;
-        std::string                     expression_string = "";
         s64                             last_value        = 0;
         DataType                        data_type         = DataType::BYTE;
         bool                            pad               = true;
         int                             base              = 16; // number base for display
+
+        bool Save(std::ostream&, std::string&) const;
+        bool Load(std::istream&, std::string&);
     };
 
     struct ExploreData {

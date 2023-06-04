@@ -1899,6 +1899,72 @@ bool Watch::DereferenceLong(s64 in, s64* out, string& errmsg)
     return true;
 }
 
+bool Watch::SaveWindow(std::ostream& os, std::string& errmsg)
+{
+    WriteVarInt(os, watches.size());
+    for(auto& watch_data : watches) {
+        if(!watch_data->Save(os, errmsg)) return false;
+    }
+    return true;
+}
+
+bool Watch::LoadWindow(std::istream& is, std::string& errmsg)
+{
+    watches.clear();
+    sorted_watches.clear();
+
+    int watch_count = ReadVarInt<int>(is);
+    for(int i = 0; i < watch_count; i++) {
+        auto watch_data = make_shared<WatchData>();
+        if(!watch_data->Load(is, errmsg)) return false;
+        // dereference ops aren't saved with the expression and need to be reconfigured
+        SetDereferenceOp(watch_data);
+        watches.push_back(watch_data);
+        sorted_watches.push_back(i);
+    }
+
+    need_resort = true;
+    return true;
+}
+
+bool Watch::WatchData::Save(std::ostream& os, std::string& errmsg) const
+{
+    if(!expression->Save(os, errmsg)) return false;
+    WriteVarInt(os, last_value);
+    WriteEnum(os, data_type);
+    WriteVarInt(os, (int)pad);
+    WriteVarInt(os, base);
+    if(!os.good()) {
+        errmsg = "Error writing WatchData";
+        return false;
+    }
+    return true;
+}
+
+bool Watch::WatchData::Load(std::istream& is, std::string& errmsg)
+{
+    expression = make_shared<Systems::NES::Expression>();
+    if(!expression->Load(is, errmsg)) return false;
+    last_value = ReadVarInt<s64>(is);
+    data_type = ReadEnum<DataType>(is);
+    pad = (bool)ReadVarInt<int>(is);
+    base = ReadVarInt<int>(is);
+    if(!is.good()) {
+        errmsg = "Error loading WatchData";
+        return false;
+    }
+
+    // need to call Update() on all labels
+    auto cb = [&](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+        if(auto label_node = dynamic_pointer_cast<Systems::NES::ExpressionNodes::Label>(node)) {
+            label_node->Update();
+        }
+        return true;
+    };
+
+    return expression->Explore(cb, nullptr);
+}
+
 std::shared_ptr<Breakpoints> Breakpoints::CreateWindow()
 {
     return make_shared<Breakpoints>();
