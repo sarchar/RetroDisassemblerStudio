@@ -41,6 +41,42 @@ REGISTER_WINDOW(Breakpoints);
 REGISTER_WINDOW(CPUState);
 REGISTER_WINDOW(PPUState);
 
+bool BreakpointInfo::Save(ostream& os, string& errmsg) const
+{
+    if(!address.Save(os, errmsg)) return false;
+    WriteVarInt(os, (int)enabled);
+    WriteVarInt(os, (int)has_bank);
+    WriteVarInt(os, (int)(bool)condition);
+    if(condition && !condition->Save(os, errmsg)) return false;
+    WriteVarInt(os, (int)break_read);
+    WriteVarInt(os, (int)break_write);
+    WriteVarInt(os, (int)break_execute);
+    if(!os.good()) {
+        errmsg = "Error saving BreakpointInfo";
+        return false;
+    }
+    return true;
+}
+
+bool BreakpointInfo::Load(istream& is, string& errmsg)
+{
+    if(!address.Load(is, errmsg)) return false;
+    enabled = (bool)ReadVarInt<int>(is);
+    has_bank = (bool)ReadVarInt<int>(is);
+    if((bool)ReadVarInt<int>(is)) {
+        condition = make_shared<Systems::NES::Expression>();
+        if(!condition->Load(is, errmsg)) return false;
+    }
+    break_read = (bool)ReadVarInt<int>(is);
+    break_write = (bool)ReadVarInt<int>(is);
+    break_execute = (bool)ReadVarInt<int>(is);
+    if(!is.good()) {
+        errmsg = "Error loading BreakpointInfo";
+        return false;
+    }
+    return true;
+}
+
 std::shared_ptr<SystemInstance> SystemInstance::CreateWindow()
 {
     return make_shared<SystemInstance>();
@@ -650,7 +686,29 @@ bool SystemInstance::SaveWindow(std::ostream& os, std::string& errmsg)
     WriteVarInt(os, system_id);
 
     // TODO serialize CPU, PPU, APU_IO, DMA
-    // TODO serialize Watches, Breakpoints
+    // TODO serialize Watches
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // serialize breakpoints
+    WriteVarInt(os, breakpoints.size());
+    for(auto& bppair: breakpoints) {
+        if(auto where_ptr = get_if<GlobalMemoryLocation>(&bppair.first)) {
+            GlobalMemoryLocation const& where = *where_ptr;
+            WriteVarInt(os, 0); // key type
+            if(!where.Save(os, errmsg)) return false;
+        } else if(auto address_ptr = get_if<u16>(&bppair.first)) {
+            u16 const& address = *address_ptr;
+            WriteVarInt(os, 1); // key type
+            WriteVarInt(os, address);
+        }
+        
+        // number of breakpoints at this key
+        auto& bplist = bppair.second;
+        WriteVarInt(os, bplist.size());
+        for(auto& bpi: bplist) {
+            if(!bpi->Save(os, errmsg)) return false;
+        }
+    }
 
     current_state = last_state;
     return true;
@@ -663,6 +721,28 @@ bool SystemInstance::LoadWindow(std::istream& is, std::string& errmsg)
     next_system_id = ReadVarInt<int>(is);
     system_id = ReadVarInt<int>(is);
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // deserialize breakpoints
+    int breakpoints_size = ReadVarInt<int>(is);
+    for(int i = 0; i < breakpoints_size; i++) {
+        int key_type = ReadVarInt<int>(is);
+        breakpoint_key_t key;
+        if(key_type == 0) { // read GlobalMemoryLocation
+            GlobalMemoryLocation where;
+            if(!where.Load(is, errmsg)) return false;
+            key = where;
+        } else if(key_type == 1) { // read u16
+            key = ReadVarInt<u16>(is);
+        }
+
+        int num_breakpoints = ReadVarInt<int>(is);
+        for(int j = 0; j < num_breakpoints; j++) {
+            auto bpi = make_shared<BreakpointInfo>();
+            if(!bpi->Load(is, errmsg)) return false;
+
+            SetBreakpoint(key, bpi);
+        }
+    }
     return true;
 }
 

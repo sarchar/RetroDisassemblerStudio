@@ -44,6 +44,9 @@ struct BreakpointInfo {
     bool break_write = false;
     bool break_execute = false;
 
+    bool Save(std::ostream&, std::string&) const;
+    bool Load(std::istream&, std::string&);
+
     bool operator==(BreakpointInfo const& other) {
         return address == other.address;
     }

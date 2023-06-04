@@ -22,7 +22,7 @@ using namespace std;
 
 namespace Systems::NES {
 
-bool GlobalMemoryLocation::Save(std::ostream& os, std::string& errmsg)
+bool GlobalMemoryLocation::Save(std::ostream& os, std::string& errmsg) const
 {
     WriteVarInt(os, address);
     assert(sizeof(is_chr) == 1);

@@ -52,7 +52,7 @@ struct GlobalMemoryLocation {
         return *this;
     }
 
-    bool Save(std::ostream&, std::string&);
+    bool Save(std::ostream&, std::string&) const;
     bool Load(std::istream&, std::string&);
 
     bool operator==(GlobalMemoryLocation const& other) const {
