@@ -1406,8 +1406,12 @@ void Watch::Resort()
         auto bp = watches[b];
 
         if(sort_column == 0) {
-            if(reverse_sort) diff = bp->expression_string <= ap->expression_string;
-            else             diff = ap->expression_string <= bp->expression_string;
+            stringstream a_ss, b_ss;
+            a_ss << *ap->expression;
+            b_ss << *bp->expression;
+
+            if(reverse_sort) diff = b_ss.str() <= a_ss.str();
+            else             diff = a_ss.str() <= b_ss.str();
         } else {
             if(reverse_sort) diff = bp->last_value <= ap->last_value;
             else             diff = ap->last_value <= bp->last_value;
@@ -1480,10 +1484,14 @@ void Watch::Render()
                     editing = -1;
                 }
             } else {
+                // format the expression..we can't use an expression string cache because dynamic elements can change (labels)
+                stringstream ss;
+                ss << *watch_data->expression;
+
                 if(ImGui::IsItemHovered()) {
                     if(ImGui::IsMouseDoubleClicked(0)) {
                         editing = row;
-                        edit_string = watch_data->expression_string;
+                        edit_string = ss.str();
                         started_editing = true;
                     } else if(ImGui::IsMouseClicked(1)) {
                         selected_row = watch_index;
@@ -1491,7 +1499,7 @@ void Watch::Render()
                     }
                 }
 
-                ImGui::Text("%s", watch_data->expression_string.c_str());
+                ImGui::Text("%s", ss.str().c_str());
             }
 
             // evaluate and display the expression, caching the value for sort only
@@ -1670,9 +1678,6 @@ void Watch::SetWatch()
                     do_set_watch = false;
                     editing = -1;
                     need_resort = true;
-
-                    // cache the expression string
-                    watch_data->expression_string = edit_string;
                 }
             }
         }
