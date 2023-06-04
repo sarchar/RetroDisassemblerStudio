@@ -229,10 +229,24 @@ void Labels::Render()
     ImGui::PopStyleVar(2);
 
     if(ImGui::BeginPopupContextItem("label_context_menu")) {
-        if(ImGui::Selectable("View References")) {
+        if(ImGui::MenuItem("View References")) {
             auto wnd = References::CreateWindow(labels[context_row].lock());
-            wnd->SetInitialDock(BaseWindow::DOCK_RIGHT);
+            wnd->SetInitialDock(BaseWindow::DOCK_TOPRIGHT);
             GetMySystemInstance()->AddChildWindow(wnd);
+        } else if(ImGui::BeginMenu("Set Breakpoint")) {
+            auto bpi = make_shared<BreakpointInfo>();
+            bpi->address = labels[context_row].lock()->GetMemoryLocation();
+            bpi->has_bank = true;
+            bpi->enabled = true;
+            if(ImGui::MenuItem("On Execute")) {
+                bpi->break_execute = true;
+                GetMySystemInstance()->SetBreakpoint(bpi->address, bpi);
+            } else if(ImGui::MenuItem("On Read/Write")) {
+                bpi->break_read = true;
+                bpi->break_write = true;
+                GetMySystemInstance()->SetBreakpoint(bpi->address, bpi);
+            }
+            ImGui::EndMenu();
         }
         ImGui::EndPopup();
     }
