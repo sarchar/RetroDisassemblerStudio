@@ -58,8 +58,10 @@ Listing::Listing()
         // my code is silly .. set breakpoint_hit_connection after we have a parent system instance
         window_parented_connection = window_parented->connect([&](shared_ptr<BaseWindow> const&) {
             breakpoint_hit_connection =
-                GetMySystemInstance()->breakpoint_hit->connect([&](shared_ptr<BreakpointInfo> const& bp) {
-                    GoToAddress(bp->address);
+                GetMySystemInstance()->breakpoint_hit->connect([&](shared_ptr<BreakpointInfo> const&) {
+                    // even on read/write to memory addresses, we want to look at where the breakpoint occured,
+                    // not the address of the breakpoint itself
+                    GoToCurrentInstruction();
                 });
             });
 
