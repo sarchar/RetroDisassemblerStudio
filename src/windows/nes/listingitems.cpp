@@ -206,6 +206,7 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
                     // create new breakpoint here
                     bpi = make_shared<BreakpointInfo>();
                     bpi->address = where;
+                    bpi->has_bank = true;
                     bpi->enabled = true;
                     bpi->break_execute = true;
                     system_instance->SetBreakpoint(where, bpi);

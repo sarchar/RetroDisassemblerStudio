@@ -51,7 +51,7 @@ shared_ptr<Define> Define::Load(istream& is, string& errmsg, shared_ptr<BaseExpr
 }
 
 Label::Label(GlobalMemoryLocation const& _where, int _nth, string const& _display)
-    : where(_where), nth(_nth), display(_display), offset(0xDEADBEEF)
+    : where(_where), nth(_nth), display(_display), offset(0xDEADBEEF), long_mode(false)
 { }
 
 bool Label::NoteReference(GlobalMemoryLocation const& source) {

@@ -35,6 +35,7 @@ class Listing;
 struct BreakpointInfo {
     Systems::NES::GlobalMemoryLocation address;
     bool enabled = true;
+    bool has_bank = false; // true when prg/chr_rom_bank in address is valid
 
     // these could be a single int but separate bools work better with ImGui
     bool break_read = false;
@@ -361,6 +362,15 @@ protected:
 
 private:
     int selected_row = -1;
+
+    void SetBreakpoint();
+    std::shared_ptr<BreakpointInfo> editing_breakpoint_info;
+    std::string edit_string;
+    bool editing = false;
+    bool started_editing = false;
+    bool do_set_breakpoint = false;
+    bool wait_dialog = false;
+    std::string set_breakpoint_error_message;
 };
 
 

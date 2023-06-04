@@ -396,6 +396,9 @@ void Listing::Render()
     bool was_editing = editing_listing_item;
     editing_listing_item = false;
 
+    // reset currently hovered item when window is not in focus
+    if(!focused) hovered_listing_item_index = -1;
+
     {
         bool need_pop = false;
         if(adjust_columns) {

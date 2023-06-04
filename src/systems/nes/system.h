@@ -92,11 +92,13 @@ public:
     void MarkMemoryAsString(GlobalMemoryLocation const&, u32 byte_count);
 
     // Convert units like Names into defines and labels 
+    // TODO this is now silly enough that the bools should be a single flag parameter instead
     bool FixupExpression(std::shared_ptr<BaseExpression> const&, std::string&,
             bool allow_labels = true,
             bool allow_defines = true,
             bool allow_deref = true,
-            bool allow_addressing_modes = false);
+            bool allow_addressing_modes = false,
+            bool long_mode_labels = false);
 
     // Set the operand_expression at a memory location. System::SetOperandExpression performs a FixupExpression and
     // checks the addressing mode. Calling MemoryRegion::SetOperandExpression bypasses this
@@ -226,6 +228,8 @@ private:
 
         bool allow_deref;    // allow dereference nodes
         std::vector<std::string> undefined_names; // All other Names that were not labels or defines
+
+        bool long_mode_labels; // call SetLongMode(true) on all labels
     };
 
     std::shared_ptr<ExpressionNodeCreator> GetNodeCreator();

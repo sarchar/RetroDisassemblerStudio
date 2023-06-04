@@ -274,6 +274,9 @@ bool System::ExploreExpressionNodeCallback(shared_ptr<BaseExpressionNode>& node,
                 // make sure offset is updated
                 auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node);
                 label_node->Update();
+                
+                // enable long mode if wanted
+                if(explore_data->long_mode_labels) label_node->SetLongMode(true);
 
                 explore_data->labels.push_back(label);
                 was_a_thing = true;
@@ -543,14 +546,15 @@ bool System::DetermineAddressingMode(shared_ptr<Expression>& expr, ADDRESSING_MO
 }
 
 bool System::FixupExpression(shared_ptr<BaseExpression> const& expr, string& errmsg,
-        bool allow_labels, bool allow_defines, bool allow_deref, bool allow_addressing_modes)
+        bool allow_labels, bool allow_defines, bool allow_deref, bool allow_addressing_modes, bool long_mode_labels)
 {
     ExploreExpressionNodeData explore_data {
-        .errmsg        = errmsg,
-        .allow_modes   = allow_addressing_modes,
-        .allow_labels  = allow_labels,
-        .allow_defines = allow_defines,
-        .allow_deref   = allow_deref
+        .errmsg           = errmsg,
+        .allow_modes      = allow_addressing_modes,
+        .allow_labels     = allow_labels,
+        .allow_defines    = allow_defines,
+        .allow_deref      = allow_deref,
+        .long_mode_labels = long_mode_labels
     };
 
     // Loop over every node (and change them to system nodes if necessary), validating some things along the way
@@ -583,11 +587,12 @@ shared_ptr<Define> System::AddDefine(string const& name, string const& expressio
 
     // explore the expression and allow only defines
     ExploreExpressionNodeData explore_data {
-        .errmsg        = errmsg,
-        .allow_modes   = false,
-        .allow_labels  = false,
-        .allow_defines = true,
-        .allow_deref   = false
+        .errmsg           = errmsg,
+        .allow_modes      = false,
+        .allow_labels     = false,
+        .allow_defines    = true,
+        .allow_deref      = false,
+        .long_mode_labels = false
     };
 
     auto cb = std::bind(&System::ExploreExpressionNodeCallback, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);

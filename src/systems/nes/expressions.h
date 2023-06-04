@@ -56,6 +56,8 @@ namespace ExpressionNodes {
         bool NoteReference(GlobalMemoryLocation const&);
         void RemoveReference(GlobalMemoryLocation const&);
 
+        void SetLongMode(bool _v) { long_mode = _v; }
+
         // You're expected to call RemoveReference before and NoteReference() after
         void NextLabel();
         bool Update();
@@ -71,7 +73,12 @@ namespace ExpressionNodes {
 
         // Labels evaluate to their address, whether they be zero page or not
         bool Evaluate(s64* result, std::string& errmsg) const override {
-            *result = where.address + offset;
+            if(long_mode) {
+                *result = where.address + offset;
+                *result += (where.is_chr ? where.chr_rom_bank : where.prg_rom_bank) * 0x10000;
+            } else {
+                *result = where.address + offset;
+            }
             return true;
         }
 
@@ -91,6 +98,7 @@ namespace ExpressionNodes {
         int                         nth;
         int                         offset;
         std::string                 display;
+        bool                        long_mode;
     };
 
     class Accum : public ExpressionNode {
