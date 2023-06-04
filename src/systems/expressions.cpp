@@ -65,6 +65,9 @@ void Tenderizer::Gobble() // gobble, gobble
     if((c == '<' || c == '>') && (Look() == c)) { // LSHIFT and RSHIFT
         meat_text << Bite();
         current_meat = (c == '<') ? Meat::LSHIFT : Meat::RSHIFT;
+    } else if((c == '=' || c == '!') && Look() == '=') { // EQUAL_TO
+        meat_text << Bite();
+        current_meat = (c == '=') ? Meat::EQUAL_TO : Meat::NOT_EQUAL_TO;
     } else if(c == '*' && Look() == '*') { // POWER
         meat_text << Bite();
         current_meat = Meat::POWER;
@@ -160,6 +163,9 @@ void BaseExpressionNodeCreator::RegisterBaseExpressionNodes()
     RegisterBaseExpressionNode<BaseExpressionNodes::Parens>();
 
     RegisterBaseExpressionNode<BaseExpressionNodes::DereferenceOp>();
+
+    RegisterBaseExpressionNode<BaseExpressionNodes::EqualToOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::NotEqualToOp>();
 
     // any node registered after this point is a subclassed node. using an ID
     // offset lets us add new base nodes without corrupting the subnode indexes in save files
@@ -380,23 +386,68 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseXorExpression(shared_ptr<Ten
 // AND (&) C++ precedence 11
 // 
 // and_expr: shift_expr and_expr_tail
-//            ;
+//         ;
 // 
-// and_expr_tail: AMPERSAND shift_expr and_expr_tail
-//                 | // EMPTY
-//                 ;
+// and_expr_tail: AMPERSAND equality_expr and_expr_tail
+//              | // EMPTY
+//              ;
 // 
 shared_ptr<BaseExpressionNode> BaseExpression::ParseAndExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
-    auto lhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+    auto lhs = ParseEqualityExpression(tenderizer, node_creator, errmsg, errloc);
     if(!lhs) return nullptr;
 
     while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::AMPERSAND) {
         string display = tenderizer->GetDisplayText();
         tenderizer->Gobble();
-        auto rhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+        auto rhs = ParseEqualityExpression(tenderizer, node_creator, errmsg, errloc);
         if(!rhs) return nullptr;
         lhs = node_creator->CreateAndOp(lhs, display, rhs);
+    }
+
+    return lhs;
+}
+
+// EQUALITY (==, !=) C++ precedence 10
+// 
+// equality_expr: shift_expr equality_expr_tail
+//              ;
+// 
+// equality_expr_tail: EQUAL_TO     shift_expr equality_expr_tail
+//                   | NOT_EQUAL_TO shift_expr equality_expr_tail
+//                   | // EMPTY
+//                   ;
+// 
+shared_ptr<BaseExpressionNode> BaseExpression::ParseEqualityExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
+{
+    auto lhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+    if(!lhs) return nullptr;
+
+    for(bool done = false; !done;) {
+        string display = tenderizer->GetDisplayText();
+        switch(tenderizer->GetCurrentMeat()) {
+        case Tenderizer::Meat::EQUAL_TO:
+        {
+            tenderizer->Gobble();
+            auto rhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+            if(!rhs) return nullptr;
+            lhs = node_creator->CreateEqualToOp(lhs, display, rhs);
+            break;
+        }
+
+        case Tenderizer::Meat::NOT_EQUAL_TO:
+        {
+            tenderizer->Gobble();
+            auto rhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+            if(!rhs) return nullptr;
+            lhs = node_creator->CreateNotEqualToOp(lhs, display, rhs);
+            break;
+        }
+
+        default:
+            done = true;
+            break;
+        }
     }
 
     return lhs;
@@ -405,10 +456,10 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseAndExpression(shared_ptr<Ten
 // BIT SHIFTS (<<, >>) C++ precedence 7
 // 
 // shift_expr: add_expr shift_expr_tail
-//              ;
+//           ;
 // 
 // shift_expr_tail: LSHIFT add_expr shift_expr_tail
-//                | RSHIFT add_expr shift_expr tail
+//                | RSHIFT add_expr shift_expr_tail
 //                | // EMPTY
 //                ;
 // 

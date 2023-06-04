@@ -37,6 +37,8 @@ struct BreakpointInfo {
     bool enabled = true;
     bool has_bank = false; // true when prg/chr_rom_bank in address is valid
 
+    std::shared_ptr<BaseExpression> condition;
+
     // these could be a single int but separate bools work better with ImGui
     bool break_read = false;
     bool break_write = false;
@@ -110,7 +112,7 @@ public:
         breakpoint_list.erase(it);
         if(breakpoint_list.size() != 0) return;
 
-        breakpoints.erase(breakpoint_info->address);
+        breakpoints.erase(key);
 
         // unset cpu_quick_breakpoints bit when there are no bp at this address
         cpu_quick_breakpoints[breakpoint_info->address.address >> 5] &= ~(1 << (breakpoint_info->address.address & 0x1F));
@@ -121,6 +123,8 @@ public:
         if(breakpoints.contains(where)) return breakpoints[where];
         return empty_list;
     }
+
+    bool SetBreakpointCondition(std::shared_ptr<BreakpointInfo> const&, std::shared_ptr<BaseExpression> const&, std::string&);
 
     template<typename T>
     inline void IterateBreakpoints(T const& func) {
@@ -363,14 +367,20 @@ protected:
 private:
     int selected_row = -1;
 
+    enum class EditMode { NONE, ADDRESS, CONDITION, };
+
     void SetBreakpoint();
+    void SetCondition();
+
     std::shared_ptr<BreakpointInfo> editing_breakpoint_info;
     std::string edit_string;
-    bool editing = false;
+    EditMode editing = EditMode::NONE;
     bool started_editing = false;
     bool do_set_breakpoint = false;
     bool wait_dialog = false;
     std::string set_breakpoint_error_message;
+
+    std::shared_ptr<BreakpointInfo> context_breakpoint;
 };
 
 

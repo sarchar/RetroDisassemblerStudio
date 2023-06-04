@@ -176,7 +176,12 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
         ImGui::TableNextColumn();   // same color as the address field
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200, (selected || hovered) ? 128 : 255));
         {
-            auto bplist = system_instance->GetBreakpointsAt(where);
+            Windows::NES::SystemInstance::breakpoint_list_t bplist = system_instance->GetBreakpointsAt(where);
+
+            // extend bplist with the non-bank-specific breakpoints
+            Windows::NES::SystemInstance::breakpoint_list_t bplist2 = system_instance->GetBreakpointsAt(where.address);
+            bplist.insert(bplist.end(), bplist2.begin(), bplist2.end());
+
             bool show_disabled_bp = false;
             std::shared_ptr<BreakpointInfo> bpi = nullptr;
 
@@ -201,7 +206,11 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
 
             if((ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) || (focused && selected && ImGui::IsKeyPressed(ImGuiKey_F9))) {
                 if(bpi) {
-                    system_instance->ClearBreakpoint(where, bpi);
+                    if(bpi->has_bank) {
+                        system_instance->ClearBreakpoint(where, bpi);
+                    } else {
+                        system_instance->ClearBreakpoint(where.address, bpi);
+                    }
                 } else {
                     // create new breakpoint here
                     bpi = make_shared<BreakpointInfo>();
@@ -216,7 +225,7 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
 
         ImGui::TableNextColumn();
         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200, (selected || hovered) ? 128 : 255));
-        ImGui::Text("$%02X:0x%04X", where.prg_rom_bank, where.address);
+        ImGui::Text("$%02X:%04X", where.prg_rom_bank, where.address);
 
         ImGui::TableNextColumn(); // spacing
 

@@ -560,6 +560,39 @@ void SystemInstance::WriteOAMDMA(u8 page)
     dma_halt_cycle_done = false;
 }
 
+bool SystemInstance::SetBreakpointCondition(std::shared_ptr<BreakpointInfo> const& breakpoint_info, 
+        std::shared_ptr<BaseExpression> const& expression, std::string& errmsg)
+{
+    // first fixup the expression, allowing labels, defines, derefs
+    if(!current_system->FixupExpression(expression, errmsg, true, true, true)) return false;
+
+    // now we need to Explore() and set the dereferences on the expression
+    auto cb = [&](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+        auto deref = dynamic_pointer_cast<BaseExpressionNodes::DereferenceOp>(node);
+        if(!deref) return true;
+
+        auto deref_func = [&](s64 in, s64* out, string& errmsg)->bool {
+            if(!memory_view) {
+                errmsg = "Internal error";
+                return false;
+            }
+
+            *out = memory_view->Peek(in);
+            return true;
+        };
+
+        deref->SetDereferenceFunction(deref_func);
+        return true;
+    };
+
+    if(!expression->Explore(cb, nullptr)) return false;
+
+    // should be good to go now
+    breakpoint_info->condition = expression;
+    return true;
+}
+
+
 void SystemInstance::CheckBreakpoints(u16 address, CheckBreakpointMode mode)
 {
     GlobalMemoryLocation where = {
@@ -578,12 +611,17 @@ void SystemInstance::CheckBreakpoints(u16 address, CheckBreakpointMode mode)
         auto break_read    = bp->break_read    && (mode == CheckBreakpointMode::READ);
         auto break_write   = bp->break_write   && (mode == CheckBreakpointMode::WRITE);
         if(bp->enabled && (break_read || break_write || break_execute)) {
-            current_state = State::PAUSED;
-            // update the bank at which the breakpoint occurred -- either it'll be
-            // re-set to the same value or has_bank is false and needs to be set anyway
-            bp->address.prg_rom_bank = where.prg_rom_bank;
-            breakpoint_hit->emit(bp);
-            return true;
+            // check condition
+            s64 result;
+            string errmsg;
+            if(!bp->condition || (bp->condition->Evaluate(&result, errmsg) && (result != 0))) {
+                current_state = State::PAUSED;
+                // update the bank at which the breakpoint occurred -- either it'll be
+                // re-set to the same value or has_bank is false and needs to be set anyway
+                bp->address.prg_rom_bank = where.prg_rom_bank;
+                breakpoint_hit->emit(bp);
+                return true;
+            }
         }
         return false;
     };
@@ -1836,9 +1874,14 @@ void Breakpoints::Render()
             if(ImGui::Selectable("##selectable", selected_row == row, selectable_flags)) selected_row = row;
 
             // when the user activates a breakpoint, go to it in the listing window
-            if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                if(auto listing = GetMyListing()) {
-                    listing->GoToAddress(bpi->address);
+            if(ImGui::IsItemHovered()) {
+                if(ImGui::IsMouseDoubleClicked(0)) {
+                    if(auto listing = GetMyListing()) {
+                        listing->GoToAddress(bpi->address);
+                    }
+                } else if(ImGui::IsMouseClicked(1)) {
+                    context_breakpoint = bpi;
+                    ImGui::OpenPopup("breakpoint_context_menu");
                 }
             }
 
@@ -1856,14 +1899,34 @@ void Breakpoints::Render()
             }
             ImGui::PopStyleVar(1);
 
+            // format address
             ImGui::TableNextColumn();
             stringstream ss;
             bpi->address.FormatAddress(ss, true, bpi->has_bank);
             ImGui::Text(ss.str().c_str());
 
+            // format condition
             ImGui::TableNextColumn();
-            ImGui::Text("cpu.X==3");
-            if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+            if(bpi == editing_breakpoint_info && editing == EditMode::CONDITION) {
+                ImGui::PushItemWidth(-FLT_MIN);
+                if(ImGui::InputText("##edit_condition", &edit_string, ImGuiInputTextFlags_EnterReturnsTrue)) {
+                    do_set_breakpoint = true;
+                }
+
+                // if we just started editing, focus on the input text item
+                if(started_editing) {
+                    ImGui::SetKeyboardFocusHere(-1);
+                    // wait until item is activated
+                    if(ImGui::IsItemActive()) started_editing = false;
+                } else if(!do_set_breakpoint && !ImGui::IsItemActive()) { // check if item lost activation
+                    // stop editing without saving
+                    editing = EditMode::NONE;
+                    editing_breakpoint_info = nullptr;
+                }
+            } else {
+                stringstream ss;
+                if(bpi->condition) ss << *bpi->condition;
+                ImGui::Text("%s", ss.str().c_str());
             }
 
             ImGui::PopID();
@@ -1879,9 +1942,9 @@ void Breakpoints::Render()
 
         ImGui::TableNextColumn(); // address
 
-        if(editing_breakpoint_info) {
+        if(editing == EditMode::ADDRESS) {
             ImGui::PushItemWidth(-FLT_MIN);
-            if(ImGui::InputText("", &edit_string, ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if(ImGui::InputText("##edit_address", &edit_string, ImGuiInputTextFlags_EnterReturnsTrue)) {
                 do_set_breakpoint = true;
             }
 
@@ -1892,7 +1955,7 @@ void Breakpoints::Render()
                 if(ImGui::IsItemActive()) started_editing = false;
             } else if(!do_set_breakpoint && !ImGui::IsItemActive()) { // check if item lost activation
                 // stop editing without saving
-                editing = false;
+                editing = EditMode::NONE;
                 editing_breakpoint_info = nullptr;
             }
         } else {
@@ -1900,8 +1963,11 @@ void Breakpoints::Render()
             if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
                 // create a new disabled breakpoint and start editing it
                 editing_breakpoint_info = make_shared<BreakpointInfo>();
+                editing_breakpoint_info->break_read = true;
+                editing_breakpoint_info->break_write = true;
+                editing_breakpoint_info->break_execute = true;
                 edit_string = "";
-                editing = true;
+                editing = EditMode::ADDRESS;
                 started_editing = true;
             }
         }
@@ -1915,7 +1981,26 @@ void Breakpoints::Render()
 
     ImGui::PopStyleVar(3);
 
-    if(do_set_breakpoint) SetBreakpoint();
+    if(ImGui::BeginPopupContextItem("breakpoint_context_menu")) {
+        if(ImGui::MenuItem("Edit Condition")) {
+            editing_breakpoint_info = context_breakpoint;
+
+            // initialize the condition string
+            stringstream ss;
+            if(editing_breakpoint_info->condition) ss << *editing_breakpoint_info->condition;
+            edit_string = ss.str();
+
+            editing = EditMode::CONDITION;
+            started_editing = true;
+        }
+        ImGui::EndPopup();
+    }
+
+    if(do_set_breakpoint) {
+        if(editing == EditMode::ADDRESS) SetBreakpoint();
+        else if(editing == EditMode::CONDITION) SetCondition();
+    }
+
 }
 
 // Try to set the current edit_string as the breakpoint info's address
@@ -1947,12 +2032,6 @@ void Breakpoints::SetBreakpoint()
                             .prg_rom_bank = 0,
                         };
 
-                        if(result < 0x8000) { // default to RW mode on RAM elements
-                            editing_breakpoint_info->break_read = true;
-                            editing_breakpoint_info->break_write = true;
-                        } else { // execute
-                            editing_breakpoint_info->break_execute = true;
-                        }
 
                         editing_breakpoint_info->has_bank = false;
                         editing_breakpoint_info->enabled = true;
@@ -1984,16 +2063,16 @@ void Breakpoints::SetBreakpoint()
                     }
 
                     if(!editing_breakpoint_info) {
-                        // success, done editing and re-sort after adding
+                        // success, done editing
                         do_set_breakpoint = false;
-                        editing = false;
+                        editing = EditMode::NONE;
                     }
                 }
             }
         }
 
         // if we didn't finish editing there was an error...
-        if(editing) {
+        if(editing != EditMode::NONE) {
             stringstream ss;
             ss << "There was a problem setting the breakpoint: " << errmsg;
             if(errloc >= 0) ss << " (at offset " << errloc << ")";
@@ -2010,6 +2089,46 @@ void Breakpoints::SetBreakpoint()
         }
     }
 }
+
+void Breakpoints::SetCondition()
+{
+    if(!wait_dialog) {
+        string errmsg;
+        int errloc;
+
+        // try parsing the expression first
+        auto expr = make_shared<Systems::NES::Expression>();
+        if(expr->Set(edit_string, errmsg, errloc, false)) {
+            errloc = -1;
+
+            // Expression contained valid elements, try setting the condition
+            if(GetMySystemInstance()->SetBreakpointCondition(editing_breakpoint_info, expr, errmsg)) {
+                // success, done editing
+                editing_breakpoint_info = nullptr;
+                do_set_breakpoint = false;
+                editing = EditMode::NONE;
+            }
+        }
+
+        // if we didn't finish editing there was an error...
+        if(editing != EditMode::NONE) {
+            stringstream ss;
+            ss << "There was a problem setting the condition: " << errmsg;
+            if(errloc >= 0) ss << " (at offset " << errloc << ")";
+            set_breakpoint_error_message = ss.str();
+            wait_dialog = true;
+        }
+    } 
+
+    if(wait_dialog) {
+        if(GetMainWindow()->OKPopup("Expression error", set_breakpoint_error_message)) {
+            wait_dialog = false;
+            do_set_breakpoint = false;
+            started_editing = true; // re-edit the expression
+        }
+    }
+}
+
 
 } // namespace Windows::NES
 
