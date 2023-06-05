@@ -176,20 +176,23 @@ std::shared_ptr<MemoryRegion> System::GetMemoryRegionByIndex(int i)
 
 std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const& where)
 {
-    static shared_ptr<MemoryRegion> empty_ptr;
     assert(!where.is_chr); // TODO
 
     if(where.address < cpu_ram->GetEndAddress()) {
         return cpu_ram;
+    } else if(where.address < 0x2000) { // empty space
+        return nullptr;
     } else if(where.address < ppu_registers->GetEndAddress()) {
         return ppu_registers;
     } else if(where.address < io_registers->GetEndAddress()) {
         return io_registers;
     } else if(where.address < 0x6000) { // empty space
-        return empty_ptr;
+        return nullptr;
     } else {
         return cartridge->GetMemoryRegion(where);
     }
+
+    return nullptr;
 }
 
 std::shared_ptr<MemoryObject> System::GetMemoryObject(GlobalMemoryLocation const& where, int* offset)
