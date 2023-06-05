@@ -156,7 +156,7 @@ void References::Render()
 
                 go = [this, memory]() {
                     if(auto listing = GetMyListing()) {
-                        listing->GoToAddress(*memory);
+                        listing->GoToAddress(*memory, true);
                     }
                 };
             } else if(auto define = get_if<shared_ptr<Define>>(&location)) {

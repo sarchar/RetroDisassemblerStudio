@@ -98,7 +98,7 @@ void Listing::Follow()
             memory_object->operand_expression->Explore([this, &found](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
                 if(auto label_node = dynamic_pointer_cast<Systems::NES::ExpressionNodes::Label>(node)) {
                     // first label found, go to it
-                    GoToAddress(label_node->GetTarget());
+                    GoToAddress(label_node->GetTarget(), true);
                     found = true;
                     return false; // bail
                 }
@@ -110,7 +110,7 @@ void Listing::Follow()
                 s64 result;
                 string errmsg;
                 if(memory_object->operand_expression->Evaluate(&result, errmsg)) {
-                    GoToAddress((u16)(result & 0xFFFF));
+                    GoToAddress((u16)(result & 0xFFFF), true);
                 }
             }
         } else if(memory_object->type == MemoryObject::TYPE_CODE) {
@@ -120,9 +120,9 @@ void Listing::Follow()
             } else if(memory_object->GetSize() == 3) {
                 dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
             }
-            GoToAddress(dest);
+            GoToAddress(dest, true);
         } else if(memory_object->type == MemoryObject::TYPE_WORD) {
-            GoToAddress(memory_object->hval);
+            GoToAddress(memory_object->hval, true);
         }
     }
 }
@@ -160,14 +160,14 @@ void Listing::GoToAddress(GlobalMemoryLocation const& address, bool save)
     jump_to_selection = JUMP_TO_SELECTION_START_VALUE;
 }
 
-void Listing::GoToAddress(u32 address)
+void Listing::GoToAddress(u32 address, bool save)
 {
     auto memory_region = current_system->GetMemoryRegion(current_selection);
 
     if(address >= memory_region->GetBaseAddress() && address < memory_region->GetEndAddress()) {
         GlobalMemoryLocation new_selection(current_selection);
         new_selection.address = address;
-        GoToAddress(new_selection);
+        GoToAddress(new_selection, save);
     } else {
         // destination is not in this memory region, see if we can find it
         GlobalMemoryLocation guessed_address;
@@ -181,14 +181,14 @@ void Listing::GoToAddress(u32 address)
                 guessed_address.prg_rom_bank = possible_banks[0];
                 memory_region = current_system->GetMemoryRegion(guessed_address);
                 if(memory_region) {
-                    GoToAddress(guessed_address);
+                    GoToAddress(guessed_address, save);
                 }
             } else {
                 assert(false); // popup dialog and wait for selection of which bank to go to
             }
         } else {
             // not a banked address, go to it if it's valid
-            if(current_system->GetMemoryRegion(guessed_address)) GoToAddress(guessed_address);
+            if(current_system->GetMemoryRegion(guessed_address)) GoToAddress(guessed_address, save);
         }
     }
 }
@@ -242,18 +242,22 @@ void Listing::CheckInput()
     if(no_mods) {
         // handle back button
         if(ImGui::IsKeyPressed(ImGuiKey_MouseX1) && selection_history_back.size()) {
-            selection_history_forward.push(current_selection);
-            GlobalMemoryLocation dest = selection_history_back.top();
-            selection_history_back.pop();
-            GoToAddress(dest);
+            if(selection_history_back.size()) {
+                selection_history_forward.push(current_selection);
+                GlobalMemoryLocation dest = selection_history_back.top();
+                selection_history_back.pop();
+                GoToAddress(dest, false);
+            }
         }
 
         // handle forward button
         if(ImGui::IsKeyPressed(ImGuiKey_MouseX2) && selection_history_forward.size()) {
-            selection_history_back.push(current_selection);
-            GlobalMemoryLocation dest = selection_history_forward.top();
-            selection_history_forward.pop();
-            GoToAddress(dest);
+            if(selection_history_forward.size()) {
+                selection_history_back.push(current_selection);
+                GlobalMemoryLocation dest = selection_history_forward.top();
+                selection_history_forward.pop();
+                GoToAddress(dest, false);
+            }
         }
 
         // Move selection up
@@ -642,7 +646,7 @@ void Listing::RenderPopups()
                 u32 address;
                 ss >> address;
                 
-                GoToAddress(address);
+                GoToAddress(address, true);
             }
         }
         popups.goto_address.show = false;

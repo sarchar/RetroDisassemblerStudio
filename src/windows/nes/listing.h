@@ -35,8 +35,9 @@ public:
     static char const * const GetWindowClassStatic() { return "Windows::NES::Listing"; }
     static std::shared_ptr<Listing> CreateWindow();
 
-    void GoToAddress(GlobalMemoryLocation const&, bool save = true);
-    void GoToAddress(u32);
+    // save=true => save the current address in location history
+    void GoToAddress(GlobalMemoryLocation const&, bool save);
+    void GoToAddress(u32, bool save);
     void GoToCurrentInstruction();
     void Refocus(); // re focus on the current selection
     void Follow();

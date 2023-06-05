@@ -91,7 +91,7 @@ void MemoryRegions::Render()
                         // build an address from the bank info
                         GlobalMemoryLocation loc;
                         memory_region->GetGlobalMemoryLocation(0, &loc);
-                        wnd->GoToAddress(loc);
+                        wnd->GoToAddress(loc, true);
                     }
                 }
                 ImGui::SameLine();

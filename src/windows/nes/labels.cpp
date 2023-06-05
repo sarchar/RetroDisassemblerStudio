@@ -192,7 +192,7 @@ void Labels::Render()
                         if(ImGui::IsMouseClicked(0)) {
                             if(auto listing = GetMyListing()) {
                                 // build an address from the bank info
-                                listing->GoToAddress(label->GetMemoryLocation());
+                                listing->GoToAddress(label->GetMemoryLocation(), true);
                             }
                         } else if(ImGui::IsMouseClicked(1)) {
                             context_row = row;

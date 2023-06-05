@@ -2050,7 +2050,7 @@ void Breakpoints::Render()
                 // when the user activates a breakpoint, go to it in the listing window
                 if(ImGui::IsMouseDoubleClicked(0)) {
                     if(auto listing = GetMyListing()) {
-                        listing->GoToAddress(bpi->address);
+                        listing->GoToAddress(bpi->address, true);
                     }
                 }
             }
