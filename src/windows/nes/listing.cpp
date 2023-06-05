@@ -353,7 +353,6 @@ void Listing::CreateDestinationLabel()
 
         if(possible_banks.size() == 1) {
             label_address.prg_rom_bank = possible_banks[0];
-            memory_region = current_system->GetMemoryRegion(label_address);
         } else {
             cout << "[Listing::CheckInput] TODO: popup dialog asking for which bank this should point to" << endl;
             return;
