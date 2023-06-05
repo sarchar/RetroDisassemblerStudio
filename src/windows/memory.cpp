@@ -1,3 +1,9 @@
+// Copyright (c) 2023, Charles Mason <chuck+github@borboggle.com>
+// All rights reserved.
+// 
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. 
+
 // TODO in the future will need a way to make windows only available to the currently loaded system
 #include <iomanip>
 #include <iostream>
