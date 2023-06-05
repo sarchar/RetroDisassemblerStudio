@@ -140,7 +140,7 @@ public:
     inline void IterateBreakpoints(T const& func) {
         for(auto& bplistpair : breakpoints) {
             for(auto& bpi : bplistpair.second) {
-                func(bpi);
+                func(bplistpair.first, bpi);
             }
         }
     }
@@ -382,6 +382,8 @@ protected:
 
 private:
     int selected_row = -1;
+    SystemInstance::breakpoint_key_t selected_key;
+    std::shared_ptr<BreakpointInfo> selected_breakpoint;
 
     enum class EditMode { NONE, ADDRESS, CONDITION, };
 

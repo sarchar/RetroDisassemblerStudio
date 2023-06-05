@@ -2002,6 +2002,10 @@ Breakpoints::~Breakpoints()
 
 void Breakpoints::CheckInput()
 {
+    if(ImGui::IsKeyPressed(ImGuiKey_Delete) && selected_breakpoint) {
+        GetMySystemInstance()->ClearBreakpoint(selected_key, selected_breakpoint);
+        selected_breakpoint = nullptr;
+    }
 }
 
 void Breakpoints::Update(double deltaTime)
@@ -2032,7 +2036,7 @@ void Breakpoints::Render()
         ////////////////////////////////////////////////////////////////////////////////////////////////////
         // loop over the breakpoints and render a row for each
         int row = 0;
-        GetMySystemInstance()->IterateBreakpoints([&](shared_ptr<BreakpointInfo> const& bpi) {
+        GetMySystemInstance()->IterateBreakpoints([&](SystemInstance::breakpoint_key_t const& key, shared_ptr<BreakpointInfo> const& bpi) {
             ImGui::PushID(row);
 
             ImGui::TableNextRow();
@@ -2040,7 +2044,11 @@ void Breakpoints::Render()
 
             // show selection even when editing
             ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
-            if(ImGui::Selectable("##selectable", selected_row == row, selectable_flags)) selected_row = row;
+            if(ImGui::Selectable("##selectable", selected_row == row, selectable_flags) || (selected_row == row)) { // updates selected_breakpoint after previous one is deleted
+                selected_row = row;
+                selected_key = key;
+                selected_breakpoint = bpi;
+            }
 
             if(ImGui::IsItemHovered()) {
                 // IsItemHovered() will only be true if the popup isn't open, so we can safely change context_breakpoint
