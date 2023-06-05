@@ -95,25 +95,26 @@ bool MainApplication::OnPlatformReady()
     // TODO everything will one day be user customizable
     ImFont* default_font = io.Fonts->AddFontDefault();
 
-    main_font = io.Fonts->AddFontFromFileTTF("ext/iosevka-regular.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
-    if(main_font == nullptr) {
-        cout << "[MainApplication] Warning: unable to load iosevka-regular.ttf. Using default font." << endl;
-        main_font = default_font;
+    std::string main_font_file = "ext/iosevka-regular.ttf";
+    if(file_exists(main_font_file)) {
+        main_font = io.Fonts->AddFontFromFileTTF(main_font_file.c_str(), 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
+        if(main_font == nullptr) {
+            cout << "[MainApplication] Warning: unable to load iosevka-regular.ttf. Using default font." << endl;
+            main_font = default_font;
+        }
     }
 
-    main_font_bold = io.Fonts->AddFontFromFileTTF("ext/iosevka-heavy.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
-    if(main_font_bold == nullptr) { 
-        cout << "[MainApplication] Warning: unable to load iosevka-bold.ttf. Using default font." << endl;
-        main_font_bold = default_font;
+    std::string main_font_bold_file = "ext/iosevka-heavy.ttf";
+    if(file_exists(main_font_bold_file)) {
+        main_font_bold = io.Fonts->AddFontFromFileTTF(main_font_bold_file.c_str(), 18.0f, NULL, io.Fonts->GetGlyphRangesDefault());
+        if(main_font_bold == nullptr) { 
+            cout << "[MainApplication] Warning: unable to load iosevka-bold.ttf. Using default font." << endl;
+            main_font_bold = default_font;
+        }
     }
-
-    IM_ASSERT(main_font != NULL);
-    IM_ASSERT(main_font_bold != NULL);
 
     // replace the default font
-    if(main_font != default_font) {
-        io.FontDefault = static_cast<ImFont*>(main_font);
-    }
+    if(main_font) io.FontDefault = static_cast<ImFont*>(main_font);
 
     // scale up some
     io.FontGlobalScale = 1.2f;

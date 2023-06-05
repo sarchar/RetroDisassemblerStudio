@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -113,5 +114,11 @@ inline std::string strlower(std::string const& s)
     std::string ret = s;
     std::transform(ret.begin(), ret.end(), ret.begin(), [](unsigned char c){ return std::tolower(c); });
     return ret;
+}
+
+inline bool file_exists(std::string const& name)
+{
+    std::ifstream f(name);
+    return f.good();
 }
 

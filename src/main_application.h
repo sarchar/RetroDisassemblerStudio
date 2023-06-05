@@ -59,8 +59,8 @@ private:
     std::string layout_file;
 
     // ImGui fonts
-    void* main_font;
-    void* main_font_bold;
+    void* main_font = nullptr;
+    void* main_font_bold = nullptr;
 
 private:
     typedef std::function<std::shared_ptr<BaseWindow>(void)> create_window_func;
