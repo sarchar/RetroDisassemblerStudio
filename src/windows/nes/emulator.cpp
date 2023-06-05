@@ -218,9 +218,9 @@ void SystemInstance::CreateDefaultWorkspace()
     bpi->break_execute = true;
     SetBreakpoint(where, bpi);
 
-    CreateNewWindow("Labels");
-    CreateNewWindow("Defines");
     CreateNewWindow("Regions");
+    CreateNewWindow("Defines");
+    CreateNewWindow("Labels");
     CreateNewWindow("Listing");
     CreateNewWindow("Screen");
     CreateNewWindow("Breakpoints");
@@ -246,16 +246,16 @@ void SystemInstance::CreateNewWindow(string const& window_type)
         wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
     } else if(window_type == "Screen") {
         wnd = Screen::CreateWindow();
-        wnd->SetInitialDock(BaseWindow::DOCK_TOPRIGHT);
+        wnd->SetInitialDock(BaseWindow::DOCK_RIGHTTOP);
     } else if(window_type == "CPUState") {
         wnd = CPUState::CreateWindow();
-        wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
+        wnd->SetInitialDock(BaseWindow::DOCK_RIGHTBOTTOM);
     } else if(window_type == "PPUState") {
         wnd = PPUState::CreateWindow();
-        wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
+        wnd->SetInitialDock(BaseWindow::DOCK_RIGHTBOTTOM);
     } else if(window_type == "Watch") {
         wnd = Watch::CreateWindow();
-        wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
+        wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMLEFT);
     } else if(window_type == "Breakpoints") {
         wnd = Breakpoints::CreateWindow();
         wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);

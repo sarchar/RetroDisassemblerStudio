@@ -231,7 +231,7 @@ void Labels::Render()
     if(ImGui::BeginPopupContextItem("label_context_menu")) {
         if(ImGui::MenuItem("View References")) {
             auto wnd = References::CreateWindow(labels[context_row].lock());
-            wnd->SetInitialDock(BaseWindow::DOCK_TOPRIGHT);
+            wnd->SetInitialDock(BaseWindow::DOCK_RIGHTBOTTOM);
             GetMySystemInstance()->AddChildWindow(wnd);
         } else if(ImGui::BeginMenu("Set Breakpoint")) {
             auto bpi = make_shared<BreakpointInfo>();

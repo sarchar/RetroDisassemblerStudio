@@ -274,16 +274,24 @@ void BaseWindow::InternalPreRender()
                 dock_node_id = p->imgui_dock_builder_right_id;
                 break;
 
-            case DOCK_TOPRIGHT:
-                dock_node_id = p->imgui_dock_builder_topright_id;
+            case DOCK_RIGHTTOP:
+                dock_node_id = p->imgui_dock_builder_righttop_id;
                 break;
 
-            case DOCK_BOTTOMRIGHT:
-                dock_node_id = p->imgui_dock_builder_bottomright_id;
+            case DOCK_RIGHTBOTTOM:
+                dock_node_id = p->imgui_dock_builder_rightbottom_id;
                 break;
 
             case DOCK_BOTTOM:
                 dock_node_id = p->imgui_dock_builder_bottom_id;
+                break;
+
+            case DOCK_BOTTOMLEFT:
+                dock_node_id = p->imgui_dock_builder_bottomleft_id;
+                break;
+
+            case DOCK_BOTTOMRIGHT:
+                dock_node_id = p->imgui_dock_builder_bottomright_id;
                 break;
 
             case DOCK_ROOT:
@@ -335,19 +343,22 @@ void BaseWindow::InternalDockSpace(float w, float h)
         ImGuiViewport* viewport = ImGui::GetWindowViewport();
         ImGui::DockBuilderSetNodeSize(imgui_dock_builder_root_id, viewport->Size);
         
-        // split the dockspace into left and right, with the right side a temporary ID
-        ImGuiID right_id;
-        imgui_dock_builder_left_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_root_id, ImGuiDir_Left, 0.3f, nullptr, &right_id);
-        
-        // split the right area, creating a temporary top/bottom
+        // split the dockspace top and bottom
         ImGuiID top_id;
-        imgui_dock_builder_bottom_id = ImGui::DockBuilderSplitNode(right_id, ImGuiDir_Down, 0.5f, nullptr, &top_id);
-        
-        // now split the top area into a middle and right
-        imgui_dock_builder_right_id = ImGui::DockBuilderSplitNode(top_id, ImGuiDir_Right, 0.4f, nullptr, nullptr);
+        imgui_dock_builder_bottom_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_root_id, ImGuiDir_Down, 0.2f, nullptr, &top_id);
 
+        // split the bottom dockspace into left and right
+        imgui_dock_builder_bottomleft_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_bottom_id, ImGuiDir_Right, 0.5f, nullptr, &imgui_dock_builder_bottomright_id);
+        
+        // split the top area to left, <root>, right
+        ImGuiID right_id;
+        imgui_dock_builder_left_id = ImGui::DockBuilderSplitNode(top_id, ImGuiDir_Left, 0.2f, nullptr, &right_id);
+
+        // split the remaining area to left and right. the remaining left is the root area
+        imgui_dock_builder_right_id = ImGui::DockBuilderSplitNode(right_id, ImGuiDir_Right, 0.3f, nullptr, nullptr);
+        
         // and split the right area into top and bottom
-        imgui_dock_builder_topright_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_right_id, ImGuiDir_Up, 0.5f, nullptr, &imgui_dock_builder_bottomright_id);
+        imgui_dock_builder_righttop_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_right_id, ImGuiDir_Up, 0.5f, nullptr, &imgui_dock_builder_rightbottom_id);
 
         ImGui::DockBuilderFinish(imgui_dockspace_id);
         dockspace_is_built = true;
@@ -468,9 +479,13 @@ bool BaseWindow::InternalSaveWindow(ostream& os, string& errmsg)
     if(is_dockspace) {
         WriteVarInt(os, imgui_dock_builder_root_id);
         WriteVarInt(os, imgui_dock_builder_left_id);
+
         WriteVarInt(os, imgui_dock_builder_right_id);
-        WriteVarInt(os, imgui_dock_builder_topright_id);
-        WriteVarInt(os, imgui_dock_builder_bottomright_id);
+        WriteVarInt(os, imgui_dock_builder_righttop_id);
+        WriteVarInt(os, imgui_dock_builder_rightbottom_id);
+
+        WriteVarInt(os, imgui_dock_builder_bottom_id);
+        WriteVarInt(os, imgui_dock_builder_bottomleft_id);
         WriteVarInt(os, imgui_dock_builder_bottomright_id);
     }
 
@@ -499,9 +514,13 @@ bool BaseWindow::InternalLoadWindow(istream& is, string& errmsg)
     if(is_dockspace) {
         imgui_dock_builder_root_id = ReadVarInt<unsigned int>(is);
         imgui_dock_builder_left_id = ReadVarInt<unsigned int>(is);
+
         imgui_dock_builder_right_id = ReadVarInt<unsigned int>(is);
-        imgui_dock_builder_topright_id = ReadVarInt<unsigned int>(is);
-        imgui_dock_builder_bottomright_id = ReadVarInt<unsigned int>(is);
+        imgui_dock_builder_righttop_id = ReadVarInt<unsigned int>(is);
+        imgui_dock_builder_rightbottom_id = ReadVarInt<unsigned int>(is);
+
+        imgui_dock_builder_bottom_id = ReadVarInt<unsigned int>(is);
+        imgui_dock_builder_bottomleft_id = ReadVarInt<unsigned int>(is);
         imgui_dock_builder_bottomright_id = ReadVarInt<unsigned int>(is);
         dockspace_is_built = true;
     }

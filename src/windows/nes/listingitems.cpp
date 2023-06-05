@@ -555,7 +555,7 @@ void ListingItemLabel::Render(shared_ptr<Windows::NES::SystemInstance> const& sy
         if(ImGui::IsKeyPressed(ImGuiKey_R) && ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
             // show references to label
             auto wnd = Windows::NES::References::CreateWindow(label);
-            wnd->SetInitialDock(Windows::BaseWindow::DOCK_TOPRIGHT);
+            wnd->SetInitialDock(Windows::BaseWindow::DOCK_RIGHTBOTTOM);
             system_instance->AddChildWindow(wnd);
         }
 

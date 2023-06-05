@@ -20,9 +20,11 @@ public:
         DOCK_ROOT,
         DOCK_LEFT,
         DOCK_RIGHT,
-        DOCK_TOPRIGHT,
-        DOCK_BOTTOMRIGHT,
-        DOCK_BOTTOM
+        DOCK_RIGHTTOP,
+        DOCK_RIGHTBOTTOM,
+        DOCK_BOTTOM,
+        DOCK_BOTTOMLEFT,
+        DOCK_BOTTOMRIGHT
     };
 
     BaseWindow();
@@ -182,9 +184,11 @@ private:
     unsigned int imgui_dock_builder_root_id;
     unsigned int imgui_dock_builder_left_id;
     unsigned int imgui_dock_builder_right_id;
-    unsigned int imgui_dock_builder_topright_id;
-    unsigned int imgui_dock_builder_bottomright_id;
+    unsigned int imgui_dock_builder_righttop_id;
+    unsigned int imgui_dock_builder_rightbottom_id;
     unsigned int imgui_dock_builder_bottom_id;
+    unsigned int imgui_dock_builder_bottomleft_id;
+    unsigned int imgui_dock_builder_bottomright_id;
 
     // Managed child windows
     void ProcessQueuedChildWindowsForAdd();
