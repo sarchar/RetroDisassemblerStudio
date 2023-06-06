@@ -104,6 +104,10 @@ public:
     std::shared_ptr<PPU>        const& GetPPU()        { return ppu; }
     u32                         const* GetFramebuffer() const { return framebuffer; }
     std::shared_ptr<MemoryView> const& GetMemoryView() { return memory_view; }
+
+    template<class T>
+    std::shared_ptr<T> GetMemoryViewAs() { return dynamic_pointer_cast<T>(memory_view); }
+
     void GetCurrentInstructionAddress(GlobalMemoryLocation*);
 
     inline void SetBreakpoint(breakpoint_key_t const& key, std::shared_ptr<BreakpointInfo> const& breakpoint_info) {
@@ -401,5 +405,43 @@ private:
     std::shared_ptr<BreakpointInfo> context_breakpoint;
 };
 
+class Memory : public BaseWindow {
+public:
+    using GlobalMemoryLocation = Systems::NES::GlobalMemoryLocation;
+
+    Memory();
+    virtual ~Memory();
+
+    virtual char const * const GetWindowClass() { return Memory::GetWindowClassStatic(); }
+    static char const * const GetWindowClassStatic() { return "Windows::NES::Memory"; }
+    static std::shared_ptr<Memory> CreateWindow();
+
+protected:
+    void CheckInput() override;
+    void Update(double deltaTime) override;
+    void Render() override;
+
+    bool SaveWindow(std::ostream&, std::string&) override;
+    bool LoadWindow(std::istream&, std::string&) override;
+
+private:
+    int memory_mode = 0;
+    int memory_size = 0;
+    int memory_shift = 0;
+    s64 go_to_address = -1;
+    int selected_address = -1;
+
+    void RenderAddressBar();
+    std::string address_text{};
+    bool set_address = false;
+    bool wait_dialog = false;
+    std::string address_error{};
+
+    void  RenderTileDisplay(GlobalMemoryLocation const&);
+    bool  show_tile_display = false;
+    u32*  tile_display_framebuffer;
+    void* tile_display_texture;
+    bool  valid_texture = false;
+};
 
 } //namespace Windows::NES

@@ -131,6 +131,12 @@ void Cartridge::CreateMemoryRegions()
             character_rom_banks.push_back(bank);
         }
     }
+
+    // create SRAM if the cart has it
+    if(header.has_sram) {
+        sram = make_shared<RAMRegion>(system, "SRAM", 0x6000, 0x2000);
+        sram->InitializeEmpty();
+    }
 }
 
 u16 Cartridge::GetResetVectorBank()
@@ -176,14 +182,14 @@ bool Cartridge::CanBank(GlobalMemoryLocation const& where)
 
 int Cartridge::GetNumMemoryRegions() const
 {
-    // TODO need one for SRAM?
-    return program_rom_banks.size() + character_rom_banks.size();
+    return (sram ? 1 : 0) + program_rom_banks.size() + character_rom_banks.size();
 }
 
 std::shared_ptr<MemoryRegion> Cartridge::GetMemoryRegionByIndex(int i)
 {
-    if(i >= program_rom_banks.size()) return character_rom_banks.at(i - program_rom_banks.size());
-    return program_rom_banks.at(i);
+    if(i >= (program_rom_banks.size() + character_rom_banks.size())) return sram;
+    else if(i >= program_rom_banks.size()) return character_rom_banks.at(i - program_rom_banks.size());
+    else return program_rom_banks.at(i);
 }
 
 std::shared_ptr<MemoryRegion> Cartridge::GetMemoryRegion(GlobalMemoryLocation const& where)
@@ -191,8 +197,8 @@ std::shared_ptr<MemoryRegion> Cartridge::GetMemoryRegion(GlobalMemoryLocation co
     if(where.is_chr) {
         return nullptr;
     } else {
-        if(where.address < 0x8000) { // TODO SRAM support
-            return nullptr;
+        if(where.address < 0x8000) {
+            return sram;
         } else {
             switch(header.mapper) {
             case 0: // easy
@@ -227,6 +233,7 @@ bool Cartridge::Save(std::ostream& os, std::string& errmsg)
         return false;
     }
 
+    if(header.has_sram && !sram->Save(os, errmsg)) return false;
     for(auto& memory_region : program_rom_banks) if(!memory_region->Save(os, errmsg)) return false;
     for(auto& memory_region : character_rom_banks) if(!memory_region->Save(os, errmsg)) return false;
 
@@ -239,6 +246,11 @@ bool Cartridge::Load(std::istream& is, std::string& errmsg, shared_ptr<System>& 
     if(!is.good()) {
         errmsg = "Error reading cartridge header";
         return false;
+    }
+
+    if(header.has_sram) {
+        sram = make_shared<RAMRegion>(system, "SRAM", 0x6000, 0x2000);
+        if(!sram->Load(is, errmsg)) return false;
     }
 
     for(u32 i = 0; i < header.num_prg_rom_banks; i++) {

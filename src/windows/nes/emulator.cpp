@@ -45,6 +45,7 @@ REGISTER_WINDOW(Watch);
 REGISTER_WINDOW(Breakpoints);
 REGISTER_WINDOW(CPUState);
 REGISTER_WINDOW(PPUState);
+REGISTER_WINDOW(Memory);
 
 bool BreakpointInfo::Save(ostream& os, string& errmsg) const
 {
@@ -228,10 +229,11 @@ void SystemInstance::CreateDefaultWorkspace()
     CreateNewWindow("Labels");
     CreateNewWindow("Listing");
     CreateNewWindow("Screen");
-    CreateNewWindow("Breakpoints");
-    CreateNewWindow("Watch");
     CreateNewWindow("PPUState");
     CreateNewWindow("CPUState");
+    CreateNewWindow("Watch");
+    CreateNewWindow("Memory");
+    CreateNewWindow("Breakpoints");
 }
 
 void SystemInstance::CreateNewWindow(string const& window_type)
@@ -264,6 +266,9 @@ void SystemInstance::CreateNewWindow(string const& window_type)
     } else if(window_type == "Breakpoints") {
         wnd = Breakpoints::CreateWindow();
         wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMRIGHT);
+    } else if(window_type == "Memory") {
+        wnd = Memory::CreateWindow();
+        wnd->SetInitialDock(BaseWindow::DOCK_BOTTOMLEFT);
     }
 
     AddChildWindow(wnd);
@@ -458,7 +463,7 @@ void SystemInstance::GetCurrentInstructionAddress(GlobalMemoryLocation* out)
     out->prg_rom_bank = 0;
     if(!(out->address & 0x8000)) out->address = cpu->GetPC(); // for reset/times when opcode PC isn't set
 
-    auto system_view = dynamic_pointer_cast<Systems::NES::SystemView>(memory_view);
+    auto system_view = GetMemoryViewAs<Systems::NES::SystemView>();
     assert(system_view);
 
     if(out->address & 0x8000) {
@@ -657,7 +662,7 @@ void SystemInstance::CheckBreakpoints(u16 address, CheckBreakpointMode mode)
     };
 
     [[likely]] if(where.address & 0x8000) { // determine bank when in bankable space
-        auto system_view = dynamic_pointer_cast<Systems::NES::SystemView>(memory_view);
+        auto system_view = GetMemoryViewAs<Systems::NES::SystemView>();
         where.prg_rom_bank = system_view->GetCartridgeView()->GetRomBank(where.address);
     }
 
@@ -2313,6 +2318,517 @@ void Breakpoints::SetCondition()
             started_editing = true; // re-edit the expression
         }
     }
+}
+
+std::shared_ptr<Memory> Memory::CreateWindow()
+{
+    return make_shared<Memory>();
+}
+
+Memory::Memory()
+    : BaseWindow()
+{
+    SetTitle("Memory");
+    SetNoScrollbar(true);
+
+    tile_display_framebuffer = new u32[256 * 256];
+}
+
+Memory::~Memory()
+{
+    delete [] tile_display_framebuffer;
+}
+
+void Memory::CheckInput()
+{
+}
+
+void Memory::Update(double deltaTime)
+{
+}
+
+void Memory::Render()
+{
+    auto si = GetMySystemInstance();
+    auto system_view = si->GetMemoryViewAs<Systems::NES::SystemView>();
+    if(!system_view) return;
+
+    auto ppu_view = system_view->GetPPUView();
+    if(!ppu_view) return;
+
+    auto cartridge = GetSystem()->GetCartridge();
+    if(!cartridge) return;
+
+    RenderAddressBar();
+
+    ImGui::SameLine();
+    ImGuiFlagButton(&show_tile_display, "T", "Show 2bpp Tile Display");
+
+    if(ImGui::SameLine(); ImGuiFlagButton(nullptr, "+", "Increase offset by 1")) {
+        memory_shift = (memory_shift + 1) & 15;
+    }
+
+    if(ImGui::SameLine(); ImGuiFlagButton(nullptr, "-", "Decrease offset by 1")) {
+        memory_shift = (memory_shift + 15) & 15;
+    }
+
+    bool visible_table = true;
+    if(show_tile_display) {
+        auto size = ImGui::GetWindowSize();
+        size.x *= 0.75;
+        visible_table = ImGui::BeginChild("left", size);
+    }
+
+    GlobalMemoryLocation min_visible_address{};
+    bool first_visible_address = true;
+
+    ImGuiTableFlags table_flags = ImGuiTableFlags_NoBordersInBodyUntilResize
+        | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable
+        | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchSame;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+
+    // We use nested tables so that each row can have its own layout. This will be useful when we can render
+    // things like plate comments, labels, etc
+    static int data_columns[] = { 16, 8, 4, 4 }; // byte, word, long, float
+    if(visible_table && ImGui::BeginTable("memory_table", 1 + data_columns[memory_size], table_flags)) {
+        ImGui::TableSetupScrollFreeze(1, 1);
+        ImGui::TableSetupColumn("Addr", ImGuiTableColumnFlags_WidthFixed, -1);
+
+        char colhdr[3] = "0_";
+        for(int i = 0; i < 16; i++) {
+            int si = i + memory_shift;
+            if(si >= 16) {
+                colhdr[0] = '1';
+                si -= 16;
+            }
+            colhdr[1] = (si < 10) ? ('0' + si) : ('A' + si - 10);
+            ImGui::TableSetupColumn(colhdr, ImGuiTableColumnFlags_WidthStretch);
+
+            // skip some columns for larger data sizes
+            if(memory_size == 1) i += 1;
+            else if(memory_size > 1) i += 3;
+        }
+
+        ImGui::TableHeadersRow();
+
+        u32 total_rows = 0;
+        if(memory_mode == 0) { // CPU
+            total_rows = 0x10000 >> 4; // 16 bytes per row, 64KiB of memory
+        } else if(memory_mode == 1) { // PPU
+            total_rows = 0x4000 >> 4; // 16KiB address space
+        } else if(memory_mode == 2) { // PRG
+            // 16KiB per PRG-ROM bank
+            u32 prg_size = GetSystem()->GetCartridge()->header.num_prg_rom_banks * 0x4000;
+            if(prg_size != 0) total_rows = prg_size >> 4;
+        } else if(memory_mode == 3) { // CHR
+            int num_chr_rom_banks = GetSystem()->GetCartridge()->header.num_chr_rom_banks;
+            // 8KiB per CHR-ROM bank
+            u32 chr_size = num_chr_rom_banks * 0x2000;
+            if(chr_size != 0) total_rows = chr_size >> 4;
+        }
+
+        ImGuiListClipper clipper;
+        clipper.Begin(total_rows);
+
+        int go_to_address_row = (go_to_address >> 4);
+        if(go_to_address >= 0) {
+            clipper.ForceDisplayRangeByIndices(go_to_address_row - 1, go_to_address_row + 1);
+        }
+
+        while(clipper.Step()) {
+            for(int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+
+                stringstream ss;
+                GlobalMemoryLocation address{};
+                bool format_bank = false;
+                u8 data[16];
+                int empty_after = 16;
+                for(int i = 0; i < 16; i++) {
+                    switch(memory_mode) {
+                    case 0: // CPU
+                        if(i == 0) {
+                            address.address = (u16)(row << 4) + memory_shift;
+                        }
+                        data[i] = system_view->Peek(address.address + i);
+                        if(address.address + i >= 0x10000) {
+                            empty_after = (i < empty_after) ? i : empty_after;
+                        }
+                        break;
+
+                    case 1: // PPU
+                        if(i == 0) {
+                            address.address = (u16)(row << 4) + memory_shift;
+                            address.is_chr = true;
+                        }
+                        data[i] = ppu_view->PeekPPU(address.address + i);
+                        if(address.address + i >= 0x4000) {
+                            empty_after = (i < empty_after) ? i : empty_after;
+                        }
+                        break;
+
+                    case 2: { // PRG-ROM
+                        if(i == 0) {
+                            // 0x4000 bytes per bank, 0x400 rows per bank in this table
+                            // every (1<<10) rows increases the bank number
+                            address.address = (u16)((row & 0x03FF) << 4) + memory_shift;
+                            address.prg_rom_bank = (u16)(row >> 10);
+                            format_bank = true;
+                        }
+                        u16 bank = address.prg_rom_bank;
+                        u16 src = address.address + i;
+                        if(src >= 0x4000) { // wrap into next bank
+                            bank += 1;
+                            src &= 0x3FFF;
+                        }
+                        if(bank < cartridge->header.num_prg_rom_banks) {
+                            data[i] = cartridge->ReadProgramRomRelative(bank, src);
+                        } else {
+                            empty_after = (i < empty_after) ? i : empty_after;
+                        }
+                        break;
+                    }
+
+                    case 3: // CHR-ROM
+                        if(i == 0) {
+                            // 0x2000 bytes per bank, 0x400 rows per bank in this table
+                            // every (1<<9) rows increases the bank number
+                            address.address = (u16)((row & 0x01FF) << 4) + memory_shift;
+                            address.chr_rom_bank = (u16)(row >> 9);
+                            format_bank = true;
+                        }
+                        u16 bank = address.chr_rom_bank;
+                        u16 src = address.address + i;
+                        if(src >= 0x2000) { // wrap into next bank
+                            bank += 1;
+                            src &= 0x1FFF;
+                        }
+                        if(bank < cartridge->header.num_chr_rom_banks) {
+                            data[i] = cartridge->ReadCharacterRomRelative(bank, src);
+                        } else {
+                            empty_after = (i < empty_after) ? i : empty_after;
+                        }
+                        break;
+                    }
+                }
+
+                address.FormatAddress(ss, true, format_bank);
+                if(!format_bank) ss << "    "; // hack to get Imgui to set the first column width
+                ImGui::Text("%s", ss.str().c_str());
+                bool visible = ImGui::IsItemVisible();
+                
+                if(visible) {
+                    if(first_visible_address || address < min_visible_address) {
+                        min_visible_address = address;
+                        first_visible_address = false;
+                    }
+                }
+
+                char buf[64];
+                for(int i = 0; i < 16;) {
+                    int save_i = i;
+
+                    ImGui::TableNextColumn();
+                    switch(memory_size) {
+                    case 0: // byte
+                        snprintf(buf, sizeof(buf), "%02X##%d_%d", data[i], row, i);
+                        i += 1;
+                        break;
+                    case 1: // word
+                        snprintf(buf, sizeof(buf), "%04X##%d_%d", (u16)data[i] | ((u16)data[i+1] << 8), row, i);
+                        i += 2;
+                        break;
+                    case 2: { // long
+                        u32 v = (u32)data[i] | ((u32)data[i+1] << 8) | ((u32)data[i+2] << 16) | ((u32)data[i+3] << 24);
+                        snprintf(buf, sizeof(buf), "%08X##%d_%d", v, row, i);
+                        i += 4;
+                        break;
+                    }
+                    case 3: { // float
+                        float v = *(float *)(&data[i]);
+                        snprintf(buf, sizeof(buf), "%f##%d_%d", v, row, i);
+                        i += 4;
+                        break;
+                    }
+                    }
+
+                    // overwrite buffer on empty space
+                    if(save_i >= empty_after) {
+                        snprintf(buf, sizeof(buf), "##%d_%d", row, i);
+                    }
+
+                    // prg/chr bank is 0 for CPU/PPU modes
+                    int long_address = address.address + save_i 
+                                       + 0x4000 * address.prg_rom_bank 
+                                       + 0x2000 * address.chr_rom_bank;
+                    if(ImGui::Selectable(buf, long_address == selected_address, ImGuiSelectableFlags_AllowItemOverlap)) {
+                        selected_address = long_address;
+                    }
+                }
+
+                if(go_to_address >= 0 && row == go_to_address_row) {
+                    selected_address = go_to_address;
+
+                    if(visible) go_to_address = -1;
+                    else        ImGui::ScrollToItem(ImGuiScrollFlags_KeepVisibleCenterY);
+                }
+            }
+        }
+
+        ImGui::EndTable();
+    }
+
+    ImGui::PopStyleVar(3);
+
+    if(show_tile_display) {
+        ImGui::EndChild();
+        ImGui::SameLine();
+        if(ImGui::BeginChild("right") && !first_visible_address) RenderTileDisplay(min_visible_address);
+        ImGui::EndChild();
+    }
+}
+
+void Memory::RenderAddressBar()
+{
+    auto width = ImGui::GetWindowSize().x;
+
+    char const * const tooltip = 
+        "CPU: system bus memory\n"
+        "PPU: VRAM memory\nPRG: PRG-ROM on the cartridge\n"
+        "CHR: CHR-ROM on the cartridge\n";
+    ImGui::SetNextItemWidth(width * 0.1f);
+    ImGui::Combo("##mode", &memory_mode, "CPU\0PPU\0PRG\0CHR\0\0");
+    if(ImGui::IsItemHovered()) ImGui::SetTooltip(tooltip);
+
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(width * 0.1f);
+    ImGui::Combo("##size", &memory_size, "Byte\0Word\0Long\0Float\0\0");
+
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(width * 0.6f);
+    if(ImGui::InputText("Address", &address_text, ImGuiInputTextFlags_EnterReturnsTrue)) {
+        set_address = true;
+    }
+
+    if(wait_dialog) {
+        if(GetMainWindow()->OKPopup("Address error", address_error)) {
+            wait_dialog = false;
+        }
+        return;
+    }
+
+    if(!set_address) return;
+
+    auto expr = make_shared<Systems::NES::Expression>();
+    int errloc;
+    string errmsg;
+    // check if expression is valid
+    if(expr->Set(address_text, errmsg, errloc, false)) {
+        // fixup the expression, allowing labels, defines, derefs, no modes, long labels
+        if(GetSystem()->FixupExpression(expr, errmsg, true, true, true, false, true)) {
+            // now we need to Explore() and set the dereferences on the expression to be word lookups
+            auto cb = [&](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+                // skip everything that's not a DereferenceOp
+                auto deref = dynamic_pointer_cast<BaseExpressionNodes::DereferenceOp>(node);
+                if(!deref) return true;
+
+                // create the word dereference 
+                auto deref_func = [&](s64 in, s64* out, string& errmsg)->bool {
+                    auto memory_view = GetMySystemInstance()->GetMemoryView();
+                    if(!memory_view) {
+                        errmsg = "Internal error";
+                        return false;
+                    }
+
+                    *out = (u16)memory_view->Peek(in) | ((u16)memory_view->Peek(in + 1) << 8);
+                    return true;
+                };
+
+                // set the function
+                deref->SetDereferenceFunction(deref_func);
+                return true;
+            };
+
+            if(!expr->Explore(cb, nullptr)) {
+                errmsg = "Error in Explore()";
+            } else {
+                // valid, so evaluate the expression now to figure out our destination address
+                s64 result;
+                if(expr->Evaluate(&result, errmsg)) {
+                    // truncate addresses in CPU and PPU modes
+                    if(memory_mode < 2) result &= 0xFFFF;
+                    // in bankable modes, convert to linear address
+                    if(memory_mode == 2) {
+                        result = ((result & 0xFF0000) >> 2) | (result & 0x3FFF);
+                    } else if(memory_mode == 3) {
+                        // TODO when labels are usable in CHR-ROM
+                    }
+
+                    // TODO properly check range on result
+                    if(result < 0) {
+                        errmsg = "address out of range";
+                    } else {
+                        // everything was a success!
+                        set_address = false;
+                        go_to_address = result;
+                    }
+                }
+            }
+        }
+    }
+
+    // if we get here and set_address is still true, then the expression failed to evaluate, so set the error
+    // message and show the OKPopup
+    if(set_address) {
+        stringstream ss;
+        ss << "There was a problem with the expression: " << errmsg;
+        if(errloc >= 0) ss << " (at offset " << errloc << ")";
+        address_error = ss.str();
+        wait_dialog = true;
+        set_address = false;
+    }
+}
+
+void Memory::RenderTileDisplay(GlobalMemoryLocation const& start_address)
+{
+    auto si = GetMySystemInstance();
+    auto system_view = si->GetMemoryViewAs<Systems::NES::SystemView>();
+    if(!system_view) return;
+
+    auto ppu_view = system_view->GetPPUView();
+    if(!ppu_view) return;
+
+    auto cartridge = GetSystem()->GetCartridge();
+    if(!cartridge) return;
+
+    if(!valid_texture) {
+        GLuint gl_texture;
+        glGenTextures(1, &gl_texture);
+        glBindTexture(GL_TEXTURE_2D, gl_texture);
+        // OpenGL requires at least one glTexImage2D to setup the texture
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        tile_display_texture = (void*)(intptr_t)gl_texture;
+        glBindTexture(GL_TEXTURE_2D, 0);
+        valid_texture = true;
+    }
+
+    GlobalMemoryLocation address = start_address;
+    bool next_invalid = false;
+    for(int tile_y = 0; tile_y < 32; tile_y++) {
+        for(int tile_x = 0; tile_x < 32; tile_x++) {
+
+            // read 16 bytes at `address`
+            u8 tile_data[16];
+            int tdi = 0;
+            for(; tdi < 16 && !next_invalid; tdi++) {
+                switch(memory_mode) {
+                case 0: // CPU
+                    tile_data[tdi] = system_view->Peek(address.address);
+                    address.address += 1;
+                    if(address.address == 0) next_invalid = true;
+                    break;
+
+                case 1: // PPU
+                    tile_data[tdi] = ppu_view->PeekPPU(address.address);
+                    address.address += 1;
+                    if(address.address == 0) next_invalid = true;
+                    break;
+
+                case 2: // PRG-ROM
+                    tile_data[tdi] = cartridge->ReadProgramRomRelative(address.prg_rom_bank, address.address);
+                    address.address += 1;
+                    if(address.address == 0x4000) {
+                        address.address = 0;
+                        address.prg_rom_bank += 1;
+                        if(address.prg_rom_bank >= cartridge->header.num_prg_rom_banks) {
+                            next_invalid = true;
+                        }
+                    }
+                    break;
+
+                case 3: // CHR-ROM
+                    tile_data[tdi] = cartridge->ReadCharacterRomRelative(address.chr_rom_bank, address.address);
+                    address.address += 1;
+                    if(address.address == 0x2000) {
+                        address.address = 0;
+                        address.chr_rom_bank += 1;
+                        if(address.chr_rom_bank >= cartridge->header.num_chr_rom_banks) {
+                            next_invalid = true;
+                        }
+                    }
+                    break;
+                }
+            }
+
+            // if we didn't get enough data for a tile, clear out the image
+            bool valid = (tdi == 16);
+
+            // render 8x8 tile in tile_data
+            for(int i = 0; i < 8; i++) {
+                int y = tile_y * 8 + i;
+                int byte0 = tile_data[i];
+                int byte1 = tile_data[i+8];
+                for(int j = 0; j < 8; j++) {
+                    int x = tile_x * 8 + j;
+
+                    if(valid) {
+                        int bit0 = (byte0 >> (7-j)) & 0x01;
+                        int bit1 = (byte1 >> (7-j)) & 0x01;
+                        int color = (bit1 << 1) | bit0;
+                        tile_display_framebuffer[y * 256 + x] = 0xFF000000 | (0x404040 * color);
+                    } else {
+                        tile_display_framebuffer[y * 256 + x] = 0xFF000000;
+                    }
+                }
+            }
+        }
+    }
+
+    // update the GL texture
+    GLuint gl_texture = (GLuint)(intptr_t)tile_display_texture;
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, tile_display_framebuffer);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    auto size = ImGui::GetWindowSize();
+    float sz = min(size.x, size.y);
+    ImGui::Image(tile_display_texture, ImVec2(sz, sz));
+}
+
+bool Memory::SaveWindow(std::ostream& os, std::string& errmsg)
+{
+    WriteVarInt(os, memory_mode);
+    WriteVarInt(os, memory_size);
+    WriteVarInt(os, memory_shift);
+    WriteVarInt(os, selected_address);
+    WriteString(os, address_text);
+    WriteVarInt(os, (int)show_tile_display);
+    if(!os.good()) {
+        errmsg = "Error saving " + WindowPrefix();
+        return false;
+    }
+    return true;
+}
+
+bool Memory::LoadWindow(std::istream& is, std::string& errmsg)
+{
+    memory_mode = ReadVarInt<int>(is);
+    memory_size = ReadVarInt<int>(is);
+    memory_shift = ReadVarInt<int>(is);
+    selected_address = ReadVarInt<int>(is);
+    ReadString(is, address_text);
+    show_tile_display = (bool)ReadVarInt<int>(is);
+    if(!is.good()) {
+        errmsg = "Error loading " + WindowPrefix();
+        return false;
+    }
+    return true;
 }
 
 

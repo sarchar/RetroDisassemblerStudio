@@ -37,6 +37,7 @@ public:
     bool LoadHeader(u8*);
 
     bool                               CanBank(GlobalMemoryLocation const&);
+    std::shared_ptr<RAMRegion> const&  GetSRAM() { return sram; }
     std::shared_ptr<ProgramRomBank>&   GetProgramRomBank(u8 bank) { return program_rom_banks[bank]; }
     std::shared_ptr<CharacterRomBank>& GetCharacterRomBank(u8 bank) { return character_rom_banks[bank]; }
     int                                GetNumMemoryRegions() const;
@@ -61,6 +62,7 @@ private:
 
     std::weak_ptr<System> parent_system;
 
+    std::shared_ptr<RAMRegion>                     sram;
     std::vector<std::shared_ptr<ProgramRomBank>>   program_rom_banks;
     std::vector<std::shared_ptr<CharacterRomBank>> character_rom_banks;
 };

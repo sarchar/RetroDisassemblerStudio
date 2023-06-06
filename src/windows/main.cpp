@@ -262,7 +262,7 @@ void MainWindow::RenderMenuBar()
                 if(ImGui::BeginMenu("Current instance")) {
                     if(ImGui::BeginMenu("New Window")) {
                         static char const * const window_types[] = {
-                            "Defines", "Regions", "Labels", "Listing", "Memory", "Screen", "PPUState", "CPUState", "Watch", "Breakpoints"
+                            "Defines", "Regions", "Labels", "Listing", "Memory", "Screen", "PPUState", "CPUState", "Watch", "Breakpoints", "Memory"
                         };
 
                         for(int i = 0; i < IM_ARRAYSIZE(window_types); i++) {

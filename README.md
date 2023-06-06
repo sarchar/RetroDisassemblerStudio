@@ -10,7 +10,7 @@ source code for old games.
 ## Features
 
 * Inline editing of code
-* Real time displays of VRAM
+* Real time displays of memory
 * Watches, breakpoints, labels, defines
 * Multiple running instances with separate state
 
@@ -21,6 +21,7 @@ Still to do are some pretty large tasks:
 * Ability to export the project as source code (.ASM files)
 * Search and filter changes in memory
 * For the emulator: audio, more mappers, optimizations
+* For the editor: quality of life changes, multi-line comments, and plenty more
 
 ## Screenshots
 

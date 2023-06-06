@@ -67,6 +67,12 @@ struct GlobalMemoryLocation {
             );
     }
 
+    bool operator<(GlobalMemoryLocation const& other) const {
+        return (!is_chr && other.is_chr) 
+            || (!is_chr && (prg_rom_bank < other.prg_rom_bank || address < other.address))
+            || (is_chr && (chr_rom_bank < other.chr_rom_bank || address < other.address));
+    }
+
     struct HashFunction {
         size_t operator()(GlobalMemoryLocation const& other) const {
             u64 x = (u64)other.address;
@@ -408,7 +414,7 @@ private:
 
 class RAMRegion : public MemoryRegion {
 public:
-    RAMRegion(std::shared_ptr<System>&);
+    RAMRegion(std::shared_ptr<System>&, std::string const&, u32, u32);
     virtual ~RAMRegion() {}
 
     bool Load(std::istream&, std::string&);

@@ -1510,13 +1510,13 @@ shared_ptr<CharacterRomBank> CharacterRomBank::Load(std::istream& is, std::strin
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// CPU RAM $0000-$0800 (mirroed every $800 bytes)
+// Generic RAM
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-RAMRegion::RAMRegion(shared_ptr<System>& system)
-    : MemoryRegion(system, "RAM")
+RAMRegion::RAMRegion(shared_ptr<System>& system, string const& name, u32 _base_adress, u32 _region_size)
+    : MemoryRegion(system, name)
 {
-    base_address = 0x0000;
-    region_size  = 0x0800;
+    base_address = _base_adress;
+    region_size = _region_size;
 }
 
 bool RAMRegion::Load(istream& is, string& errmsg)

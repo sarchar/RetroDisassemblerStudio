@@ -49,7 +49,7 @@ void System::CreateMemoryRegions()
     auto selfptr = dynamic_pointer_cast<System>(base_system);
     assert(selfptr);
     
-    cpu_ram       = make_shared<RAMRegion>(selfptr);
+    cpu_ram       = make_shared<RAMRegion>(selfptr, "RAM", 0x0000, 0x0800); // 0x0000-0x2000 mirrored every 0x0800 bytes
     cpu_ram->InitializeEmpty();
 
     ppu_registers = make_shared<PPURegistersRegion>(selfptr); // 0x2000-0x3FFF
@@ -129,6 +129,8 @@ bool System::CanBank(GlobalMemoryLocation const& where)
 {
     if(where.is_chr) {
         assert(false); // TODO
+        return false;
+    } else if(where.address < 0x6000) {
         return false;
     } else {
         // some mappers don't have switchable banks, making some disassembly look nicer
@@ -1065,10 +1067,11 @@ bool System::Load(std::istream& is, std::string& errmsg)
 
     cout << "[System::Load] loaded " << num_labels << " labels." << endl;
 
-    // load registers
-    cpu_ram = make_shared<RAMRegion>(selfptr);
+    // load RAM
+    cpu_ram = make_shared<RAMRegion>(selfptr, "RAM", 0x0000, 0x0800);
     if(!cpu_ram->Load(is, errmsg)) return false;
 
+    // load registers
     ppu_registers = make_shared<PPURegistersRegion>(selfptr); // 0x2000-0x3FFF
     if(!ppu_registers->Load(is, errmsg)) return false;
 

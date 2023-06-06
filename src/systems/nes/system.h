@@ -264,6 +264,7 @@ public:
         memcpy(dest, &VRAM[offset], (left < size) ? left : size);
     }
 
+    std::shared_ptr<MemoryView> const& GetPPUView() const { return ppu_view; }
     std::shared_ptr<CartridgeView> const& GetCartridgeView() const { return cartridge_view; }
 private:
     std::shared_ptr<System> system;

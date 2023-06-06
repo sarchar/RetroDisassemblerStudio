@@ -353,7 +353,7 @@ void BaseWindow::InternalDockSpace(float w, float h)
         imgui_dock_builder_bottom_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_root_id, ImGuiDir_Down, 0.2f, nullptr, &top_id);
 
         // split the bottom dockspace into left and right
-        imgui_dock_builder_bottomleft_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_bottom_id, ImGuiDir_Right, 0.5f, nullptr, &imgui_dock_builder_bottomright_id);
+        imgui_dock_builder_bottomright_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_bottom_id, ImGuiDir_Right, 0.5f, nullptr, &imgui_dock_builder_bottomleft_id);
         
         // split the top area to left, <root>, right
         ImGuiID right_id;

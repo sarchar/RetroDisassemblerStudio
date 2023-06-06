@@ -18,16 +18,21 @@
 #define GetMainWindow() GetApplication()->GetMainWindowAs<Windows::MainWindow>()
 
 // Common flag buttons used in many windows
-inline void ImGuiFlagButton(bool* var, char const* text, char const* hover) {
+inline bool ImGuiFlagButton(bool* var, char const* text, char const* hover) {
     bool need_pop = false;
-    if(*var) {
+    bool pressed = false;
+    if(var && *var) {
         ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor(255, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor(196, 0, 0));
         need_pop = true;
     }
-    if(ImGui::SmallButton(text)) *var = !(*var);
+    if(ImGui::SmallButton(text)) {
+        if(var) *var = !(*var);
+        pressed = true;
+    }
     if(ImGui::IsItemHovered()) ImGui::SetTooltip(hover);
     if(need_pop) ImGui::PopStyleColor(2);
+    return pressed;
 }
 
 namespace Windows {
