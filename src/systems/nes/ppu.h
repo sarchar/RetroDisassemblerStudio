@@ -40,6 +40,10 @@ public:
     inline u16 GetScrollX() const { return scroll_x; }
     inline u16 GetScrollY() const { return scroll_y; }
 
+    inline void CopyOAM(u8* dest) {
+        memcpy(dest, primary_oam, sizeof(primary_oam));
+    }
+
     inline void CopyPaletteRAM(u8* dest, bool sprites) {
         memcpy(dest, sprites ? &palette_ram[0x10] : palette_ram, 0x10);
     }

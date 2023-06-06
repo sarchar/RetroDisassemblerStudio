@@ -162,7 +162,6 @@ protected:
     void RenderMenuBar() override;
     void CheckInput() override;
     void Update(double deltaTime) override;
-    void Render() override;
 
     bool SaveWindow(std::ostream&, std::string&) override;
     bool LoadWindow(std::istream&, std::string&) override;
@@ -283,6 +282,7 @@ public:
 protected:
     void CheckInput() override;
     void Update(double deltaTime) override;
+    void PreRender() override;
     void Render() override;
 
     bool SaveWindow(std::ostream&, std::string&) override;
@@ -293,15 +293,28 @@ private:
     void RenderNametables(std::shared_ptr<PPU> const&);
     void RenderPalettes(std::shared_ptr<PPU> const&);
     void RenderSprites(std::shared_ptr<PPU> const&);
+    void RenderPatternTables(std::shared_ptr<PPU> const&);
 
     int   display_mode = 0;
     bool  show_scroll_window = true;
     int   hovered_palette_index = -1;
 
+    bool  valid_texture = false;
+
     void  UpdateNametableTexture();
     u32*  nametable_framebuffer;
     void* nametable_texture;
-    bool  valid_texture = false;
+
+    void  UpdateSpriteTexture();
+    u32*  sprites_framebuffer;
+    void* sprites_texture;
+    u8    oam_copy[256]; // copy of OAM updated in UpdateSpriteTexture
+
+    void  UpdatePatternTextures();
+    u32*  pattern_framebuffer[2];
+    void* pattern_texture[2];
+    u8    palette_copy[0x20];
+    u8    palette_index = 0;
 };
 
 class Watch : public BaseWindow {

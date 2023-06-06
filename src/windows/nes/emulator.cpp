@@ -5,6 +5,7 @@
 // LICENSE file in the root directory of this source tree. 
 #include <bitset>
 #include <chrono>
+#include <cmath>
 #include <functional>
 #include <memory>
 #include <thread>
@@ -115,25 +116,6 @@ SystemInstance::SystemInstance()
     // fill the framebuffer with fully transparent pixels (0), so the bottom 16 rows aren't visible
     memset(framebuffer, 0, 4 * 256 * 256);
 
-    // generate the textures
-//!    GLuint gl_texture;
-//!
-//!    glGenTextures(1, &gl_texture);
-//!    glBindTexture(GL_TEXTURE_2D, gl_texture);
-//!    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, ram_framebuffer);
-//!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-//!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-//!    ram_texture = (void*)(intptr_t)gl_texture;
-//!
-//!    glGenTextures(1, &gl_texture);
-//!    glBindTexture(GL_TEXTURE_2D, gl_texture);
-//!    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, nametable_framebuffer);
-//!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-//!    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-//!    nametable_texture = (void*)(intptr_t)gl_texture;
-
-//!    glBindTexture(GL_TEXTURE_2D, 0);
-
     if(current_system = GetSystem()) {
         auto& mv = memory_view;
 
@@ -197,16 +179,7 @@ SystemInstance::~SystemInstance()
     exit_thread = true;
     if(emulation_thread) emulation_thread->join();
 
-//!    GLuint gl_texture = (GLuint)(intptr_t)framebuffer_texture;
-//!    gl_texture = (GLuint)(intptr_t)ram_texture;
-//!    glDeleteTextures(1, &gl_texture);
-//!
-//!    gl_texture = (GLuint)(intptr_t)nametable_texture;
-//!    glDeleteTextures(1, &gl_texture);
-
     delete [] (u8*)framebuffer;
-//!    delete [] (u8*)ram_framebuffer;
-
     delete [] cpu_quick_breakpoints;
 }
 
@@ -346,8 +319,6 @@ void SystemInstance::Update(double deltaTime)
         last_cycle_time = current_time;
         last_cycle_count = cycle_count;
     }
-
-//!    UpdateRAMTexture();
 }
 
 void SystemInstance::UpdateRAMTexture()
@@ -425,13 +396,6 @@ void SystemInstance::RenderMenuBar()
 
     ImGui::SameLine();
     ImGui::Text("%f Hz", cycles_per_sec);
-}
-
-void SystemInstance::Render()
-{
-//!    ImGui::Image(ram_texture, ImVec2(256, 256));
-//!    ImGui::SameLine();
-//!    ImGui::Image(nametable_texture, ImVec2(256, 256));
 }
 
 void SystemInstance::CheckInput()
@@ -928,9 +892,19 @@ PPUState::PPUState()
     SetTitle("PPU");
 
     // allocate storage for the nametable rendering
-    nametable_framebuffer = (u32*)new u8[sizeof(int) * 512 * 512];
-    memset(nametable_framebuffer, 0, sizeof(int) * 512 * 512);
+    nametable_framebuffer = new u32[512 * 512];
+    memset(nametable_framebuffer, 0, sizeof(u32) * 512 * 512);
 
+    // allocate storage for sprites rendering
+    // clearing the image to white makes our dividing lines white and we don't have to draw lines
+    sprites_framebuffer = new u32[128 * 128];
+    memset(sprites_framebuffer, 0xFF, sizeof(u32) * 128 * 128);
+
+    // allocate storage for two pattern tables with no dividing line
+    for(int i = 0; i < 2; i++) {
+        pattern_framebuffer[i] = new u32[128 * 128];
+        memset(pattern_framebuffer[i], 0x00, sizeof(u32) * 128 * 128);
+    }
 }
 
 PPUState::~PPUState()
@@ -938,7 +912,18 @@ PPUState::~PPUState()
     GLuint gl_texture = (GLuint)(intptr_t)nametable_texture;
     glDeleteTextures(1, &gl_texture);
 
-    delete [] (u8*)nametable_framebuffer;
+    gl_texture = (GLuint)(intptr_t)sprites_texture;
+    glDeleteTextures(1, &gl_texture);
+
+    for(int i = 0; i < 2; i++) {
+        gl_texture = (GLuint)(intptr_t)pattern_texture[i];
+        glDeleteTextures(1, &gl_texture);
+    }
+
+    delete [] nametable_framebuffer;
+    delete [] sprites_framebuffer;
+    delete [] pattern_framebuffer[0];
+    delete [] pattern_framebuffer[1];
 }
 
 void PPUState::CheckInput()
@@ -949,22 +934,52 @@ void PPUState::Update(double deltaTime)
 {
     if(!valid_texture) {
         // generate the nametable GL texture
-        GLuint gl_texture;
+        GLuint gl_texture[2];
 
-        glGenTextures(1, &gl_texture);
-        glBindTexture(GL_TEXTURE_2D, gl_texture);
+        glGenTextures(1, &gl_texture[0]);
+        glBindTexture(GL_TEXTURE_2D, gl_texture[0]);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        nametable_texture = (void*)(intptr_t)gl_texture;
-        glBindTexture(GL_TEXTURE_2D, 0);
+        nametable_texture = (void*)(intptr_t)gl_texture[0];
 
+        // make an 8x8 view of the 64 sprites with a dividing line between all
+        // sprites are 8x8, so there are 8*8+7=71 pixels in each direction.
+        // next power of two is 128, so allocate a 128x128 texture
+        glGenTextures(1, &gl_texture[0]);
+        glBindTexture(GL_TEXTURE_2D, gl_texture[0]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 128, 128, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        sprites_texture = (void*)(intptr_t)gl_texture[0];
+
+        // two 16 tile by 16 tile pattern textures, each 8x8 pixels
+        glGenTextures(2, &gl_texture[0]);
+        for(int i = 0; i < 2; i++) {
+            glBindTexture(GL_TEXTURE_2D, gl_texture[i]);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 128, 128, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            pattern_texture[i] = (void*)(intptr_t)gl_texture[i];
+        }
+
+        glBindTexture(GL_TEXTURE_2D, 0);
         valid_texture = true;
     }
 
     if(display_mode == 1) {
         UpdateNametableTexture();
+    } else if(display_mode == 3) {
+        UpdateSpriteTexture();
+    } else if(display_mode == 4) {
+        UpdatePatternTextures();
     }
+}
+
+void PPUState::PreRender()
+{
+    // show horizontal scroll only on the pattern table view
+    SetHorizontalScroll(display_mode == 4);
 }
 
 void PPUState::Render()
@@ -976,7 +991,7 @@ void PPUState::Render()
     auto memory_view = si->GetMemoryView();
     if(!memory_view) return;
 
-    ImGui::Combo("View", &display_mode, "Registers\0Nametables\0Palettes\0Sprites\0\0");
+    ImGui::Combo("View", &display_mode, "Registers\0Nametables\0Palettes\0Sprites\0Pattern Tables\0\0");
     ImGui::Separator();
 
     switch(display_mode) {
@@ -994,6 +1009,10 @@ void PPUState::Render()
 
     case 3:
         RenderSprites(ppu);
+        break;
+
+    case 4:
+        RenderPatternTables(ppu);
         break;
     }
 }
@@ -1356,7 +1375,105 @@ void PPUState::RenderPalettes(std::shared_ptr<PPU> const& ppu)
 
 void PPUState::RenderSprites(std::shared_ptr<PPU> const& ppu)
 {
-    ImGui::Text("Sprites TODO");
+    ImVec2 size = ImGui::GetWindowSize();
+    float sz = size.x < size.y ? size.x : size.y;
+    sz *= 0.9;
+    // sprites are 8x8 with 1 pixel between each = 71x71 pixels, but texture is 128x128
+    ImGui::Image(sprites_texture, ImVec2(sz, sz), ImVec2(0, 0), ImVec2(71.0/128.0, 71.0/128.0));
+
+    if(ImGui::IsItemHovered()) {
+        auto loc   = ImGui::GetItemRectMin();
+        auto mouse = ImGui::GetMousePos();
+        // convert mouse coordinate relative to image location into pixels from 0..71, and dividing by 9 gives us our x/y index
+        int dx     = round(71.0 * (mouse.x - loc.x) / sz);
+        int dy     = round(71.0 * (mouse.y - loc.y) / sz);
+        int si     = (dy / 9) * 8 + (dx / 9);
+
+        // grab the OAM data
+        u8* oam_ptr = &oam_copy[si << 2];
+        u8  y       = *oam_ptr++;
+        u8  tile    = *oam_ptr++;
+        u8  attr    = *oam_ptr++;
+        u8  x       = *oam_ptr++;
+
+        stringstream ss;
+        ss << "Sprite #" << si << "\n\n";
+        ss << "Tile: $" << hex << uppercase << (int)tile << " (" << dec << (int)tile << ")\n";
+        ss << "Pos: (" << (int)x << "," << (int)y << ")\n";
+        ss << "Palette: " << (int)(attr & 0x03) << "\n";
+        ss << "Priority: " << ((attr & 0x20) ? "Back" : "Front") << "\n";
+        ss << "XFlip: " << ((attr & 0x40) ? "1" : "0") << "\n";
+        ss << "YFlip: " << ((attr & 0x80) ? "1" : "0") << "\n";
+
+        ImGui::SetTooltip(ss.str().c_str());
+    }
+}
+
+void PPUState::RenderPatternTables(std::shared_ptr<PPU> const& ppu)
+{
+    char buf[12];
+    snprintf(buf, sizeof(buf), "Palette %d", palette_index);
+
+    if(ImGui::BeginCombo("Palette", buf)) {
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
+
+        ImGuiTableFlags table_flags = ImGuiTableFlags_NoBordersInBodyUntilResize
+            | ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_SizingStretchSame;
+
+        // We use nested tables so that each row can have its own layout. This will be useful when we can render
+        // things like plate comments, labels, etc
+        if(ImGui::BeginTable("palette_table", 5, table_flags)) {
+            ImGui::TableSetupColumn("##0", ImGuiTableColumnFlags_WidthStretch, 0.0f);
+            ImGui::TableSetupColumn("##1", ImGuiTableColumnFlags_WidthStretch, 0.0f);
+            ImGui::TableSetupColumn("##2", ImGuiTableColumnFlags_WidthStretch, 0.0f);
+            ImGui::TableSetupColumn("##3", ImGuiTableColumnFlags_WidthStretch, 0.0f);
+            ImGui::TableSetupColumn("##Text", ImGuiTableColumnFlags_WidthFixed, 0.0f);
+
+            for(int i = 0; i < 8; i++) {
+                ImGui::TableNextRow();
+                u8* palette = &palette_copy[i << 2];
+                for(int j = 0; j < 4; j++) {
+                    ImU32 im_color = 0xFF000000 | Systems::NES::rgb_palette_map[palette[j]];
+
+                    ImGui::TableNextColumn();
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, im_color);
+
+                    ImGui::PushID(i * 4 + j);
+                    if(ImGui::Selectable(" ", false, ImGuiSelectableFlags_SpanAllColumns)) {
+                        palette_index = i;
+                    }
+                    ImGui::PopID();
+                }
+
+                ImGui::TableNextColumn();
+                ImGui::Text("%s %d", (i < 4) ? "BG" : "SPR", i % 4);
+            }
+
+            ImGui::EndTable();
+        }
+
+        ImGui::PopStyleVar(2);
+        ImGui::EndCombo();
+    }
+
+    ImVec2 size = ImGui::GetWindowSize();
+    float sz = size.x < size.y ? size.x : size.y;
+    sz *= 0.9;
+
+    for(int i = 0; i < 2; i++) {
+        ImGui::BeginGroup();
+
+        ImGui::Text("Table $%04X:", i << 12);
+        ImGui::Image(pattern_texture[i], ImVec2(sz, sz));
+        if(ImGui::IsItemHovered()) {
+        }
+
+        ImGui::EndGroup();
+
+        // display horizontally if window is wider than it is tall
+        if(i == 0 && size.x > size.y) ImGui::SameLine();
+    }
 }
 
 void PPUState::UpdateNametableTexture()
@@ -1460,6 +1577,127 @@ void PPUState::UpdateNametableTexture()
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 }
+
+void PPUState::UpdateSpriteTexture()
+{
+    auto si = GetMySystemInstance();
+    auto ppu = si->GetPPU();
+    auto system_view = si->GetMemoryViewAs<Systems::NES::SystemView>();
+
+    // fetch the sprite pattern data in one go
+    u8 sprite_patterns[0x1000];
+    auto cartridge_view = system_view->GetCartridgeView();
+    u16 sprite_pattern_address = (u16)(ppu->GetPPUCONT() & 0x08) << 9;
+    cartridge_view->CopyPatterns(sprite_patterns, sprite_pattern_address, 0x1000);
+
+    // grab the PPU OAM
+    ppu->CopyOAM(oam_copy);
+
+    // we'll need sprite palettes
+    u8 palette_ram[0x10];
+    ppu->CopyPaletteRAM(palette_ram, true);
+
+    // render 8x8 sprites
+    u8* oam_ptr = oam_copy;
+    for(int sprite_y = 0; sprite_y < 8; sprite_y++) {
+        int sy = sprite_y * 9; // +1 for the dividing line
+        for(int sprite_x = 0; sprite_x < 8; sprite_x++) {
+            int sx = sprite_x * 9;
+
+            // fetch sprite components
+            u8 y    = *oam_ptr++;
+            u8 tile = *oam_ptr++;
+            u8 attr = *oam_ptr++;
+            u8 x    = *oam_ptr++;
+
+            // parse attr
+            u8   pal    = attr & 0x03;
+            bool flip_x = attr & 0x40;
+            bool flip_y = attr & 0x80;
+
+            // render one 8x8
+            for(int i = 0; i < 8; i++) {
+                int y = sy + i;
+
+                int use_i = flip_y ? (7 - i) : i; // vertical flip
+                u8 byte0 = sprite_patterns[(tile << 4) + use_i];
+                u8 byte1 = sprite_patterns[(tile << 4) + use_i + 8];
+
+                for(int j = 0; j < 8; j++) {
+                    int x = sx + j;
+                    int use_j = flip_x ? (7 - j) : j; // horizontal flip
+                    u8 bit0  = (byte0 >> (7 - use_j)) & 0x01;
+                    u8 bit1  = (byte1 >> (7 - use_j)) & 0x01;
+                    u8 index = (pal << 2) | (bit1 << 1) | bit0;
+                    u8 color = palette_ram[index];
+
+                    sprites_framebuffer[y * 128 + x] = 0xFF000000 | Systems::NES::rgb_palette_map[color];
+                }
+            }
+        }
+    }
+
+    // update the opengl texture
+    GLuint gl_texture = (GLuint)(intptr_t)sprites_texture;
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 128, 128, GL_RGBA, GL_UNSIGNED_BYTE, sprites_framebuffer);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void PPUState::UpdatePatternTextures()
+{
+    auto si = GetMySystemInstance();
+    auto ppu = si->GetPPU();
+    auto system_view = si->GetMemoryViewAs<Systems::NES::SystemView>();
+    auto cartridge_view = system_view->GetCartridgeView();
+
+    // we'll need both palettes
+    ppu->CopyPaletteRAM(&palette_copy[0x00], false);
+    ppu->CopyPaletteRAM(&palette_copy[0x10], true);
+
+    // loop over both pattern tables
+    for(int pt = 0; pt < 2; pt++) {
+        // fetch the pattern data in one go
+        u8 patterns[0x1000];
+        cartridge_view->CopyPatterns(patterns, pt << 12, 0x1000);
+
+        // render 16x16 tiles
+        u8* pattern_ptr = patterns;
+        for(int tile_y = 0; tile_y < 16; tile_y++) {
+            int ty = tile_y * 8; // +1 for the dividing line
+            for(int tile_x = 0; tile_x < 16; tile_x++) {
+                int tx = tile_x * 8;
+
+                // render one 8x8 tile
+                for(int i = 0; i < 8; i++) {
+                    int y = ty + i;
+
+                    u8 byte0 = *(pattern_ptr + 0);
+                    u8 byte1 = *(pattern_ptr + 8);
+                    pattern_ptr++;
+
+                    for(int j = 0; j < 8; j++) {
+                        int x = tx + j;
+                        u8 bit0  = (byte0 >> (7 - j)) & 0x01;
+                        u8 bit1  = (byte1 >> (7 - j)) & 0x01;
+                        u8 index = (palette_index << 2) | (bit1 << 1) | bit0;
+                        u8 color = palette_copy[index];
+
+                        pattern_framebuffer[pt][y * 128 + x] = 0xFF000000 | Systems::NES::rgb_palette_map[color];
+                    }
+                }
+            }
+        }
+
+        // update the opengl texture
+        GLuint gl_texture = (GLuint)(intptr_t)pattern_texture[pt];
+        glBindTexture(GL_TEXTURE_2D, gl_texture);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 128, 128, GL_RGBA, GL_UNSIGNED_BYTE, pattern_framebuffer[pt]);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 
 bool PPUState::SaveWindow(std::ostream& os, std::string& errmsg)
 {

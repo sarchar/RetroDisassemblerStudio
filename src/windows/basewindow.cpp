@@ -182,6 +182,7 @@ void BaseWindow::InternalRender()
         if(no_scrollbar)  window_flags |= ImGuiWindowFlags_NoScrollbar;
         if(show_menubar)  window_flags |= ImGuiWindowFlags_MenuBar;
         if(!is_dockable)  window_flags |= ImGuiWindowFlags_NoDocking;
+        if(horizontal_scroll)  window_flags |= ImGuiWindowFlags_HorizontalScrollbar;
 
         // Adjust the window size if necessary
         ImVec2 client_size = ImGui::GetWindowSize();

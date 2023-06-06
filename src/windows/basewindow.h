@@ -53,6 +53,7 @@ public:
     void SetDockable(bool _v) { is_dockable = _v; }
     void SetMainWindow(bool _v) { is_mainwindow = _v; }
     void SetHideOnClose(bool _v) { hide_on_close = _v; }
+    void SetHorizontalScroll(bool _v) { horizontal_scroll = _v; }
 
     template <class T>
     std::shared_ptr<T> As() { 
@@ -183,6 +184,8 @@ private:
     bool show_menubar = false;
 
     bool hide_on_close = false;
+
+    bool horizontal_scroll = false;
 
     bool dockspace_is_built = false;
     unsigned int imgui_dockspace_id;
