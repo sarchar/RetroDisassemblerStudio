@@ -184,7 +184,7 @@ void ProjectCreatorWindow::Render()
 
 void ProjectCreatorWindow::CreateNewProject(BaseProject::Information const* info)
 {
-    current_project = info->create_project();
+    current_project = info->create_project(PROJECT_FILE_VERSION, PROJECT_FILE_DEFAULT_FLAGS);
     *current_project->create_new_project_progress += std::bind(&ProjectCreatorWindow::CreateNewProjectProgress, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4, placeholders::_5);
     create_project_max_progress = 0;
     create_project_message.clear();

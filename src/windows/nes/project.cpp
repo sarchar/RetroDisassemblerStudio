@@ -37,19 +37,19 @@ Windows::BaseProject::Information const* Project::GetInformationStatic()
         .abbreviation   = "NES",
         .full_name      = "Nintendo Entertainment System",
         .is_rom_valid   = std::bind(&Project::IsROMValid, placeholders::_1, placeholders::_2),
-        .create_project = std::bind(&Project::CreateProject),
+        .create_project = std::bind(&Project::CreateProject, placeholders::_1, placeholders::_2),
     };
 
     return &information;
 }
 
-shared_ptr<Windows::BaseProject> Project::CreateProject()
+shared_ptr<Windows::BaseProject> Project::CreateProject(int save_version, int save_flags)
 {
-    return make_shared<Project>();
+    return make_shared<Project>(save_version, save_flags);
 }
 
-Project::Project()
-    : Windows::BaseProject("Project")
+Project::Project(int save_file_version, int save_file_flags)
+    : Windows::BaseProject("Project", save_file_version, save_file_flags)
 {
 }
 
@@ -70,7 +70,7 @@ bool Project::IsROMValid(std::string const& file_path_name, std::istream& is)
 
 bool Project::CreateNewProjectFromFile(string const& file_path_name)
 {
-    cout << "[NES::Project] CreateNewProjectFromFile begin" << endl;
+    cout << WindowPrefix() << "CreateNewProjectFromFile begin" << endl;
     rom_file_name = file_path_name;
 
     // create a barebones system with nothing loaded

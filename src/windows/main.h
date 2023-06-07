@@ -54,10 +54,10 @@ public:
 
     // Helper dialog boxes
     // Poups must be called every frame even if they're not open
-    bool OKPopup(std::string const& title, std::string const& content, 
+    int  OKPopup(std::string const& title, std::string const& content, 
             bool resizeable = false);
 
-    bool OKCancelPopup(std::string const& title, std::string const& content, 
+    int  OKCancelPopup(std::string const& title, std::string const& content, 
             bool resizeable = false);
 
     int  InputNamePopup(std::string const& title, std::string const& label, std::string* buffer, 

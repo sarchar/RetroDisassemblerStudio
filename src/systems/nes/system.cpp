@@ -1247,4 +1247,39 @@ void SystemView::WritePPU(u16 address, u8 value)
     }
 }
 
+bool SystemView::Save(ostream& os, string& errmsg) const
+{
+    WriteVarInt(os, 0);
+
+    os.write((char*)RAM, sizeof(RAM));
+    os.write((char*)VRAM, sizeof(VRAM));
+    if(!os.good()) goto done;
+
+    if(!ppu_view->Save(os, errmsg)) return false;
+    if(!apu_io_view->Save(os, errmsg)) return false;
+    if(!cartridge_view->Save(os, errmsg)) return false;
+
+done:
+    errmsg = "Error saving SystemView";
+    return os.good();
+}
+
+bool SystemView::Load(istream& is, string& errmsg)
+{
+    auto r = ReadVarInt<int>(is);
+    assert(r == 0);
+
+    is.read((char*)RAM, sizeof(RAM));
+    is.read((char*)VRAM, sizeof(VRAM));
+    if(!is.good()) goto done;
+
+    if(!ppu_view->Load(is, errmsg)) return false;
+    if(!apu_io_view->Load(is, errmsg)) return false;
+    if(!cartridge_view->Load(is, errmsg)) return false;
+
+done:
+    errmsg = "Error loading SystemView";
+    return is.good();
+}
+
 }

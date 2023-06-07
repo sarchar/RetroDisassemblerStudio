@@ -85,6 +85,10 @@ public:
 
     void CopyPatterns(u8*, u16, u16);
 
+    // save/load
+    bool Save(std::ostream&, std::string&) const override;
+    bool Load(std::istream&, std::string&) override;
+
     friend class Cartridge;
 
 private:
@@ -94,6 +98,7 @@ private:
     u8 reset_vector_bank;
 
     union {
+        // do not reorder any of these individual structures without addressing Save/Load()
         struct {
             u8 shift_register;
             u8 shift_register_count;

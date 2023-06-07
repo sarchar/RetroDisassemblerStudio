@@ -92,7 +92,6 @@ public:
 
     u8 Peek(u16 address) override {
         u16 reg = address & 0x07;
-        u8 ret = latch_value;
 
         switch(reg) {
         case 0x00: return ppu->ppucont;
@@ -273,6 +272,21 @@ public:
             ppu->Write(address, value);
         }
     };
+
+    bool Save(std::ostream& os, std::string& errmsg) const override {
+        WriteVarInt(os, 0);
+        WriteVarInt(os, latch_value);
+        errmsg = "Error saving PPUView";
+        return os.good();
+    }
+
+    bool Load(std::istream& is, std::string& errmsg) override {
+        auto r = ReadVarInt<int>(is);
+        assert(r == 0);
+        latch_value = ReadVarInt<u8>(is);
+        errmsg = "Error loading PPUView";
+        return is.good();
+    }
 
 private:
     shared_ptr<PPU> ppu;
@@ -796,5 +810,141 @@ int PPU::DetermineBackgroundColor(int& tile_color) const
 
     return nes_color & 0x3F;
 }
+
+bool PPU::Save(ostream& os, string& errmsg) const
+{
+    WriteVarInt(os, 0); // reserved
+
+    WriteVarInt(os, ppucont);
+    WriteVarInt(os, ppumask);
+    WriteVarInt(os, ppustat);
+
+    // rendering_enabled is initialized in every call to Step(), so we don't 
+    // need to save that state
+
+    WriteVarInt(os, (int)prevent_nmi_this_frame);
+
+    WriteVarInt(os, vram_address);
+    WriteVarInt(os, vram_address_t);
+    WriteVarInt(os, vram_address_v);
+
+    WriteVarInt(os, fine_x);
+
+    WriteVarInt(os, vram_read_buffer);
+    WriteVarInt(os, vram_address_latch);
+
+    WriteVarInt(os, frame);
+    WriteVarInt(os, scanline);
+    WriteVarInt(os, cycle);
+    WriteVarInt(os, odd);
+
+    WriteVarInt(os, scroll_x);
+    WriteVarInt(os, scroll_y);
+
+    WriteVarInt(os, color_pipeline[0]);
+    WriteVarInt(os, color_pipeline[1]);
+    WriteVarInt(os, color_pipeline[2]);
+
+    WriteVarInt(os, nametable_latch);
+    WriteVarInt(os, attribute_latch);
+    WriteVarInt(os, background_lsbits_latch);
+    WriteVarInt(os, background_msbits_latch);
+
+    WriteVarInt(os, attribute_byte);
+    WriteVarInt(os, attribute_next_byte);
+    WriteVarInt(os, background_lsbits);
+    WriteVarInt(os, background_msbits);
+
+    os.write((char*)primary_oam, sizeof(primary_oam));
+    WriteVarInt(os, primary_oam_rw);
+    WriteVarInt(os, primary_oam_address);
+    WriteVarInt(os, primary_oam_address_bug);
+    WriteVarInt(os, primary_oam_data);
+    os.write((char*)secondary_oam, sizeof(secondary_oam));
+    WriteVarInt(os, secondary_oam_rw);
+    WriteVarInt(os, secondary_oam_address);
+    WriteVarInt(os, secondary_oam_data);
+
+    os.write((char*)sprite_lsbits, sizeof(sprite_lsbits));
+    os.write((char*)sprite_msbits, sizeof(sprite_msbits));
+    os.write((char*)sprite_attribute, sizeof(sprite_attribute));
+    os.write((char*)sprite_x, sizeof(sprite_x));
+
+    WriteVarInt(os, sprite_zero);
+
+    os.write((char*)palette_ram, sizeof(palette_ram));
+
+    errmsg = "Error saving PPU";
+    return os.good();
+}
+
+bool PPU::Load(istream& is, string& errmsg)
+{
+    int r = ReadVarInt<int>(is); // reserved
+    assert(r == 0);
+
+    ppucont = ReadVarInt<u8>(is);
+    ppumask = ReadVarInt<u8>(is);
+    ppustat = ReadVarInt<u8>(is);
+
+    // rendering_enabled is initialized in every call to Step(), so we don't 
+    // need to save that state
+
+    prevent_nmi_this_frame = (bool)ReadVarInt<int>(is);
+
+    vram_address = ReadVarInt<u16>(is);
+    vram_address_t = ReadVarInt<u16>(is);
+    vram_address_v = ReadVarInt<u16>(is);
+
+    fine_x = ReadVarInt<u8>(is);
+
+    vram_read_buffer = ReadVarInt<u8>(is);
+    vram_address_latch = ReadVarInt<int>(is);
+
+    frame = ReadVarInt<int>(is);
+    scanline = ReadVarInt<int>(is);
+    cycle = ReadVarInt<int>(is);
+    odd = ReadVarInt<int>(is);
+
+    scroll_x = ReadVarInt<int>(is);
+    scroll_y = ReadVarInt<int>(is);
+
+    color_pipeline[0] = ReadVarInt<int>(is);
+    color_pipeline[1] = ReadVarInt<int>(is);
+    color_pipeline[2] = ReadVarInt<int>(is);
+
+    nametable_latch = ReadVarInt<u8>(is);
+    attribute_latch = ReadVarInt<u8>(is);
+    background_lsbits_latch = ReadVarInt<u8>(is);
+    background_msbits_latch = ReadVarInt<u8>(is);
+
+    attribute_byte = ReadVarInt<u8>(is);
+    attribute_next_byte = ReadVarInt<u8>(is);
+    background_lsbits = ReadVarInt<u16>(is);
+    background_msbits = ReadVarInt<u16>(is);
+
+    is.read((char*)primary_oam, sizeof(primary_oam));
+    primary_oam_rw          = ReadVarInt<u8>(is);
+    primary_oam_address     = ReadVarInt<u8>(is);
+    primary_oam_address_bug = ReadVarInt<u8>(is);
+    primary_oam_data        = ReadVarInt<u8>(is);
+    is.read((char*)secondary_oam, sizeof(secondary_oam));
+    secondary_oam_rw        = ReadVarInt<u8>(is);
+    secondary_oam_address   = ReadVarInt<u8>(is);
+    secondary_oam_data      = ReadVarInt<u8>(is);
+
+    is.read((char*)sprite_lsbits, sizeof(sprite_lsbits));
+    is.read((char*)sprite_msbits, sizeof(sprite_msbits));
+    is.read((char*)sprite_attribute, sizeof(sprite_attribute));
+    is.read((char*)sprite_x, sizeof(sprite_x));
+
+    sprite_zero = ReadVarInt<u8>(is);
+
+    is.read((char*)palette_ram, sizeof(palette_ram));
+
+    errmsg = "Error loading PPU";
+    return is.good();
+}
+
 
 }

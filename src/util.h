@@ -29,6 +29,7 @@ inline bool StringEndsWith(std::string const& value, std::string const& ending)
 template <class T>
 inline void WriteVarInt(std::ostream& os, T const& v)
 {
+    assert(v >= 0); // TODO support negative, u64
     if(v < 254) {
         u8 s = (u8)v;
         os.write((char*)&s, 1);

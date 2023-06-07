@@ -29,7 +29,7 @@ public:
 
     BaseProject::Information const* GetInformation();
 
-    Project();
+    Project(int, int);
     virtual ~Project();
 
     bool CreateNewProjectFromFile(std::string const&) override;
@@ -39,7 +39,7 @@ public:
     // creation interface
     static BaseProject::Information const* GetInformationStatic();
     static bool IsROMValid(std::string const&, std::istream&);
-    static std::shared_ptr<BaseProject> CreateProject();
+    static std::shared_ptr<BaseProject> CreateProject(int, int);
 
     // System Instance
     inline std::shared_ptr<BaseWindow> const& GetMostRecentSystemInstance() const { return most_recent_system_instance; }

@@ -15,6 +15,20 @@
 
 #include "windows/basewindow.h"
 
+#define PROJECT_FILE_MAGIC         0x8781A90AFDE1F317ULL
+#define PROJECT_FILE_VERSION       0x00000102
+#define PROJECT_FILE_DEFAULT_FLAGS 0
+
+// Add a new flag equal to the version number above
+// And to check if your save file has support for the feature:
+// if(GetCurrentProject()->GetSaveFileVersion >= FILE_VERSION_SAVE_STATES) ...
+// The checks are used in Load*() only. The Save functions should always save
+// the latest format
+enum FILE_VERSIONS {
+    FILE_VERSION_BASE        = 0x00000101,
+    FILE_VERSION_SAVE_STATES = 0x00000102
+};
+
 class BaseSystem;
 
 namespace Windows {
@@ -25,15 +39,18 @@ public:
         std::string abbreviation;
         std::string full_name;
         std::function<bool(std::string const&, std::istream&)> is_rom_valid;
-        std::function<std::shared_ptr<BaseProject>()> create_project;
+        std::function<std::shared_ptr<BaseProject>(int, int)> create_project;
     };
     virtual Information const* GetInformation() = 0;
 
-    BaseProject(std::string const&);
+    BaseProject(std::string const&, int, int);
     virtual ~BaseProject();
 
     std::string                 GetRomFileName() const { return rom_file_name; }
     std::shared_ptr<BaseSystem> GetBaseSystem() { return current_system; }
+
+    int GetSaveFileVersion() const { return save_file_version; }
+    int GetSaveFileFlags()   const { return save_file_flags; }
 
     template <class T>
     std::shared_ptr<T> GetSystem() {
@@ -47,7 +64,7 @@ public:
 
     virtual bool Save(std::ostream&, std::string&);
     virtual bool Load(std::istream&, std::string&);
-    static std::shared_ptr<BaseProject> StartLoadProject(std::istream&, std::string&);
+    static std::shared_ptr<BaseProject> StartLoadProject(std::istream&, std::string&, int, int);
 
     // signals
     typedef signal<std::function<void(std::shared_ptr<BaseProject>, bool error, 
@@ -60,6 +77,9 @@ protected:
 
     std::shared_ptr<BaseSystem> current_system;
     std::string                 rom_file_name;
+
+    int save_file_version;
+    int save_file_flags;
 
 public:
     static void RegisterProjectInformation(Information const*);

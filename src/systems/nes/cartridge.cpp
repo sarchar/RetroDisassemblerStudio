@@ -558,4 +558,39 @@ void CartridgeView::CopyPatterns(u8* dest, u16 source, u16 size)
     cartridge->CopyCharacterRomRelative(chr_bank, dest, source, size);
 }
 
+bool CartridgeView::Save(ostream& os, string& errmsg) const
+{
+    WriteVarInt(os, 0); // reserved
+
+    // need to save the largest mapper to make sure to save all mappers
+    os.write((char*)&mmc1, sizeof(mmc1));
+
+    if(cartridge->header.has_sram) {
+        os.write((char*)sram, sizeof(sram));
+    }
+
+    os.write((char*)chr_ram, sizeof(chr_ram));
+
+    errmsg = "Error saving CartridgeView";
+    return os.good();
+}
+
+bool CartridgeView::Load(istream& is, string& errmsg)
+{
+    auto r = ReadVarInt<int>(is);
+    assert(r == 0);
+
+    is.read((char*)&mmc1, sizeof(mmc1));
+
+    if(cartridge->header.has_sram) {
+        is.read((char*)sram, sizeof(sram));
+    }
+
+    is.read((char*)chr_ram, sizeof(chr_ram));
+
+    errmsg = "Error loading CartridgeView";
+    return is.good();
+}
+
+
 }

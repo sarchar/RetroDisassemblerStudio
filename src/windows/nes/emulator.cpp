@@ -110,8 +110,7 @@ SystemInstance::SystemInstance()
     memset(cpu_quick_breakpoints, 0, size);
 
     // allocate storage for framebuffers
-    framebuffer = (u32*)new u8[4 * 256 * 256];
-    ram_framebuffer = (u32*)new u8[4 * 256 * 256];
+    framebuffer = (u32*)new u8[sizeof(u32) * 256 * 256];
 
     // fill the framebuffer with fully transparent pixels (0), so the bottom 16 rows aren't visible
     memset(framebuffer, 0, 4 * 256 * 256);
@@ -181,6 +180,76 @@ SystemInstance::~SystemInstance()
 
     delete [] (u8*)framebuffer;
     delete [] cpu_quick_breakpoints;
+}
+
+void SystemInstance::RenderInstanceMenu()
+{
+    if(ImGui::BeginMenu("New Window")) {
+        static char const * const window_types[] = {
+            "Defines", "Regions", "Labels", "Listing", "Memory", 
+            "Screen", "PPUState", "CPUState", "Watch", "Breakpoints", "Memory"
+        };
+
+        for(int i = 0; i < IM_ARRAYSIZE(window_types); i++) {
+            if(ImGui::MenuItem(window_types[i])) {
+                CreateNewWindow(window_types[i]);
+            }
+        }
+
+        ImGui::EndMenu();
+    }
+
+    if(ImGui::BeginMenu("States")) {
+        if(ImGui::MenuItem("Save New State")) {
+            auto new_state = CreateSaveState();
+            save_states.push_back(new_state);
+        }
+
+        ImGui::Separator();
+
+        int i = 0;
+        for(auto& save_state : save_states) {
+            ImGui::PushID(i++);
+            if(ImGui::BeginMenu(save_state->name.c_str())) {
+                auto const time = chrono::current_zone()->to_local(save_state->timestamp);
+
+                string timestr = std::format("{:%c}", time);
+                ImGui::Text("Last %s", timestr.c_str());
+                ImGui::Separator();
+
+                if(ImGui::MenuItem("Load Now")) {
+                    LoadSaveState(save_state);
+                }
+
+                if(ImGui::MenuItem("Save Now")) {
+                    auto new_state = CreateSaveState();
+                    // free memory associated with the current state
+                    delete [] save_state->data;
+                    // copy over new_state values
+                    save_state->timestamp = new_state->timestamp;
+                    save_state->data_size = new_state->data_size;
+                    save_state->data = new_state->data;
+                }
+
+                if(ImGui::MenuItem("Rename")) {
+                    popups.edit_buffer = save_state->name;
+                    popups.save_state_name.save_state = save_state;
+                    popups.save_state_name.show = true;
+                }
+
+                if(ImGui::MenuItem("Delete")) {
+                    popups.delete_state_name.save_state = save_state;
+                    popups.delete_state_name.show = true;
+                }
+
+                ImGui::EndMenu();
+            }
+            ImGui::PopID();
+        }
+
+        ImGui::EndMenu();
+    }
+
 }
 
 void SystemInstance::CreateDefaultWorkspace()
@@ -321,40 +390,6 @@ void SystemInstance::Update(double deltaTime)
     }
 }
 
-void SystemInstance::UpdateRAMTexture()
-{
-    int cx = 0;
-    int cy = 0;
-    int sz = 5;
-
-    for(int i = 0; i < 0x800; i++) { // iterate over ram
-        u8 v = memory_view->Read(i);
-
-        // render sz x sz square of the ram value
-        for(int i = 0; i < sz; i++) {
-            int y = cy + i;
-            for(int j = 0; j < sz; j++) {
-                int x = cx + j;
-                // cycle between R/G/B colors
-                ram_framebuffer[y * 256 + x] = 0xFF000000 | ((0x01 << ((v % 3) * 8)) * (u32)v);
-            }
-        }
-
-        // next square
-        cx += sz;
-        if(cx >= 256) {
-            cx = 0;
-            cy += sz;
-        }
-    }
-
-    // update the opengl texture
-    GLuint gl_texture = (GLuint)(intptr_t)ram_texture;
-    glBindTexture(GL_TEXTURE_2D, gl_texture);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 256, GL_RGBA, GL_UNSIGNED_BYTE, ram_framebuffer);
-    glBindTexture(GL_TEXTURE_2D, 0);
-}
-
 void SystemInstance::RenderMenuBar()
 {
     if(current_state == State::PAUSED && ImGui::Button("Run")) {
@@ -400,6 +435,39 @@ void SystemInstance::RenderMenuBar()
 
 void SystemInstance::CheckInput()
 {
+}
+
+void SystemInstance::Render()
+{
+    if(popups.save_state_name.show) {
+        if(auto ret = GetMainWindow()->InputNamePopup("Enter save state name", "Name", &popups.edit_buffer, true, true)) {
+            if(ret > 0) {
+                auto ss = popups.save_state_name.save_state;
+                ss->name = popups.edit_buffer;
+            }
+
+            popups.save_state_name.show = false;
+            popups.save_state_name.save_state = nullptr;
+        }
+    } else if(popups.delete_state_name.show) {
+        stringstream ss;
+        ss << "Deleting save state \"" << popups.delete_state_name.save_state->name << "\" cannot be undone. Continue?";
+        if(auto ret = GetMainWindow()->OKCancelPopup("Delete save state", ss.str().c_str())) {
+            if(ret > 0) {
+                auto it = find_if(save_states.begin(), save_states.end(), [&](shared_ptr<SaveStateInfo> const& s)->bool {
+                    if(s->data == popups.delete_state_name.save_state->data) return true;
+                    return false;
+                });
+
+                if(it != save_states.end()) {
+                    save_states.erase(it);
+                }
+            }
+
+            popups.delete_state_name.show = false;
+            popups.delete_state_name.save_state = nullptr;
+        }
+    }
 }
 
 void SystemInstance::Reset()
@@ -479,13 +547,14 @@ void SystemInstance::StepPPU()
         raster_line = framebuffer;
         raster_y = 0;
     } else if(hblank_new && hblank_new != hblank) { // on rising edge of hblank
-        // move scanline down
-        raster_line = &framebuffer[++raster_y * 256];
         hblank = hblank_new;
+        // move scanline down
+        raster_line = &framebuffer[raster_y++ * 256];
+        raster_x = 0;
     } else if(!hblank_new) {
         hblank = false;
         // display color
-        *raster_line++ = (0xFF000000 | color);
+        raster_line[raster_x++] = (0xFF000000 | color);
     }
 }
 
@@ -662,6 +731,122 @@ void SystemInstance::CheckBreakpoints(u16 address, CheckBreakpointMode mode)
     }
 }
 
+std::shared_ptr<SaveStateInfo> SystemInstance::CreateSaveState()
+{
+    stringstream oss;
+    string errmsg;
+
+    // system has to be paused to prevent modification while executing
+    auto last_state = current_state;
+    if(current_state != State::PAUSED) {
+        current_state = State::PAUSED;
+        while(running) ;
+    }
+
+    WriteVarInt(oss, 1); // reserved, must be 1
+
+    // save CPU
+    if(!cpu->Save(oss, errmsg)) return nullptr;
+
+    // save PPU
+    if(!ppu->Save(oss, errmsg)) return nullptr;
+
+    // save APU_IO
+    if(!apu_io->Save(oss, errmsg)) return nullptr;
+
+    // save memory_view (i.e., all VRAM, RAM, cart state, etc)
+    if(!memory_view->Save(oss, errmsg)) return nullptr;
+
+    // save DMA state
+    WriteVarInt(oss, (int)oam_dma_enabled);
+    WriteVarInt(oss, oam_dma_source);
+    WriteVarInt(oss, oam_dma_rw);
+    WriteVarInt(oss, oam_dma_read_latch);
+    WriteVarInt(oss, (int)dma_halt_cycle_done);
+
+    // save a copy of the frame buffer so we can display it when state loads without running
+    oss.write((char*)framebuffer, sizeof(u32) * 256 * 256);
+
+    // and the raster positions
+    WriteVarInt(oss, (int)hblank);
+    WriteVarInt(oss, raster_x);
+    WriteVarInt(oss, raster_y);
+
+    // create a new SaveStateInfo
+    auto new_state = make_shared<SaveStateInfo>();
+    new_state->timestamp = chrono::system_clock::now();
+
+    int x = save_states.size(); // set a default name
+    stringstream ss;
+    ss << "Save state " << x;
+    new_state->name = ss.str();
+
+    // get the data from stream
+    auto buf = oss.rdbuf();
+    new_state->data_size = oss.tellp();
+    new_state->data = new u8[new_state->data_size];
+    buf->sgetn((char*)new_state->data, new_state->data_size);
+
+    // done, return current_state to its original value
+    current_state = last_state;
+
+    cout << WindowPrefix() << "save state \"" << new_state->name << "\" is " << dec << new_state->data_size << " bytes" << endl;
+    return new_state;
+}
+
+bool SystemInstance::LoadSaveState(std::shared_ptr<SaveStateInfo> const& save_state)
+{
+    string errmsg;
+
+    // create an istringstream with save_state's buffer
+    auto buf = save_state->GetMembuf();
+    istream is(&buf);
+
+    // system has to be paused to prevent modification while executing
+    auto last_state = current_state;
+    if(current_state != State::PAUSED) {
+        current_state = State::PAUSED;
+        while(running) ;
+    }
+
+    int r = ReadVarInt<int>(is); // reserved, must be 1
+    assert(r == 1);
+
+    // load CPU
+    if(!cpu->Load(is, errmsg)) return false;
+
+    // load PPU
+    if(!ppu->Load(is, errmsg)) return false;
+
+    // load APU_IO
+    if(!apu_io->Load(is, errmsg)) return false;
+
+    // load memory_view
+    if(!memory_view->Load(is, errmsg)) return false;
+
+    // load DMA state
+    oam_dma_enabled     = (bool)ReadVarInt<int>(is);
+    oam_dma_source      = ReadVarInt<u16>(is);
+    oam_dma_rw          = ReadVarInt<u8>(is);
+    oam_dma_read_latch  = ReadVarInt<u8>(is);
+    dma_halt_cycle_done = (bool)ReadVarInt<int>(is);
+
+    // load framebuffer copy
+    is.read((char*)framebuffer, sizeof(u32) * 256 * 256);
+
+    // and the raster positions
+    hblank = (bool)ReadVarInt<int>(is);
+    raster_x = ReadVarInt<int>(is);
+    raster_y = ReadVarInt<int>(is);
+
+    // fixup raster_line to point to the correct row
+    // raster_y == 0 means we're in vblank and will set render_line later
+    if(raster_y > 0) raster_line = &framebuffer[(raster_y - 1) * 256];
+
+    errmsg = "Error loading state";
+    return is.good();
+}
+
 bool SystemInstance::SaveWindow(std::ostream& os, std::string& errmsg)
 {
     auto last_state = current_state;
@@ -672,9 +857,6 @@ bool SystemInstance::SaveWindow(std::ostream& os, std::string& errmsg)
 
     WriteVarInt(os, next_system_id); // every instance of SystemInstance will save and write the same value, but whatever...
     WriteVarInt(os, system_id);
-
-    // TODO serialize CPU, PPU, APU_IO, DMA
-    // TODO serialize Watches
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     // serialize breakpoints
@@ -697,6 +879,17 @@ bool SystemInstance::SaveWindow(std::ostream& os, std::string& errmsg)
             if(!bpi->Save(os, errmsg)) return false;
         }
     }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // serialize save states
+    WriteVarInt(os, save_states.size());
+    for(auto& save_state : save_states) {
+        if(!save_state->Save(os, errmsg)) return false;
+    }
+
+    // serialize the /current/ state as well
+    auto current_save_state = CreateSaveState();
+    if(!current_save_state->Save(os, errmsg)) return false;
 
     current_state = last_state;
     return true;
@@ -731,6 +924,25 @@ bool SystemInstance::LoadWindow(std::istream& is, std::string& errmsg)
             SetBreakpoint(key, bpi);
         }
     }
+    
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // deserialize save states
+    if(GetCurrentProject()->GetSaveFileVersion() >= FILE_VERSION_SAVE_STATES) {
+        int save_states_size = ReadVarInt<int>(is);
+        for(int i = 0; i < save_states_size; i++) {
+            auto save_state = make_shared<SaveStateInfo>();
+            if(!save_state->Load(is, errmsg)) return false;
+            save_states.push_back(save_state);
+        }
+
+        // load the current state
+        auto current_save_state = make_shared<SaveStateInfo>();
+        if(!current_save_state->Load(is, errmsg)) return false;
+
+        // and immediately load it
+        LoadSaveState(current_save_state);
+    }
+
     return true;
 }
 

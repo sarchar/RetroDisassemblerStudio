@@ -52,6 +52,10 @@ public:
     int Step(bool& hblank_out, bool& vblank_out);
 
     std::shared_ptr<MemoryView> CreateMemoryView();
+
+    bool Save(std::ostream&, std::string&) const;
+    bool Load(std::istream&, std::string&);
+
 private:
     int  InternalStep(bool);
     void Shift();
@@ -143,8 +147,8 @@ private:
     u8 background_msbits_latch;
 
     // shift registers for background
-    u8  attribute_next_byte;
     u8  attribute_byte;
+    u8  attribute_next_byte;
     u16 background_lsbits;
     u16 background_msbits;
 
@@ -166,11 +170,14 @@ private:
     u8 sprite_x[8];
 
     // for tracking sprite 0 hit
-    struct {
-        u8 unused1                  : 5;
-        u8 sprite_zero_present      : 1;
-        u8 sprite_zero_next_present : 1;
-        u8 sprite_zero_hit_buffer   : 1;
+    union {
+        u8 sprite_zero;
+        struct {
+            u8 unused1                  : 5;
+            u8 sprite_zero_present      : 1;
+            u8 sprite_zero_next_present : 1;
+            u8 sprite_zero_hit_buffer   : 1;
+        };
     };
 
     // palette RAM, 16 bytes for BG, 16 for OAM

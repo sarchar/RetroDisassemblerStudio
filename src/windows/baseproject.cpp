@@ -38,8 +38,8 @@ BaseProject::Information const* BaseProject::GetProjectInformation(std::string c
     return NULL;
 }
 
-BaseProject::BaseProject(std::string const& title)
-    : BaseWindow()
+BaseProject::BaseProject(std::string const& title, int _save_file_version, int _save_file_flags)
+    : BaseWindow(), save_file_version(_save_file_version), save_file_flags(_save_file_flags)
 {
     SetWindowless(true);
     SetTitle(title);
@@ -90,7 +90,7 @@ bool BaseProject::Load(std::istream& is, std::string& errmsg)
     return is.good();
 }
 
-shared_ptr<BaseProject> BaseProject::StartLoadProject(std::istream& is, std::string& errmsg)
+shared_ptr<BaseProject> BaseProject::StartLoadProject(std::istream& is, std::string& errmsg, int save_version, int save_flags)
 {
     string abbr;
     ReadString(is, abbr);
@@ -101,9 +101,9 @@ shared_ptr<BaseProject> BaseProject::StartLoadProject(std::istream& is, std::str
         return nullptr;
     }
 
-    cout << "Loading " << info->full_name << " project..." << endl;
+    cout << "Loading " << info->full_name << " project (save file version = 0x" << hex << save_version << ")..." << endl;
 
-    return info->create_project();
+    return info->create_project(save_version, save_flags);
 }
 
 } // namespace Windows

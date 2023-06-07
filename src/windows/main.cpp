@@ -253,29 +253,9 @@ void MainWindow::RenderMenuBar()
     }
 
     if(current_project) {
-        if(ImGui::BeginMenu("Instance")) {
+        if(ImGui::BeginMenu("Project")) {
             if(ImGui::MenuItem("New instance")) {
                 current_project->CreateSystemInstance();
-            }
-
-            if(auto si = GetSystemInstance()) {
-                if(ImGui::BeginMenu("Current instance")) {
-                    if(ImGui::BeginMenu("New Window")) {
-                        static char const * const window_types[] = {
-                            "Defines", "Regions", "Labels", "Listing", "Memory", "Screen", "PPUState", "CPUState", "Watch", "Breakpoints", "Memory"
-                        };
-
-                        for(int i = 0; i < IM_ARRAYSIZE(window_types); i++) {
-                            if(ImGui::MenuItem(window_types[i])) {
-                                si->CreateNewWindow(window_types[i]);
-                            }
-                        }
-
-                        ImGui::EndMenu();
-                    }
-
-                    ImGui::EndMenu();
-                }
             }
 
             // hidden instances menu
@@ -305,6 +285,13 @@ void MainWindow::RenderMenuBar()
                 ImGui::EndMenu();
             }
             ImGui::EndMenu();
+        }
+
+        if(auto si = GetSystemInstance()) {
+            if(ImGui::BeginMenu("Instance")) {
+                si->RenderInstanceMenu();
+                ImGui::EndMenu();
+            }
         }
     }
 
@@ -590,7 +577,7 @@ int MainWindow::EndPopup(int ret, bool show_ok, bool show_cancel, bool allow_esc
     return ret;
 }
 
-bool MainWindow::OKPopup(std::string const& title, std::string const& content, bool resizeable)
+int MainWindow::OKPopup(std::string const& title, std::string const& content, bool resizeable)
 {
     int ret = 0;
 
@@ -603,7 +590,7 @@ bool MainWindow::OKPopup(std::string const& title, std::string const& content, b
     return EndPopup(ret, true, false, true, true);
 }
 
-bool MainWindow::OKCancelPopup(std::string const& title, std::string const& content, bool resizeable)
+int MainWindow::OKCancelPopup(std::string const& title, std::string const& content, bool resizeable)
 {
     int ret = 0;
 
@@ -817,8 +804,6 @@ void MainWindow::DeleteInstancePopup()
     }
 }
 
-#define PROJECT_FILE_MAGIC 0x8781a90afde1f317ULL
-#define PROJECT_FILE_VERSION 0x00000101
 void MainWindow::SaveProjectThread()
 {
     ofstream out(project_file_path, ios::binary);
@@ -874,13 +859,16 @@ void MainWindow::LoadProjectThread()
         } else if(magic != PROJECT_FILE_MAGIC) {
             popups.load_project.errmsg = "Not a Retro Disassembly Studio project file";
             popups.load_project.errored = true;
-        } else if(version != PROJECT_FILE_VERSION) {
+        } else if(version < FILE_VERSION_BASE) {
             popups.load_project.errmsg = "The project file contains an invalid version number";
+            popups.load_project.errored = true;
+        } else if(version > PROJECT_FILE_VERSION) {
+            popups.load_project.errmsg = "The project file contains an newer version number that cannot be loaded";
             popups.load_project.errored = true;
         }
 
         if(!popups.load_project.errored) {
-            current_project = BaseProject::StartLoadProject(is, popups.load_project.errmsg);
+            current_project = BaseProject::StartLoadProject(is, popups.load_project.errmsg, version, flags);
             if(current_project && !current_project->Load(is, popups.load_project.errmsg)) {
                 current_project = nullptr;
             } else {

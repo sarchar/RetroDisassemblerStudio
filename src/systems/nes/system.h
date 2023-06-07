@@ -266,6 +266,11 @@ public:
 
     std::shared_ptr<MemoryView> const& GetPPUView() const { return ppu_view; }
     std::shared_ptr<CartridgeView> const& GetCartridgeView() const { return cartridge_view; }
+
+    // save/load
+    bool Save(std::ostream&, std::string&) const override;
+    bool Load(std::istream&, std::string&) override;
+
 private:
     std::shared_ptr<System> system;
     std::shared_ptr<MemoryView> ppu_view;

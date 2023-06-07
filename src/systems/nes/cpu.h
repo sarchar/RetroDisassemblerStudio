@@ -46,13 +46,18 @@ public:
     // the definition for CPU_READ is in nes_cpu_tables.h, but this inline optimization is worth it
     inline bool IsReadCycle()  const { return state.ops && ((*state.ops & 0x04) == 0); }
 
+    bool Save(std::ostream&, std::string&) const;
+    bool Load(std::istream&, std::string&);
+
 private:
     struct {
+        // Do not re-order this structure without fixing Save/Load
         u8  A, X, Y, S, P;
         u16 PC;
     } regs;
 
     struct {
+        // This structure can safely be reordered
         u8         nmi;
         u8         nmi_detected;
         u8         do_nmi;
@@ -62,6 +67,7 @@ private:
         u8         intermediate;
         u16        eaddr;
         u64 const* ops;
+        u64 const* ops_base;
 
         u16        inst_pc;
     } state;

@@ -5,6 +5,7 @@
 // LICENSE file in the root directory of this source tree. 
 #pragma once
 
+#include <chrono>
 #include <memory>
 #include <stack>
 #include <thread>
@@ -57,6 +58,51 @@ struct BreakpointInfo {
     }
 };
 
+struct SaveStateInfo {
+    using clock_t = std::chrono::system_clock;
+
+    struct membuf : public std::streambuf {
+        membuf(char* begin, char* end) {
+            this->setg(begin, begin, end);
+        }
+    };
+
+    struct membuf GetMembuf() { return membuf((char*)data, (char*)(data + data_size)); }
+
+    clock_t::time_point timestamp;
+    std::string name;
+    int data_size;
+    u8* data;
+
+    bool Save(std::ostream& os, std::string& errmsg) const {
+        long long tp = timestamp.time_since_epoch().count();
+        os.write((char*)&tp, sizeof(tp));
+
+        WriteString(os, name);
+
+        WriteVarInt(os, data_size);
+        os.write((char*)data, data_size);
+
+        errmsg = "Error saving SaveStateInfo";
+        return os.good();
+    }
+
+    bool Load(std::istream& is, std::string& errmsg) {
+        long long tp;
+        is.read((char*)&tp, sizeof(tp));
+        timestamp = clock_t::time_point(clock_t::duration(tp));
+
+        ReadString(is, name);
+
+        data_size = ReadVarInt<int>(is);
+        data = new u8[data_size];
+        is.read((char*)data, data_size);
+
+        errmsg = "Error loading SaveStateInfo";
+        return is.good();
+    }
+};
+
 // Windows::NES::SystemInstance is home to everything you need about an instance of a NES system.  
 // You can have multiple SystemInstances and they contain their own system state. 
 // Systems::NES::System is generic and doesn't contain instance specific state
@@ -93,6 +139,9 @@ public:
     // create a default workspace
     void CreateDefaultWorkspace();
     void CreateNewWindow(std::string const&);
+    
+    // main menu bar from the parent window
+    void RenderInstanceMenu();
 
     std::shared_ptr<Listing> GetMostRecentListingWindow() const {
         return dynamic_pointer_cast<Listing>(most_recent_listing_window);
@@ -161,6 +210,7 @@ public:
 protected:
     void RenderMenuBar() override;
     void CheckInput() override;
+    void Render() override;
     void Update(double deltaTime) override;
 
     bool SaveWindow(std::ostream&, std::string&) override;
@@ -172,7 +222,6 @@ private:
 
     void UpdateTitle();
     void Reset();
-    void UpdateRAMTexture();
     bool SingleCycle();
     bool StepCPU();
     void StepPPU();
@@ -207,14 +256,12 @@ private:
 
     // Framebuffers are 0xAABBGGRR format (MSB = alpha)
     u32*                         framebuffer;
-    u32*                         ram_framebuffer;
-
-    void*                        ram_texture;
 
     // rasterizer position
     bool                         hblank;
     u32*                         raster_line;
     int                          raster_y;
+    int                          raster_x;
 
     // OAM DMA
     bool                         oam_dma_enabled = false;
@@ -228,6 +275,25 @@ private:
     // breakpoints
     std::unordered_map<breakpoint_key_t, breakpoint_list_t> breakpoints;
     u32* cpu_quick_breakpoints;
+
+    // save states
+    std::shared_ptr<SaveStateInfo> CreateSaveState();
+    bool LoadSaveState(std::shared_ptr<SaveStateInfo> const&);
+    std::vector<std::shared_ptr<SaveStateInfo>> save_states;
+
+    struct {
+        struct {
+            bool show = false;
+            std::shared_ptr<SaveStateInfo> save_state;
+        } save_state_name;
+
+        struct {
+            bool show = false;
+            std::shared_ptr<SaveStateInfo> save_state;
+        } delete_state_name;
+
+        std::string edit_buffer;
+    } popups;
 };
 
 class Screen : public BaseWindow {

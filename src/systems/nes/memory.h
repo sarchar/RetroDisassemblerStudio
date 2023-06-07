@@ -451,6 +451,10 @@ public:
     virtual u8 ReadPPU(u16) = 0;
     virtual void WritePPU(u16, u8) = 0;
     virtual u8 PeekPPU(u16 address) { return ReadPPU(address); }
+
+    // save/load
+    virtual bool Save(std::ostream&, std::string&) const { return true; }
+    virtual bool Load(std::istream&, std::string&)       { return true; }
 };
 
 } // namespace Systems::NES

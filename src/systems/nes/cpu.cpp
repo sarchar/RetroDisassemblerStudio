@@ -35,7 +35,7 @@ CPU::~CPU()
 void CPU::Reset()
 {
     state.nmi = 0;
-    state.ops = CpuReset;
+    state.ops = state.ops_base = CpuReset;
     state.istep = 0;
     regs.P |= 0x20;
     regs.PC = 0xFFFC;
@@ -207,10 +207,11 @@ bool CPU::Step()
     if((op & CPU_LATCH_OPCODE_mask) == CPU_LATCH_OPCODE) {
         //cout << "PC: $" << hex << uppercase << setw(4) << setfill('0') << (regs.PC - 1)
         //     << " opcode: " << hex << uppercase << setw(2) << setfill('0') << (int)ibus << endl;
-        state.opcode  = (u8)ibus;
-        state.ops     = OpTable[state.opcode];
-        state.istep   = 0;
-        state.inst_pc = regs.PC - 1; // PC is always incremented on the opcode latch cycle
+        state.opcode   = (u8)ibus;
+        state.ops      = OpTable[state.opcode];
+        state.ops_base = state.ops;
+        state.istep    = 0;
+        state.inst_pc  = regs.PC - 1; // PC is always incremented on the opcode latch cycle
         ret = true;
     }
 
@@ -351,12 +352,84 @@ bool CPU::Step()
     if(state.do_nmi && !state.did_nmi && (state.ops && *state.ops == OPCODE_FETCH)) {
         state.did_nmi = 1;
         state.eaddr   = 0xFFFA;
-        state.ops     = CpuNMI;
+        state.ops     = state.ops_base = CpuNMI;
         state.istep   = 0;
     }
 
 	return ret;
 }
 
+bool CPU::Save(ostream& os, string& errmsg) const
+{
+    WriteVarInt(os, 0); // Reserved for future use in case we re-order components of structures
+
+    os.write((char const*)&regs, sizeof(regs));
+
+    WriteVarInt(os, state.nmi);
+    WriteVarInt(os, state.nmi_detected);
+    WriteVarInt(os, state.do_nmi);
+    WriteVarInt(os, state.did_nmi);
+    WriteVarInt(os, state.istep);
+    WriteVarInt(os, state.opcode);
+    WriteVarInt(os, state.intermediate);
+    WriteVarInt(os, state.eaddr);
+    WriteVarInt(os, state.inst_pc);
+
+    // we can't save state.ops, so we use ops_base to determine what state it's in:
+    // 0 - nullptr
+    // 1 - CpuReset
+    // 2 - CpuNMI
+    // 3 - OpTable[state.opcode]
+    // and we save the delta from that point
+    if(state.ops == nullptr) WriteVarInt(os, 0);
+    else {
+        if(state.ops == CpuReset) WriteVarInt(os, 1);
+        else if(state.ops == CpuNMI) WriteVarInt(os, 2);
+        else WriteVarInt(os, 3);
+
+        WriteVarInt(os, (uintptr_t)state.ops - (uintptr_t)state.ops_base);
+    }
+
+    WriteVarInt(os, cycle_count);
+
+    errmsg = "Error saving CPU state"; // in case os.good() returns false
+    return os.good();
+}
+
+bool CPU::Load(istream& is, string& errmsg)
+{
+    int r = ReadVarInt<int>(is); // reserved
+    assert(r == 0);
+
+    is.read((char*)&regs, sizeof(regs));
+
+    state.nmi          = ReadVarInt<u8>(is);
+    state.nmi_detected = ReadVarInt<u8>(is);
+    state.do_nmi       = ReadVarInt<u8>(is);
+    state.did_nmi      = ReadVarInt<u8>(is);
+    state.istep        = ReadVarInt<u8>(is);
+    state.opcode       = ReadVarInt<u8>(is);
+    state.intermediate = ReadVarInt<u8>(is);
+    state.eaddr        = ReadVarInt<u16>(is);
+    state.inst_pc      = ReadVarInt<u16>(is);
+
+    // determine state.ops (see Save())
+    int v = ReadVarInt<int>(is);
+    if(v == 0) { // nullptr
+        state.ops = state.ops_base = nullptr;
+    } else {
+        if(v == 1)      state.ops_base = CpuReset;
+        else if(v == 2) state.ops_base = CpuNMI;
+        else if(v == 3) state.ops_base = OpTable[state.opcode];
+
+        uintptr_t offs = ReadVarInt<uintptr_t>(is);
+        state.ops = (u64 const*)((uintptr_t)state.ops_base + offs);
+    }
+
+    cycle_count = ReadVarInt<u64>(is);
+
+    errmsg = "Error loading CPU state";
+    return is.good();
+}
 
 }

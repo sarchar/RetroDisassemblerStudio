@@ -39,6 +39,9 @@ public:
     typedef signal<std::function<void(u8)>> oam_dma_callback_t;
     std::shared_ptr<oam_dma_callback_t> oam_dma_callback;
 
+    bool Save(std::ostream&, std::string&) const;
+    bool Load(std::istream&, std::string&);
+
     friend class APU_IO_View;
 
 private:
@@ -59,6 +62,9 @@ public:
 
     u8 ReadPPU(u16) override { return 0xFF; }
     void WritePPU(u16, u8) override {}
+
+    bool Save(std::ostream& os, std::string& errmsg) const override;
+    bool Load(std::istream& is, std::string& errmsg) override;
 
 private:
     std::shared_ptr<APU_IO> apu_io;
