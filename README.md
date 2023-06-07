@@ -35,7 +35,7 @@ In short, create a new project from the file menu.  In the listing window, press
 * Ctrl-R on a label line: show references to the selected label
 * Delete: revert disassembled code to data
 * Backspace: remove operand (but leave instruction)
-* w, s: make data as (w)ord or (s)tring
+* w, s: mark data as (w)ord or (s)tring
 
 For the debugger:
 * F5 to run the system instance
@@ -44,7 +44,11 @@ For the debugger:
 
 ## Build
 
-More detailed instructions will be written in the future. For now, clone this repository, update the submodules, and create an empty build directory. Use CMake to generate a project, and build it using a modern (C++20) compiler. As it stands now, I've only been developing in Windows with MSVC 2022. It likely doesn't build on other platforms.
+More detailed instructions will be written in the future. For now, clone this
+repository, update the submodules, and create an empty build directory. Use
+CMake to generate a project, and build it using a modern (C++20) compiler. As
+it stands now, I've only been developing in Windows with MSVC 2022. It likely
+doesn't build on other platforms.
 
 ## Contact
 
