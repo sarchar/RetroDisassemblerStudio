@@ -13,6 +13,7 @@ source code for old games.
 * Real time displays of memory
 * Watches, breakpoints, labels, defines
 * Multiple running instances with separate state
+* Each instance contains its own collection of save states
 
 ## TODO
 
