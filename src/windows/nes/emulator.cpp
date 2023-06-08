@@ -169,6 +169,8 @@ SystemInstance::SystemInstance()
         UpdateTitle();
     };
 
+    CreateStateVariableTable();
+
     Reset();
     UpdateTitle();
 }
@@ -180,6 +182,23 @@ SystemInstance::~SystemInstance()
 
     delete [] (u8*)framebuffer;
     delete [] cpu_quick_breakpoints;
+}
+
+void SystemInstance::CreateStateVariableTable()
+{
+    auto& st = state_variable_table;
+
+    st["a"]     = [=]() { return (s64)cpu->GetA(); };
+    st["x"]     = [=]() { return (s64)cpu->GetX(); };
+    st["y"]     = [=]() { return (s64)cpu->GetY(); };
+    st["s"]     = [=]() { return (s64)cpu->GetS(); };
+    st["p"]     = [=]() { return (s64)cpu->GetP(); };
+    st["pc"]    = [=]() { return (s64)cpu->GetPC(); };
+    st["istep"] = [=]() { return (s64)cpu->GetIStep(); };
+
+    st["scanline"] = [=]() { return (s64)ppu->GetScanline(); };
+    st["ppucycle"] = [=]() { return (s64)ppu->GetCycle(); };
+    st["frame"]    = [=]() { return (s64)ppu->GetFrame(); };
 }
 
 void SystemInstance::RenderInstanceMenu()
@@ -656,7 +675,10 @@ void SystemInstance::WriteOAMDMA(u8 page)
 bool SystemInstance::SetBreakpointCondition(std::shared_ptr<BreakpointInfo> const& breakpoint_info, 
         std::shared_ptr<BaseExpression> const& expression, std::string& errmsg)
 {
-    // first fixup the expression, allowing labels, defines, derefs
+    // before going to System::FixupExpression, set system state variables
+    if(!FixupExpression(expression, errmsg)) return false;
+
+    // fixup the expression allowing labels, defines, derefs
     if(!current_system->FixupExpression(expression, errmsg, true, true, true)) return false;
 
     // now we need to Explore() and set the dereferences on the expression
@@ -729,6 +751,44 @@ void SystemInstance::CheckBreakpoints(u16 address, CheckBreakpointMode mode)
     [[unlikely]] for(auto& bpiter : bplist) {
         if(check_bp(bpiter)) return;
     }
+}
+
+bool SystemInstance::FixupExpression(shared_ptr<BaseExpression> const& expression, string& errmsg)
+{
+    ExploreData ed = {
+        .errmsg = errmsg,
+    };
+
+    // explore the expression and convert Names to SystemInstanceState nodes
+    return expression->Explore(quick_bind(&SystemInstance::ExploreCallback, this), (void*)&ed);
+}
+
+bool SystemInstance::ExploreCallback(shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void* userdata)
+{
+    ExploreData* ed = (ExploreData*)userdata;
+    auto nc = GetSystem()->GetNodeCreator();
+
+    if(auto name = dynamic_pointer_cast<BaseExpressionNodes::Name>(node)) {
+        auto state_variable = name->GetString();
+        auto state_variable_lower = strlower(state_variable);
+
+        // if the state_variable is valid, create a SystemInstanceState
+        if(state_variable_table.contains(state_variable_lower)) {
+            cout << "found " << state_variable << endl;
+
+            // replace 'node' with a new type 
+            node = nc->CreateSystemInstanceState(state_variable);
+        }
+    }
+
+    // the above Name to SystemInstanceState could have happened, but also some already existing SystemInstanceState 
+    // need to have the getter function set
+    if(auto sis = dynamic_pointer_cast<Systems::NES::ExpressionNodes::SystemInstanceState>(node)) {
+        auto state_variable_lower = strlower(sis->GetString());
+        sis->SetGetStateFunction(state_variable_table[state_variable_lower]);
+    }
+
+    return true;
 }
 
 std::shared_ptr<SaveStateInfo> SystemInstance::CreateSaveState()
@@ -920,6 +980,9 @@ bool SystemInstance::LoadWindow(std::istream& is, std::string& errmsg)
         for(int j = 0; j < num_breakpoints; j++) {
             auto bpi = make_shared<BreakpointInfo>();
             if(!bpi->Load(is, errmsg)) return false;
+
+            // condition expressions need SystemInstanceState updated
+            if(bpi->condition && !FixupExpression(bpi->condition, errmsg)) return false;
 
             SetBreakpoint(key, bpi);
         }
@@ -2261,15 +2324,20 @@ void Watch::SetWatch()
         if(expr->Set(edit_string, errmsg, errloc, false)) {
             errloc = -1;
 
-            // expression was valid from a grammar point of view, now apply semantics
-            // allow labels, defines, derefs, but not addressing modes
-            if(GetSystem()->FixupExpression(expr, errmsg, true, true, true, false)) {
-                // Expression contained valid elements, now DereferenceOp nodes need evaluation functions set
-                if(SetDereferenceOp(watch_data)) {
-                    // success, done editing and re-sort after adding
-                    do_set_watch = false;
-                    editing = -1;
-                    need_resort = true;
+            // apply SystemInstance expression changes to the expression before System
+            // so that we can convert names like "X" and "PC" to their actual state values
+            // at the time the expression is evaluated
+            if(GetMySystemInstance()->FixupExpression(expr, errmsg)) {
+                // expression was valid from a grammar point of view, now apply semantics
+                // allow labels, defines, derefs, but not addressing modes
+                if(GetSystem()->FixupExpression(expr, errmsg, true, true, true, false)) {
+                    // Expression contained valid elements, now DereferenceOp nodes need evaluation functions set
+                    if(SetDereferenceOp(watch_data)) {
+                        // success, done editing and re-sort after adding
+                        do_set_watch = false;
+                        editing = -1;
+                        need_resort = true;
+                    }
                 }
             }
         }
@@ -2384,6 +2452,8 @@ bool Watch::SaveWindow(std::ostream& os, std::string& errmsg)
 
 bool Watch::LoadWindow(std::istream& is, std::string& errmsg)
 {
+    auto si = GetMySystemInstance();
+
     watches.clear();
     sorted_watches.clear();
 
@@ -2393,6 +2463,8 @@ bool Watch::LoadWindow(std::istream& is, std::string& errmsg)
         if(!watch_data->Load(is, errmsg)) return false;
         // dereference ops aren't saved with the expression and need to be reconfigured
         SetDereferenceOp(watch_data);
+        // same for SystemInstanceState nodes
+        if(!si->FixupExpression(watch_data->expression, errmsg)) return false;
         watches.push_back(watch_data);
         sorted_watches.push_back(i);
     }
@@ -2657,56 +2729,59 @@ void Breakpoints::SetBreakpoint()
         if(expr->Set(edit_string, errmsg, errloc, false)) {
             errloc = -1;
 
-            // expression was valid from a grammar point of view, now apply semantics
-            // allow labels, defines, no derefs, no modes
-            if(GetSystem()->FixupExpression(expr, errmsg, true, true, false, false, true)) {
-                // Expression contained valid elements, evaluate the function to determine where the breakpoint should be
-                s64 result;
-                if(expr->Evaluate(&result, errmsg)) {
-                    // result contains the address of our breakpoint!
-                    if(result < 0) {
-                        errmsg = "Invalid address";
-                    } else if(result < 0x10000) { // no bank specified
-                        editing_breakpoint_info->address = {
-                            .address = (u16)(result & 0xFFFF),
-                            .is_chr = false,
-                            .prg_rom_bank = 0,
-                        };
+            // before we go to System::FixupExpression, we need to convert some Names to SystemInstanceStates
+            if(GetMySystemInstance()->FixupExpression(expr, errmsg)) {
+                // expression was valid from a grammar point of view, now apply semantics
+                // allow labels, defines, no derefs, no modes
+                if(GetSystem()->FixupExpression(expr, errmsg, true, true, false, false, true)) {
+                    // Expression contained valid elements, evaluate the function to determine where the breakpoint should be
+                    s64 result;
+                    if(expr->Evaluate(&result, errmsg)) {
+                        // result contains the address of our breakpoint!
+                        if(result < 0) {
+                            errmsg = "Invalid address";
+                        } else if(result < 0x10000) { // no bank specified
+                            editing_breakpoint_info->address = {
+                                .address = (u16)(result & 0xFFFF),
+                                .is_chr = false,
+                                .prg_rom_bank = 0,
+                            };
 
 
-                        editing_breakpoint_info->has_bank = false;
-                        editing_breakpoint_info->enabled = true;
+                            editing_breakpoint_info->has_bank = false;
+                            editing_breakpoint_info->enabled = true;
 
-                        // set the u16 style breakpoint
-                        GetMySystemInstance()->SetBreakpoint((u16)(result & 0xFFFF), editing_breakpoint_info);
-                        editing_breakpoint_info = nullptr;
-                    } else { // user specified a bank via a label or manually
-                        // use the bank byte to build a GlobalMemoryLocation and make sure it's valid
-                        editing_breakpoint_info->address = {
-                            .address      = (u16)(result & 0xFFFF),
-                            .is_chr       = false,
-                            .prg_rom_bank = (u16)((result >> 16) & 0xFF),
-                        };
-
-                        editing_breakpoint_info->has_bank = true;
-                        editing_breakpoint_info->enabled = true;
-
-                        if(!GetSystem()->GetMemoryObject(editing_breakpoint_info->address)) {
-                            stringstream ss;
-                            ss << "Invalid address (no memory exists at $" << hex << uppercase << setw(4) 
-                               << setfill('0') << result << ")";
-                            errmsg = ss.str();
-                        } else {
-                            // valid target
-                            GetMySystemInstance()->SetBreakpoint(editing_breakpoint_info->address, editing_breakpoint_info);
+                            // set the u16 style breakpoint
+                            GetMySystemInstance()->SetBreakpoint((u16)(result & 0xFFFF), editing_breakpoint_info);
                             editing_breakpoint_info = nullptr;
-                        }
-                    }
+                        } else { // user specified a bank via a label or manually
+                            // use the bank byte to build a GlobalMemoryLocation and make sure it's valid
+                            editing_breakpoint_info->address = {
+                                .address      = (u16)(result & 0xFFFF),
+                                .is_chr       = false,
+                                .prg_rom_bank = (u16)((result >> 16) & 0xFF),
+                            };
 
-                    if(!editing_breakpoint_info) {
-                        // success, done editing
-                        do_set_breakpoint = false;
-                        editing = EditMode::NONE;
+                            editing_breakpoint_info->has_bank = true;
+                            editing_breakpoint_info->enabled = true;
+
+                            if(!GetSystem()->GetMemoryObject(editing_breakpoint_info->address)) {
+                                stringstream ss;
+                                ss << "Invalid address (no memory exists at $" << hex << uppercase << setw(4) 
+                                   << setfill('0') << result << ")";
+                                errmsg = ss.str();
+                            } else {
+                                // valid target
+                                GetMySystemInstance()->SetBreakpoint(editing_breakpoint_info->address, editing_breakpoint_info);
+                                editing_breakpoint_info = nullptr;
+                            }
+                        }
+
+                        if(!editing_breakpoint_info) {
+                            // success, done editing
+                            do_set_breakpoint = false;
+                            editing = EditMode::NONE;
+                        }
                     }
                 }
             }

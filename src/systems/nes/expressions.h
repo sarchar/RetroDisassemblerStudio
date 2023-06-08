@@ -304,6 +304,53 @@ namespace ExpressionNodes {
         std::shared_ptr<BaseExpressionNode> base;
         std::string display;
     };
+
+    class SystemInstanceState : public BaseExpressionNode {
+    public:
+        typedef std::function<s64()> get_state_func_t;
+
+        SystemInstanceState(std::string const& _display)
+            : display(_display)
+        {
+        }
+
+        virtual ~SystemInstanceState() {}
+
+        static int base_expression_node_id;
+        int GetExpressionNodeType() const override { return SystemInstanceState::base_expression_node_id; }
+
+        std::string const& GetString() const { return display; }
+
+        template<typename T>
+        void SetGetStateFunction(T const& func) { get_state_func = func; }
+
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            // get_state_func never fails. if anything it returns garbage data
+            if(!get_state_func) {
+                errmsg = "Get state function not specified";
+                return false;
+            }
+            *result = get_state_func();
+            return true;
+        }
+
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            // SystemInstanceState has no child ExpressionNode
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override {
+            ostream << display;
+        }
+
+        bool Save(std::ostream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>) override;
+        static std::shared_ptr<SystemInstanceState> Load(std::istream&, std::string&, std::shared_ptr<BaseExpressionNodeCreator>&);
+
+    private:
+        std::string display;
+        get_state_func_t get_state_func;
+    };
+
 }
 
 class ExpressionNodeCreator : public BaseExpressionNodeCreator {
@@ -334,6 +381,10 @@ public:
 
     BN CreateLabel(GlobalMemoryLocation const& label_address, int nth, std::string const& display) {
         return std::make_shared<ExpressionNodes::Label>(label_address, nth, display);
+    }
+
+    BN CreateSystemInstanceState(std::string const& display) {
+        return std::make_shared<ExpressionNodes::SystemInstanceState>(display);
     }
 };
 

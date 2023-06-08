@@ -67,13 +67,25 @@ void Tenderizer::Gobble() // gobble, gobble
         return;
     }
 
-    if((c == '<' || c == '>') && (Look() == c)) { // LSHIFT and RSHIFT
+    if((c == '<' || c == '>') && (Look() == c)) { // << and >>
         meat_text << Bite();
         current_meat = (c == '<') ? Meat::LSHIFT : Meat::RSHIFT;
-    } else if((c == '=' || c == '!') && Look() == '=') { // EQUAL_TO
+    } else if(c == '<' && Look() == '=') { // <=
+        meat_text << Bite();
+        current_meat = Meat::LANGLE_EQUAL;
+    } else if(c == '>' && Look() == '=') { // >=
+        meat_text << Bite();
+        current_meat = Meat::RANGLE_EQUAL;
+    } else if((c == '=' || c == '!') && Look() == '=') { // == and !=
         meat_text << Bite();
         current_meat = (c == '=') ? Meat::EQUAL_TO : Meat::NOT_EQUAL_TO;
-    } else if(c == '*' && Look() == '*') { // POWER
+    } else if(c == '|' && Look() == '|') { // ||
+        meat_text << Bite();
+        current_meat = Meat::DOUBLE_PIPE;
+    } else if(c == '&' && Look() == '&') { // &&
+        meat_text << Bite();
+        current_meat = Meat::DOUBLE_AMPERSAND;
+    } else if(c == '*' && Look() == '*') { // **
         meat_text << Bite();
         current_meat = Meat::POWER;
     /* } else if(other items) { */
@@ -171,6 +183,14 @@ void BaseExpressionNodeCreator::RegisterBaseExpressionNodes()
 
     RegisterBaseExpressionNode<BaseExpressionNodes::EqualToOp>();
     RegisterBaseExpressionNode<BaseExpressionNodes::NotEqualToOp>();
+
+    RegisterBaseExpressionNode<BaseExpressionNodes::LogicalOrOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::LogicalAndOp>();
+
+    RegisterBaseExpressionNode<BaseExpressionNodes::LessThanOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::GreaterThanOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::LessThanOrEqualOp>();
+    RegisterBaseExpressionNode<BaseExpressionNodes::GreaterThanOrEqualOp>();
 
     // any node registered after this point is a subclassed node. using an ID
     // offset lets us add new base nodes without corrupting the subnode indexes in save files
@@ -326,18 +346,68 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseExpressionList(shared_ptr<Te
 // 
 // Simple wrapper for clearity
 // 
-// expression: or_expr
+// expression: l_or_expr
 //           ;
 // 
 shared_ptr<BaseExpressionNode> BaseExpression::ParseExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
-    return ParseOrExpression(tenderizer, node_creator, errmsg, errloc);
+    return ParseLogicalOrExpression(tenderizer, node_creator, errmsg, errloc);
 }
 
-//TODO make all the Parsers virtual so that a subclass and interject its own precedence inbetween others
-//this should allow the subclass to create system specific nodes like IndexedX. However, the tokenizer has to support all
-//syntax for the entire program.
+// all the parse functions are virtual so that a subclass can interject its own precedence inbetween others
+// this allows the subclass to create system specific nodes like IndexedX. However, the tokenizer has to support all
+// syntax for the entire program.
 //
+// Logical OR (||) C++ precedence 15
+//
+// l_or_expr: l_and_expr l_or_expr_tail
+//          ;
+// 
+// l_or_expr_tail: DOUBLE_PIPE l_and_expr l_or_expr_tail
+//               | // EMPTY
+//               ;
+//
+shared_ptr<BaseExpressionNode> BaseExpression::ParseLogicalOrExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
+{
+    auto lhs = ParseLogicalAndExpression(tenderizer, node_creator, errmsg, errloc);
+    if(!lhs) return nullptr;
+
+    while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::DOUBLE_PIPE) {
+        string display = tenderizer->GetDisplayText();
+        tenderizer->Gobble();
+        auto rhs = ParseLogicalAndExpression(tenderizer, node_creator, errmsg, errloc);
+        if(!rhs) return nullptr;
+        lhs = node_creator->CreateLogicalOrOp(lhs, display, rhs);
+    }
+
+    return lhs;
+}
+
+// Logical AND (&&) C++ precedence 14
+//
+// l_and_expr: or_expr l_and_expr_tail
+//           ;
+// 
+// l_and_expr_tail: DOUBLE_AMPERSAND or_expr l_and_expr_tail
+//                | // EMPTY
+//                ;
+//
+shared_ptr<BaseExpressionNode> BaseExpression::ParseLogicalAndExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
+{
+    auto lhs = ParseOrExpression(tenderizer, node_creator, errmsg, errloc);
+    if(!lhs) return nullptr;
+
+    while(tenderizer->GetCurrentMeat() == Tenderizer::Meat::DOUBLE_AMPERSAND) {
+        string display = tenderizer->GetDisplayText();
+        tenderizer->Gobble();
+        auto rhs = ParseOrExpression(tenderizer, node_creator, errmsg, errloc);
+        if(!rhs) return nullptr;
+        lhs = node_creator->CreateLogicalAndOp(lhs, display, rhs);
+    }
+
+    return lhs;
+}
+
 // OR (|) C++ precedence 13
 //
 // or_expr: xor_expr or_expr_tail
@@ -390,7 +460,7 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseXorExpression(shared_ptr<Ten
 
 // AND (&) C++ precedence 11
 // 
-// and_expr: shift_expr and_expr_tail
+// and_expr: equality_expr and_expr_tail
 //         ;
 // 
 // and_expr_tail: AMPERSAND equality_expr and_expr_tail
@@ -415,17 +485,17 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseAndExpression(shared_ptr<Ten
 
 // EQUALITY (==, !=) C++ precedence 10
 // 
-// equality_expr: shift_expr equality_expr_tail
+// equality_expr: relational_expr equality_expr_tail
 //              ;
 // 
-// equality_expr_tail: EQUAL_TO     shift_expr equality_expr_tail
-//                   | NOT_EQUAL_TO shift_expr equality_expr_tail
+// equality_expr_tail: EQUAL_TO     relational_expr equality_expr_tail
+//                   | NOT_EQUAL_TO relational_expr equality_expr_tail
 //                   | // EMPTY
 //                   ;
 // 
 shared_ptr<BaseExpressionNode> BaseExpression::ParseEqualityExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
 {
-    auto lhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+    auto lhs = ParseRelationalExpression(tenderizer, node_creator, errmsg, errloc);
     if(!lhs) return nullptr;
 
     for(bool done = false; !done;) {
@@ -434,7 +504,7 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseEqualityExpression(shared_pt
         case Tenderizer::Meat::EQUAL_TO:
         {
             tenderizer->Gobble();
-            auto rhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+            auto rhs = ParseRelationalExpression(tenderizer, node_creator, errmsg, errloc);
             if(!rhs) return nullptr;
             lhs = node_creator->CreateEqualToOp(lhs, display, rhs);
             break;
@@ -443,7 +513,7 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseEqualityExpression(shared_pt
         case Tenderizer::Meat::NOT_EQUAL_TO:
         {
             tenderizer->Gobble();
-            auto rhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+            auto rhs = ParseRelationalExpression(tenderizer, node_creator, errmsg, errloc);
             if(!rhs) return nullptr;
             lhs = node_creator->CreateNotEqualToOp(lhs, display, rhs);
             break;
@@ -457,6 +527,73 @@ shared_ptr<BaseExpressionNode> BaseExpression::ParseEqualityExpression(shared_pt
 
     return lhs;
 }
+
+// RELATIONAL (<, <=, >, >=) C++ precedence 9
+// 
+// relational_expr: shift_expr relational_expr_tail
+//                ;
+// 
+// relational_expr_tail: LANGLE       shift_expr relational_expr_tail
+//                     | RANGLE       shift_expr relational_expr_tail
+//                     | LANGLE_EQUAL shift_expr relational_expr_tail
+//                     | RANGLE_EQUAL shift_expr relational_expr_tail
+//                     | // EMPTY
+//                     ;
+// 
+shared_ptr<BaseExpressionNode> BaseExpression::ParseRelationalExpression(shared_ptr<Tenderizer>& tenderizer, shared_ptr<BaseExpressionNodeCreator>& node_creator, string& errmsg, int& errloc)
+{
+    auto lhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+    if(!lhs) return nullptr;
+
+    for(bool done = false; !done;) {
+        string display = tenderizer->GetDisplayText();
+
+        switch(tenderizer->GetCurrentMeat()) {
+        case Tenderizer::Meat::LANGLE:
+        {
+            tenderizer->Gobble();
+            auto rhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+            if(!rhs) return nullptr;
+            lhs = node_creator->CreateLessThanOp(lhs, display, rhs);
+            break;
+        }
+
+        case Tenderizer::Meat::RANGLE:
+        {
+            tenderizer->Gobble();
+            auto rhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+            if(!rhs) return nullptr;
+            lhs = node_creator->CreateGreaterThanOp(lhs, display, rhs);
+            break;
+        }
+
+        case Tenderizer::Meat::LANGLE_EQUAL:
+        {
+            tenderizer->Gobble();
+            auto rhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+            if(!rhs) return nullptr;
+            lhs = node_creator->CreateLessThanOrEqualOp(lhs, display, rhs);
+            break;
+        }
+
+        case Tenderizer::Meat::RANGLE_EQUAL:
+        {
+            tenderizer->Gobble();
+            auto rhs = ParseShiftExpression(tenderizer, node_creator, errmsg, errloc);
+            if(!rhs) return nullptr;
+            lhs = node_creator->CreateGreaterThanOrEqualOp(lhs, display, rhs);
+            break;
+        }
+
+        default:
+            done = true;
+            break;
+        }
+    }
+
+    return lhs;
+}
+
 
 // BIT SHIFTS (<<, >>) C++ precedence 7
 // 

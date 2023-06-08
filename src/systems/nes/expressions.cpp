@@ -24,6 +24,7 @@ int Immediate::base_expression_node_id = 0;
 int IndexedX::base_expression_node_id = 0;
 int IndexedY::base_expression_node_id = 0;
 int Accum::base_expression_node_id = 0;
+int SystemInstanceState::base_expression_node_id = 0;
 
 void Define::Print(std::ostream& ostream) {
     ostream << define->GetString();
@@ -152,6 +153,29 @@ shared_ptr<Label> Label::Load(istream& is, string& errmsg, shared_ptr<BaseExpres
     return ret;
 }
 
+bool SystemInstanceState::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator>) 
+{
+    WriteString(os, display);
+    if(!os.good()) {
+        errmsg = "Error saving SystemInstanceState";
+        return false;
+    }
+    return true;
+}
+
+shared_ptr<SystemInstanceState> SystemInstanceState::Load(istream& is, string& errmsg, shared_ptr<BaseExpressionNodeCreator>&) 
+{
+    string display;
+    ReadString(is, display);
+    if(!is.good()) {
+        errmsg = "Error loading SystemInstanceState";
+        return nullptr;
+    }
+
+    auto ret = make_shared<SystemInstanceState>(display);
+    return ret;
+}
+
 }
 
 void ExpressionNodeCreator::RegisterExpressionNodes()
@@ -163,6 +187,8 @@ void ExpressionNodeCreator::RegisterExpressionNodes()
 
     RegisterBaseExpressionNode<ExpressionNodes::Define>();
     RegisterBaseExpressionNode<ExpressionNodes::Label>();
+
+    RegisterBaseExpressionNode<ExpressionNodes::SystemInstanceState>();
 }
 
 // we're going to interject immediate operands into the expression by letting

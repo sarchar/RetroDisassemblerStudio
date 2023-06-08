@@ -25,14 +25,16 @@ public:
         PLUS, MINUS, BANG,
         ASTERISK, SLASH,
         EQUAL_TO, NOT_EQUAL_TO,
+        DOUBLE_PIPE, DOUBLE_AMPERSAND,
         LSHIFT, RSHIFT,
         CARET, PIPE, AMPERSAND, TILDE,
         POWER,
         LANGLE, RANGLE,
+        LANGLE_EQUAL, RANGLE_EQUAL,
         LPAREN, RPAREN,
         COMMA,
         HASH,
-        END        // end of tile
+        END        // end of input
     };
 
     Tenderizer(std::istream&);
@@ -315,6 +317,24 @@ namespace BaseExpressionNodes {
     inline s64 _notequalto_op(s64 a, s64 b) { return (s64)(a != b); }
     using NotEqualToOp = BinaryOp<_notequalto_op>;
 
+    inline s64 _less_than_op(s64 a, s64 b) { return (s64)(a < b); }
+    using LessThanOp = BinaryOp<_less_than_op>;
+
+    inline s64 _greater_than_op(s64 a, s64 b) { return (s64)(a > b); }
+    using GreaterThanOp = BinaryOp<_greater_than_op>;
+
+    inline s64 _less_than_or_equal_op(s64 a, s64 b) { return (s64)(a <= b); }
+    using LessThanOrEqualOp = BinaryOp<_less_than_or_equal_op>;
+
+    inline s64 _greater_than_or_equal_op(s64 a, s64 b) { return (s64)(a >= b); }
+    using GreaterThanOrEqualOp = BinaryOp<_greater_than_or_equal_op>;
+
+    inline s64 _logical_or_op(s64 a, s64 b) { return (s64)((bool)a || (bool)b); }
+    using LogicalOrOp = BinaryOp<_logical_or_op>;
+
+    inline s64 _logical_and_op(s64 a, s64 b) { return (s64)((bool)a && (bool)b); }
+    using LogicalAndOp = BinaryOp<_logical_and_op>;
+
     template<s64 (*T)(s64)>
     class UnaryOp : public BaseExpressionNode {
     public:
@@ -569,6 +589,8 @@ public:
         return std::make_shared<BaseExpressionNodes::ExpressionList>(list);
     }
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // BinaryOps
     BN CreateAddOp(BN& left, std::string const& display, BN& right) {
         return std::make_shared<BaseExpressionNodes::AddOp>(left, display, right);
     }
@@ -617,6 +639,32 @@ public:
         return std::make_shared<BaseExpressionNodes::NotEqualToOp>(left, display, right);
     }
 
+    BN CreateLessThanOp(BN& left, std::string const& display, BN& right) {
+        return std::make_shared<BaseExpressionNodes::LessThanOp>(left, display, right);
+    }
+
+    BN CreateGreaterThanOp(BN& left, std::string const& display, BN& right) {
+        return std::make_shared<BaseExpressionNodes::GreaterThanOp>(left, display, right);
+    }
+
+    BN CreateLessThanOrEqualOp(BN& left, std::string const& display, BN& right) {
+        return std::make_shared<BaseExpressionNodes::LessThanOrEqualOp>(left, display, right);
+    }
+
+    BN CreateGreaterThanOrEqualOp(BN& left, std::string const& display, BN& right) {
+        return std::make_shared<BaseExpressionNodes::GreaterThanOrEqualOp>(left, display, right);
+    }
+
+    BN CreateLogicalOrOp(BN& left, std::string const& display, BN& right) {
+        return std::make_shared<BaseExpressionNodes::LogicalOrOp>(left, display, right);
+    }
+
+    BN CreateLogicalAndOp(BN& left, std::string const& display, BN& right) {
+        return std::make_shared<BaseExpressionNodes::LogicalAndOp>(left, display, right);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // UnaryOps
     BN CreatePositiveOp(std::string const& display, BN& right) {
         return std::make_shared<BaseExpressionNodes::PositiveOp>(display, right);
     }
@@ -701,20 +749,22 @@ protected:
     int parens_depth;
 
 protected:
-    virtual std::shared_ptr<BaseExpressionNode> ParseExpressionList    (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-    virtual std::shared_ptr<BaseExpressionNode> ParseExpression        (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-    virtual std::shared_ptr<BaseExpressionNode> ParseOrExpression      (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-    virtual std::shared_ptr<BaseExpressionNode> ParseXorExpression     (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-    virtual std::shared_ptr<BaseExpressionNode> ParseAndExpression     (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-    virtual std::shared_ptr<BaseExpressionNode> ParseEqualityExpression(std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-    virtual std::shared_ptr<BaseExpressionNode> ParseShiftExpression   (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-    virtual std::shared_ptr<BaseExpressionNode> ParseAddExpression     (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-    virtual std::shared_ptr<BaseExpressionNode> ParseMulExpression     (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-    virtual std::shared_ptr<BaseExpressionNode> ParsePowerExpression   (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-    virtual std::shared_ptr<BaseExpressionNode> ParseUnaryExpression   (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-    virtual std::shared_ptr<BaseExpressionNode> ParsePrimaryExpression (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-    virtual std::shared_ptr<BaseExpressionNode> ParseParenExpression   (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
-
+    virtual std::shared_ptr<BaseExpressionNode> ParseExpressionList      (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseExpression          (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseLogicalOrExpression (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseLogicalAndExpression(std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseOrExpression        (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseXorExpression       (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseAndExpression       (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseEqualityExpression  (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseRelationalExpression(std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseShiftExpression     (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseAddExpression       (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseMulExpression       (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParsePowerExpression     (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseUnaryExpression     (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParsePrimaryExpression   (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
+    virtual std::shared_ptr<BaseExpressionNode> ParseParenExpression     (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
 };
 
 ////////////////////////////////////////////////////////////////////////////////

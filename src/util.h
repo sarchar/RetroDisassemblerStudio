@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <utility>
 
 typedef unsigned char u8;
 typedef signed char s8;
@@ -121,5 +122,15 @@ inline bool file_exists(std::string const& name)
 {
     std::ifstream f(name);
     return f.good();
+}
+
+// from https://stackoverflow.com/questions/66588729/is-there-an-alternative-to-stdbind-that-doesnt-require-placeholders-if-functi
+// TODO convert the whole of the code base away from std::bind
+template<typename Func, typename Obj>
+inline auto quick_bind(Func f, Obj* obj) 
+{
+    return [=](auto&&... args) {
+        return (obj->*f)(std::forward<decltype(args)>(args)...);
+    };
 }
 

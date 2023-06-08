@@ -109,6 +109,7 @@ public:
     // checks the addressing mode. Calling MemoryRegion::SetOperandExpression bypasses this
     bool SetOperandExpression(GlobalMemoryLocation const&, std::shared_ptr<Expression>&, std::string& errmsg);
 
+    std::shared_ptr<ExpressionNodeCreator> GetNodeCreator();
 
     int GetSortableMemoryLocation(GlobalMemoryLocation const& s) {
         int ret = s.address;
@@ -237,7 +238,6 @@ private:
         bool long_mode_labels; // call SetLongMode(true) on all labels
     };
 
-    std::shared_ptr<ExpressionNodeCreator> GetNodeCreator();
     bool ExploreExpressionNodeCallback(std::shared_ptr<BaseExpressionNode>&, std::shared_ptr<BaseExpressionNode> const&, int, void*);
 	bool DetermineAddressingMode(std::shared_ptr<Expression>&, ADDRESSING_MODE*, s64*, std::string&);
 

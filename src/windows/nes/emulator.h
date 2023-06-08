@@ -201,6 +201,9 @@ public:
     enum class CheckBreakpointMode { READ, WRITE, EXECUTE };
     void CheckBreakpoints(u16 address, CheckBreakpointMode mode);
 
+    // expression state nodes
+    bool FixupExpression(std::shared_ptr<BaseExpression> const&, std::string&);
+
     // signals
     // be careful using breakpoint_hit signal, as it's emitted from the emulation thread and not the main
     // render thread. you should only set a flag and check the state of that flag in the main render thread
@@ -281,6 +284,16 @@ private:
     bool LoadSaveState(std::shared_ptr<SaveStateInfo> const&);
     std::vector<std::shared_ptr<SaveStateInfo>> save_states;
 
+    // expressions and state variables
+    struct ExploreData {
+        std::string& errmsg;
+    };
+    bool ExploreCallback(std::shared_ptr<BaseExpressionNode>&, std::shared_ptr<BaseExpressionNode> const&, int, void*);
+    typedef std::function<s64()> get_state_t;
+    std::unordered_map<std::string, get_state_t> state_variable_table;
+    void CreateStateVariableTable();
+
+    // popups
     struct {
         struct {
             bool show = false;
