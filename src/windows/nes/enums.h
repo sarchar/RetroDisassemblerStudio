@@ -80,9 +80,9 @@ private:
 
     // our list of enums can be grouped by enum or just a list of all the elements
     void RenderEnumRows();
-    void RenderEnumElement(std::shared_ptr<EnumElement> const&);
+    void RenderEnumElement(std::shared_ptr<EnumElement> const&, bool);
     std::vector<std::shared_ptr<Enum>> enums;
-
+    std::vector<std::shared_ptr<EnumElement>> all_enum_elements;
     std::unordered_map<std::shared_ptr<Enum>, std::vector<std::shared_ptr<EnumElement>>> enum_elements;
 };
 

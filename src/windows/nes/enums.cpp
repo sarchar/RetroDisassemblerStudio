@@ -64,18 +64,26 @@ void Enums::Resort()
 {
     enums.clear();
     enum_elements.clear();
+    all_enum_elements.clear();
 
     GetSystem()->IterateEnums([this](shared_ptr<Enum> const& e) {
-        enums.push_back(e);
+        if(group_by_enum) {
+            enums.push_back(e);
+        }
+
         e->IterateElements([this, &e](shared_ptr<EnumElement> const& ee) {
-            enum_elements[e].push_back(ee);
+            if(group_by_enum) {
+                enum_elements[e].push_back(ee);
+            } else {
+                all_enum_elements.push_back(ee);
+            }
         });
 
         // no sorting?
         if(sort_column == -1) return;
 
         // sort the elements within the group
-        sort(enum_elements[e].begin(), enum_elements[e].end(), 
+        auto sort_func = 
             [this](shared_ptr<EnumElement> const& ee_a, shared_ptr<EnumElement> const& ee_b)->bool {
                 bool diff = false;
 
@@ -85,14 +93,22 @@ void Enums::Resort()
                 } else if(sort_column == 1) {
                     if(reverse_sort) diff = ee_b->cached_value <= ee_a->cached_value;
                     else             diff = ee_a->cached_value <= ee_b->cached_value;
+                } else if(sort_column == 2) {
+                    if(reverse_sort) diff = ee_b->GetNumReverseReferences() <= ee_a->GetNumReverseReferences();
+                    else             diff = ee_a->GetNumReverseReferences() <= ee_b->GetNumReverseReferences();
                 }
 
                 return diff;
-            }
-        );
+            };
+
+        if(group_by_enum) {
+            sort(enum_elements[e].begin(), enum_elements[e].end(), sort_func);
+        } else {
+            sort(all_enum_elements.begin(), all_enum_elements.end(), sort_func);
+        }
     });
 
-    if(sort_column == -1) return; // no sorting (sort by order added)
+    if(sort_column == -1 || !group_by_enum) return; // no sorting (sort by order added)
 
     // enum names are only sorted by by their name
     sort(enums.begin(), enums.end(), 
@@ -116,13 +132,19 @@ void Enums::Render()
         }
     }
 
-    ImGuiFlagButton(&group_by_enum, "G", "Group by parent Enum");
+    if(ImGuiFlagButton(&group_by_enum, "G", "Group by parent Enum")) {
+        need_resort = true;
+    }
+
     ImGui::SameLine(); ImGuiFlagButton(&value_view, "V", "Toggle expression/value view");
 
-    ImGui::SameLine();
-    if(ImGuiFlagButton(nullptr, "+", "Create new Enum")) {
-        creating_new_enum = true;
-        started_editing = true;
+    if(group_by_enum) {
+        ImGui::SameLine();
+        if(ImGuiFlagButton(nullptr, "+", "Create new Enum")) {
+            creating_new_enum = true;
+            started_editing = true;
+            edit_buffer = "";
+        }
     }
 
     ImGui::Separator();
@@ -158,8 +180,14 @@ void Enums::Render()
             sort_specs->SpecsDirty = false;
         }
 
-        RenderEnumRows();
-        RenderCreateNewEnumRow();
+        if(group_by_enum) {
+            RenderEnumRows();
+            RenderCreateNewEnumRow();
+        } else {
+            for(auto& ee: all_enum_elements) {
+                RenderEnumElement(ee, true);
+            }
+        }
 
         ImGui::EndTable();
     }
@@ -173,9 +201,6 @@ void Enums::RenderEnumRows()
 {
     for(auto& e : enums) {
         ImGui::TableNextRow();
-
-        stringstream ss;
-        ss << "enum " << e->GetName();
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////
         // render the selectable
@@ -194,6 +219,8 @@ void Enums::RenderEnumRows()
             ImGui::SameLine();
         }
 
+        stringstream ss;
+        ss << "enum " << e->GetName();
         auto open = ImGui::TreeNodeEx(ss.str().c_str(), ImGuiTreeNodeFlags_SpanFullWidth);
         ImGui::TableNextColumn();
         ImGui::TextDisabled("%d elements", enum_elements[e].size());
@@ -201,7 +228,7 @@ void Enums::RenderEnumRows()
         if(!open) continue;
 
         for(auto& ee : enum_elements[e]) {
-            RenderEnumElement(ee);
+            RenderEnumElement(ee, false);
         }
 
         RenderCreateNewEnumElementRow(e);
@@ -210,7 +237,7 @@ void Enums::RenderEnumRows()
     }
 }
 
-void Enums::RenderEnumElement(std::shared_ptr<EnumElement> const& ee)
+void Enums::RenderEnumElement(std::shared_ptr<EnumElement> const& ee, bool show_formatted_name)
 {
     ImGui::TableNextRow();
 
@@ -234,7 +261,7 @@ void Enums::RenderEnumElement(std::shared_ptr<EnumElement> const& ee)
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     // render the name column
     if(!(editing_name && ee == edit_enum_element)) {
-        ImGui::Text("%s", ee->GetName().c_str());
+        ImGui::Text("%s", (show_formatted_name ? ee->GetFormattedName("_") : ee->GetName()).c_str());
         if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
             edit_buffer = ee->GetName();
             edit_enum_element = ee;
@@ -278,10 +305,18 @@ void Enums::RenderEnumElement(std::shared_ptr<EnumElement> const& ee)
     if(!(editing_expression && ee == edit_enum_element)) { // not editing
         if(value_view) {
             ImGui::Text("$%X", ee->cached_value);
+            if(ImGui::IsItemHovered()) {
+                stringstream ss;
+                ss << *ee->GetExpression();
+                ImGui::SetTooltip("%s", ss.str().c_str());
+            }
         } else {
             stringstream ss;
             ss << *ee->GetExpression();
             ImGui::Text("%s", ss.str().c_str());
+            if(ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("$%X", ee->cached_value);
+            }
         }
 
         if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
