@@ -11,7 +11,7 @@ source code for old games.
 
 * Inline editing of code
 * Real time displays of memory
-* Watches, breakpoints, labels, defines
+* Watches, breakpoints, labels, defines, enums
 * Multiple running instances with separate state
 * Each instance contains its own collection of save states
 
