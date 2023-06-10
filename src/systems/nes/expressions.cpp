@@ -19,6 +19,7 @@ namespace Systems::NES {
 
 namespace ExpressionNodes {
 int Define::base_expression_node_id = 0;
+int EnumElement::base_expression_node_id = 0;
 int Label::base_expression_node_id = 0;
 int Immediate::base_expression_node_id = 0;
 int IndexedX::base_expression_node_id = 0;
@@ -27,12 +28,12 @@ int Accum::base_expression_node_id = 0;
 int SystemInstanceState::base_expression_node_id = 0;
 
 void Define::Print(std::ostream& ostream) {
-    ostream << define->GetString();
+    ostream << define->GetName();
 }
 
 bool Define::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator>) 
 {
-    WriteString(os, define->GetString());
+    WriteString(os, define->GetName());
     if(!os.good()) {
         errmsg = "Error saving Define expression";
         return false;
@@ -56,11 +57,50 @@ shared_ptr<Define> Define::Load(istream& is, string& errmsg, shared_ptr<BaseExpr
     return make_shared<Define>(define);
 }
 
+void EnumElement::Print(std::ostream& ostream) 
+{
+    ostream << enum_element->GetFormattedName("_");
+}
+
+bool EnumElement::Save(ostream& os, string& errmsg, shared_ptr<BaseExpressionNodeCreator>) 
+{
+    auto e = enum_element->parent_enum.lock();
+    assert(e);
+    WriteString(os, e->GetName());
+    WriteString(os, enum_element->GetName());
+
+    if(!os.good()) {
+        errmsg = "Error saving EnumElement node";
+        return false;
+    }
+
+    return true;
+}
+
+shared_ptr<EnumElement> EnumElement::Load(istream& is, string& errmsg, shared_ptr<BaseExpressionNodeCreator>&) 
+{
+    string enum_name, enum_element_name;
+    ReadString(is, enum_name);
+    ReadString(is, enum_element_name);
+    if(!is.good()) {
+        errmsg = "Error reading EnumElement node";
+        return nullptr;
+    }
+
+    auto system = GetSystem();
+    assert(system);
+    auto e = system->GetEnum(enum_name);
+    assert(e);
+    auto ee = e->GetElement(enum_element_name);
+    return make_shared<EnumElement>(ee);
+}
+
+
 Label::Label(GlobalMemoryLocation const& _where, int _nth, string const& _display)
     : where(_where), nth(_nth), display(_display), offset(0xDEADBEEF), long_mode(false)
 { }
 
-bool Label::NoteReference(GlobalMemoryLocation const& source) {
+bool Label::NoteReference(shared_ptr<GlobalMemoryLocation> const& source) {
     if(auto t = label.lock()) {
         // valid label
         t->NoteReference(source);
@@ -72,7 +112,7 @@ bool Label::NoteReference(GlobalMemoryLocation const& source) {
     return false;
 }
 
-void Label::RemoveReference(GlobalMemoryLocation const& where) {
+void Label::RemoveReference(shared_ptr<GlobalMemoryLocation> const& where) {
     if(auto t = label.lock()) {
         t->RemoveReference(where);
     }
@@ -189,6 +229,8 @@ void ExpressionNodeCreator::RegisterExpressionNodes()
     RegisterBaseExpressionNode<ExpressionNodes::Label>();
 
     RegisterBaseExpressionNode<ExpressionNodes::SystemInstanceState>();
+
+    RegisterBaseExpressionNode<ExpressionNodes::EnumElement>();
 }
 
 // we're going to interject immediate operands into the expression by letting

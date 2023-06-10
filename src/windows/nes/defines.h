@@ -42,17 +42,32 @@ protected:
     void Render() override;
 
 private:
+    void RenderToolBar();
     void DefineCreated(std::shared_ptr<Systems::NES::Define> const&);
 
     std::weak_ptr<Systems::NES::System> current_system;
-    int selected_row;
+    int selected_row = -1;
     int context_row = 0;
 
+    // defines
     std::vector<std::weak_ptr<Systems::NES::Define>> defines;
-    bool force_reiterate;
-    bool force_resort;
+    void Resort();
+    bool need_reiterate = true;
+    bool need_resort = true;
+    bool case_sensitive_sort = false;
+    int  sort_column = -1;
+    bool reverse_sort = false;
 
-    bool case_sensitive_sort;
+    // creating and editing new defines
+    void RenderCreateNewDefineRow();
+    void RenderExpressionColumn(std::shared_ptr<Define> const&);
+    bool creating_new_define = false;
+    bool editing_expression = false;
+    bool started_editing = false;
+    std::string edit_buffer;
+    bool wait_dialog = false;
+    std::string wait_dialog_message;
+    std::shared_ptr<Systems::NES::Define> edit_define;
 
     std::shared_ptr<Systems::NES::Define> highlight;
 

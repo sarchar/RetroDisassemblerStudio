@@ -308,7 +308,7 @@ namespace BaseExpressionNodes {
     inline s64 _lshift_op(s64 a, s64 b) { return a << b; }
     using LShiftOp = BinaryOp<_lshift_op>;
 
-    inline s64 _rshift_op(s64 a, s64 b) { return a << b; }
+    inline s64 _rshift_op(s64 a, s64 b) { return a >> b; }
     using RShiftOp = BinaryOp<_rshift_op>;
 
     inline s64 _equalto_op(s64 a, s64 b) { return (s64)(a == b); }
@@ -767,31 +767,3 @@ protected:
     virtual std::shared_ptr<BaseExpressionNode> ParseParenExpression     (std::shared_ptr<Tenderizer>&, std::shared_ptr<BaseExpressionNodeCreator>&, std::string&, int&);
 };
 
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-class ExpressionNodeCreator : public BaseExpressionNodeCreator {
-public:
-    ExpressionNodeCreator()
-    {
-    }
-
-    virtual ~ExpressionNodeCreator()
-    {
-    }
-};
-
-class Expression : public BaseExpression {
-public:
-    Expression()
-    {
-    }
-
-    virtual ~Expression()
-    {
-    }
-
-    virtual std::shared_ptr<BaseExpressionNodeCreator> GetNodeCreator()
-    {
-        return std::make_shared<ExpressionNodeCreator>();
-    }
-};

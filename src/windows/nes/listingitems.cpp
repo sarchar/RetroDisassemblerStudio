@@ -22,6 +22,7 @@
 #include "windows/nes/references.h"
 
 #include "systems/nes/disasm.h"
+#include "systems/nes/enum.h"
 #include "systems/nes/expressions.h"
 #include "systems/nes/label.h"
 #include "systems/nes/memory.h"
@@ -153,6 +154,15 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
     // losing selection can happen without focus
     if(!selected) {
         edit_mode = EDIT_NONE;
+    }
+
+    // make sure the suggestion popup is closed when not editing
+    if(edit_mode == EDIT_NONE && ImGui::IsPopupOpen("##suggestion")) {
+        if(ImGui::BeginPopup("##suggestions")) {
+            // kinda feels like a ClosePopup() function should exist
+            ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
     }
 
     float bp_size = ImGui::GetTextLineHeight();
@@ -357,9 +367,15 @@ void ListingItemPrimary::RecalculateSuggestions(shared_ptr<System>& system)
     });
     
     system->IterateDefines([this, &bufstr](shared_ptr<Define>& define) {
-        auto define_name = define->GetString();
+        auto define_name = define->GetName();
         if(define_name.find(bufstr) == 0) {
             suggestions.push_back(define);
+        }
+    });
+
+    system->IterateEnumElements([this, &bufstr](shared_ptr<EnumElement> const& ee) {
+        if(ee->GetName().find(bufstr) == 0 || ee->GetFormattedName("_").find(bufstr) == 0) {
+            suggestions.push_back(ee);
         }
     });
     
@@ -368,12 +384,16 @@ void ListingItemPrimary::RecalculateSuggestions(shared_ptr<System>& system)
         if(auto const label = get_if<shared_ptr<Label>>(&a)) {
             a_str = (*label)->GetString();
         } else if(auto const define = get_if<shared_ptr<Define>>(&a)) {
-            a_str = (*define)->GetString();
+            a_str = (*define)->GetName();
+        } else if(auto const ee = get_if<shared_ptr<EnumElement>>(&a)) {
+            a_str = (*ee)->GetName();
         }
         if(auto const label = get_if<shared_ptr<Label>>(&b)) {
             b_str = (*label)->GetString();
         } else if(auto const define = get_if<shared_ptr<Define>>(&b)) {
-            b_str = (*define)->GetString();
+            b_str = (*define)->GetName();
+        } else if(auto const ee = get_if<shared_ptr<EnumElement>>(&b)) {
+            b_str = (*ee)->GetName();
         }
                 
         return a_str <= b_str;
@@ -433,9 +453,9 @@ void ListingItemPrimary::RenderEditOperandExpression(shared_ptr<System>& system)
     // react to the text changing by changing the suggestions. cursor position is set in the callback
     if(tmp_buffer != edit_buffer) {
         edit_buffer = tmp_buffer;
-        // TODO the inefficient version here loops over every label every time the buffer changes, but we could improve
+        // TODO the inefficient version here loops over every name every time the buffer changes, but we could improve
         // the situation by only doing that with backspace but filtering the set more when characters are added.
-        // we'll see in the future how performance looks when we have lots of labels
+        // we'll see in the future how performance looks when we have lots of items
         RecalculateSuggestions(system);
     }
     
@@ -451,19 +471,26 @@ void ListingItemPrimary::RenderEditOperandExpression(shared_ptr<System>& system)
                 | ImGuiWindowFlags_ChildWindow)) {
 
         for(int i = 0; i < suggestions.size(); i++) {
-            stringstream ss;
+            stringstream disp, repl;
             if(auto label = get_if<shared_ptr<Label>>(&suggestions[i])) {
-                ss << (*label)->GetString();
+                disp << (*label)->GetString() << " (label)";  
+                repl << (*label)->GetString();
             } else if(auto define = get_if<shared_ptr<Define>>(&suggestions[i])) {
-                ss << (*define)->GetString(); 
+                disp << (*define)->GetName() << " (define)"; 
+                repl << (*define)->GetName(); 
+            } else if(auto ee = get_if<shared_ptr<EnumElement>>(&suggestions[i])) {
+                auto e = (*ee)->parent_enum.lock();
+                if(!e) continue;
+                disp << (*ee)->GetFormattedName("_") << " (enum)";
+                repl << (*ee)->GetFormattedName("_");
             }
     
-            string s = ss.str();
-            if(ImGui::Selectable(s.c_str())) {
+            string display_str = disp.str();
+            if(ImGui::Selectable(display_str.c_str())) {
                 ImGui::ClearActiveID();
 
                 if(suggestion_start != -1) {
-                    edit_buffer = edit_buffer.substr(0, suggestion_start) + s;
+                    edit_buffer = edit_buffer.substr(0, suggestion_start) + repl.str();
                     RecalculateSuggestions(system);
 
                     // Close the popup, and restart editing which will refocus on the inputtext

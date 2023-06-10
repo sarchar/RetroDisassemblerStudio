@@ -9,10 +9,12 @@
 
 #include "systems/expressions.h"
 #include "systems/nes/defines.h"
+#include "systems/nes/enum.h"
 #include "systems/nes/memory.h"
 
 namespace Systems::NES {
 
+class EnumElement;
 class Label;
 
 class ExpressionNode : public BaseExpressionNode {
@@ -50,6 +52,38 @@ namespace ExpressionNodes {
         std::shared_ptr<NES::Define> define;
     };
 
+    class EnumElement : public ExpressionNode {
+    public:
+        EnumElement(std::shared_ptr<NES::EnumElement> const& _enum_element)
+            : enum_element(_enum_element) {}
+        virtual ~EnumElement() { }
+
+        static int base_expression_node_id;
+        int GetExpressionNodeType() const override { return EnumElement::base_expression_node_id; }
+
+        std::shared_ptr<NES::EnumElement> const& GetEnumElement() const { return enum_element; }
+
+        // EnumElement evaluate to a simple constant
+        bool Evaluate(s64* result, std::string& errmsg) const override {
+            *result = enum_element->cached_value;
+            return true;
+        }
+
+        // EnumElement has no child ExpressionNode
+        bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {
+            return true;
+        }
+
+        void Print(std::ostream& ostream) override;
+
+        bool Save(std::ostream& os, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>) override;
+        static std::shared_ptr<EnumElement> Load(std::istream& is, std::string& errmsg, std::shared_ptr<BaseExpressionNodeCreator>&);
+
+    private:
+        std::shared_ptr<NES::EnumElement> enum_element;
+    };
+
+
     class Label : public ExpressionNode {
     public:
         Label(GlobalMemoryLocation const&, int _nth, std::string const& _display);
@@ -58,8 +92,8 @@ namespace ExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return Label::base_expression_node_id; }
 
-        bool NoteReference(GlobalMemoryLocation const&);
-        void RemoveReference(GlobalMemoryLocation const&);
+        bool NoteReference(std::shared_ptr<GlobalMemoryLocation> const&);
+        void RemoveReference(std::shared_ptr<GlobalMemoryLocation> const&);
 
         void SetLongMode(bool _v) { long_mode = _v; }
 
@@ -379,6 +413,10 @@ public:
         return std::make_shared<ExpressionNodes::Define>(define);
     }
 
+    BN CreateEnumElement(std::shared_ptr<EnumElement> const& enum_element) {
+        return std::make_shared<ExpressionNodes::EnumElement>(enum_element);
+    }
+
     BN CreateLabel(GlobalMemoryLocation const& label_address, int nth, std::string const& display) {
         return std::make_shared<ExpressionNodes::Label>(label_address, nth, display);
     }
@@ -392,6 +430,15 @@ class Expression : public BaseExpression {
 public:
     std::shared_ptr<BaseExpressionNodeCreator> GetNodeCreator() override {
         return std::make_shared<ExpressionNodeCreator>();
+    }
+
+    // attempt to create an expression from a string, throwing away the error message
+    static std::shared_ptr<BaseExpression> FromString(std::string const& s) {
+        int errloc;
+        std::string errmsg;
+        auto expr = std::make_shared<Expression>();
+        if(expr->Set(s, errmsg, errloc)) return expr;
+        return nullptr;
     }
 
 protected:

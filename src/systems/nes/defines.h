@@ -7,79 +7,49 @@
 
 #include <memory>
 #include <string>
-#include <unordered_set>
-#include <variant>
-
-#include "signals.h"
 
 #include "systems/nes/memory.h"
+#include "systems/nes/referenceable.h"
+
+class BaseExpression;
 
 namespace Systems::NES {
 
-class Expression;
-
-class Define : public std::enable_shared_from_this<Define> {
+// Defines can be referenced by memory and other defines
+class Define : public std::enable_shared_from_this<Define>, 
+               public Systems::Referenceable<GlobalMemoryLocation, Define> {
 public:
-    typedef std::variant<GlobalMemoryLocation, std::shared_ptr<Define>> reverse_reference_type;
-
-    // signals
-    typedef signal<std::function<void()>> reverse_references_changed_t;
-    std::shared_ptr<reverse_references_changed_t> reverse_references_changed;
-
-    Define(std::string const&, std::shared_ptr<Expression>&);
+    Define(std::string const&);
     ~Define();
 
     void SetReferences();
+    void ClearReferences();
 
     void SetString(std::string const& s) { name = s; }
+    bool SetExpression(std::string const&, std::string&);
+    bool SetExpression(std::shared_ptr<BaseExpression> const&, std::string&);
 
-    std::string                 const& GetString()        const { return name; }
-    std::shared_ptr<Expression> const& GetExpression()    const { return expression; }
-
-    int     GetNumReverseReferences() const { return reverse_references.size(); }
-
-    template<class T>
-    void    NoteReference(T const& t) {
-        int size = reverse_references.size();
-        reverse_references.insert(t);
-        if(reverse_references.size() != size) reverse_references_changed->emit();
-    }
-
-    template<class T>
-    int RemoveReference(T const& t) {
-        int size = reverse_references.size();
-        auto ret = reverse_references.erase(t);
-        if(reverse_references.size() != size) reverse_references_changed->emit();
-        return ret;
-    }
-
-    template<typename F>
-    void IterateReverseReferences(F func) {
-        int i = 0;
-        for(auto& v : reverse_references) {
-            func(i++, v);
-        }
-    }
+    std::string                     const& GetName()       const { return name; }
+    std::shared_ptr<BaseExpression> const& GetExpression() const { return expression; }
 
     s64 Evaluate();
-    std::string const& GetExpressionString();
+    std::string GetExpressionString();
 
     bool Save(std::ostream&, std::string&);
     static std::shared_ptr<Define> Load(std::istream&, std::string&);
+
+    bool operator==(Define const& other) {
+        return name == other.name;
+    }
+
+    // signals
+
 private:
-    std::string                       name;
-    std::shared_ptr<Expression>       expression;
+    std::string                     name;
+    std::shared_ptr<BaseExpression> expression;
 
     bool cached = false;
     s64 cached_value;
-
-    bool cached_expression_string = false;
-    std::string expression_string;
-
-    // anything that refers to this define:
-    // * memory location/code
-    // * another define
-    std::unordered_set<reverse_reference_type>       reverse_references;
 };
 
 }

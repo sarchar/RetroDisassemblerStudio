@@ -12,18 +12,17 @@
 #include "signals.h"
 
 #include "systems/nes/memory.h"
+#include "systems/nes/referenceable.h"
 
 namespace Systems::NES {
 
-class Label : public std::enable_shared_from_this<Label> {
+class Label : public std::enable_shared_from_this<Label>, 
+              public Systems::Referenceable<GlobalMemoryLocation> {
 public:
     Label(GlobalMemoryLocation const&, std::string const&);
     ~Label();
 
     // signals
-    typedef signal<std::function<void()>> reverse_references_changed_t;
-    std::shared_ptr<reverse_references_changed_t> reverse_references_changed;
-
     typedef signal<std::function<void(std::shared_ptr<Label>, int)>> index_changed_t;
     std::shared_ptr<index_changed_t> index_changed;
 
@@ -34,39 +33,17 @@ public:
     GlobalMemoryLocation const& GetMemoryLocation() const { return memory_location; }
     std::string          const& GetString()         const { return label; }
 
-    int GetNumReverseReferences() const { 
-        return reverse_references.size(); 
-    }
-
-    void NoteReference(GlobalMemoryLocation const& where) {
-        int size = reverse_references.size();
-        reverse_references.insert(where);
-        if(reverse_references.size() != size) reverse_references_changed->emit();
-    }
-
-    int RemoveReference(GlobalMemoryLocation const& where) {
-        int size = reverse_references.size();
-        auto ret = reverse_references.erase(where);
-        if(reverse_references.size() != size) reverse_references_changed->emit();
-        return ret;
-    }
-
-    template<typename F>
-    void IterateReverseReferences(F func) {
-        int i = 0;
-        for(auto& where : reverse_references) {
-            func(i++, where);
-        }
-    }
-
     bool Save(std::ostream&, std::string&);
     static std::shared_ptr<Label> Load(std::istream&, std::string&);
+
+    bool operator==(Label const& other) {
+        return label == other.label;
+    }
+
 private:
     int                  index;  // not serialized in save, calculated in at runtime
     GlobalMemoryLocation memory_location;
     std::string          label;
-
-    std::unordered_set<GlobalMemoryLocation> reverse_references;
 };
 
 }

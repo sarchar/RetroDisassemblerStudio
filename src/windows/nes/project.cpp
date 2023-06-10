@@ -260,50 +260,50 @@ void Project::RenderPopups()
 
 void Project::RenderCreateNewDefinePopup()
 {
-    int ret = 0;
-
-    // Do the OKPopup instead
-    if(popups.ok.show) {
-        if(GetMainWindow()->OKPopup(popups.ok.title, popups.ok.content)) {
-            // return to editing the expression
-            popups.ok.show = false;
-        }
-
-        return;
-    }
-
-    // no further rendering if the dialog isn't visible
-    if(!StartPopup(popups.create_new_define.title, true)) return;
-
-    if(popups.create_new_define.focus) {
-        ImGui::SetKeyboardFocusHere();
-        popups.create_new_define.focus = false;
-    }
-    ImGui::InputText("Name", &popups.buffer1, 0);
-    ImGui::SetItemDefaultFocus();
-
-    if(ImGui::InputText("Expression", &popups.buffer2, ImGuiInputTextFlags_EnterReturnsTrue)) ret = 1; // enter was pressed
-
-    if((ret = EndPopup(ret)) != 0) {
-        if(ret > 0) {
-            cout << "creating define " << popups.buffer1 << " expr " << popups.buffer2 << endl;
-
-            // Try creating the define
-            if(auto system = GetSystem<System>()) {
-                string errmsg;
-                if(!system->AddDefine(popups.buffer1, popups.buffer2, errmsg)) {
-                    //cout << "could not create define: "<< errmsg << endl;
-                    popups.ok.title = "Expression";
-                    popups.ok.content = string("Error creating expression: ") + errmsg;
-                    popups.ok.show = true;
-                } else {
-                    popups.create_new_define.show = false;
-                }
-            }
-        } else {
-            popups.create_new_define.show = false;
-        }
-    }
+//!    int ret = 0;
+//!
+//!    // Do the OKPopup instead
+//!    if(popups.ok.show) {
+//!        if(GetMainWindow()->OKPopup(popups.ok.title, popups.ok.content)) {
+//!            // return to editing the expression
+//!            popups.ok.show = false;
+//!        }
+//!
+//!        return;
+//!    }
+//!
+//!    // no further rendering if the dialog isn't visible
+//!    if(!StartPopup(popups.create_new_define.title, true)) return;
+//!
+//!    if(popups.create_new_define.focus) {
+//!        ImGui::SetKeyboardFocusHere();
+//!        popups.create_new_define.focus = false;
+//!    }
+//!    ImGui::InputText("Name", &popups.buffer1, 0);
+//!    ImGui::SetItemDefaultFocus();
+//!
+//!    if(ImGui::InputText("Expression", &popups.buffer2, ImGuiInputTextFlags_EnterReturnsTrue)) ret = 1; // enter was pressed
+//!
+//!    if((ret = EndPopup(ret)) != 0) {
+//!        if(ret > 0) {
+//!            cout << "creating define " << popups.buffer1 << " expr " << popups.buffer2 << endl;
+//!
+//!            // Try creating the define
+//!            if(auto system = GetSystem<System>()) {
+//!                string errmsg;
+//!                if(!system->AddDefine(popups.buffer1, popups.buffer2, errmsg)) {
+//!                    //cout << "could not create define: "<< errmsg << endl;
+//!                    popups.ok.title = "Expression";
+//!                    popups.ok.content = string("Error creating expression: ") + errmsg;
+//!                    popups.ok.show = true;
+//!                } else {
+//!                    popups.create_new_define.show = false;
+//!                }
+//!            }
+//!        } else {
+//!            popups.create_new_define.show = false;
+//!        }
+//!    }
 }
 
 void Project::ChildWindowAdded(std::shared_ptr<BaseWindow> const& window)

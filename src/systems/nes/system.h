@@ -23,11 +23,21 @@ class Cartridge;
 class CartridgeView;
 class Define;
 class Disassembler;
+class Enum;
+class EnumElement;
 class Expression;
 class ExpressionNodeCreator;
 class Label;
 class ProgramRomBank;
 class SystemView;
+
+#define FIXUP_LABELS           (1 << 0)
+#define FIXUP_DEFINES          (1 << 1)
+#define FIXUP_DEREFS           (1 << 2)
+#define FIXUP_ENUMS            (1 << 3)
+#define FIXUP_ADDRESSING_MODES (1 << 4)
+#define FIXUP_LONG_LABELS      (1 << 5)
+typedef int FixupFlags;
 
 class System : public ::BaseSystem {
 public:
@@ -43,6 +53,16 @@ public:
 
     typedef signal<std::function<void(std::shared_ptr<Label> const&, int)>> label_deleted_t;
     std::shared_ptr<label_deleted_t> label_deleted;
+
+    typedef signal<std::function<void(std::shared_ptr<Enum> const&)>> enum_created_t;
+    std::shared_ptr<enum_created_t> enum_created;
+    std::shared_ptr<enum_created_t> enum_deleted;
+
+    typedef signal<std::function<void(std::shared_ptr<EnumElement> const&)>> enum_element_added_t;
+    typedef signal<std::function<void(std::shared_ptr<EnumElement> const&, s64)>> enum_element_changed_t;
+    std::shared_ptr<enum_element_added_t>   enum_element_added;
+    std::shared_ptr<enum_element_changed_t> enum_element_changed;
+    std::shared_ptr<enum_element_added_t>   enum_element_deleted;
 
     // On-demand new signal handlers for specific addresses
     std::shared_ptr<label_created_t> LabelCreatedAt(GlobalMemoryLocation const& where) {
@@ -97,13 +117,7 @@ public:
     void MarkMemoryAsString(GlobalMemoryLocation const&, u32 byte_count);
 
     // Convert units like Names into defines and labels 
-    // TODO this is now silly enough that the bools should be a single flag parameter instead
-    bool FixupExpression(std::shared_ptr<BaseExpression> const&, std::string&,
-            bool allow_labels = true,
-            bool allow_defines = true,
-            bool allow_deref = true,
-            bool allow_addressing_modes = false,
-            bool long_mode_labels = false);
+    bool FixupExpression(std::shared_ptr<BaseExpression> const&, std::string&, FixupFlags);
 
     // Set the operand_expression at a memory location. System::SetOperandExpression performs a FixupExpression and
     // checks the addressing mode. Calling MemoryRegion::SetOperandExpression bypasses this
@@ -128,19 +142,14 @@ public:
 
     // Defines
     void CreateDefaultDefines(); // for new projects
-    std::shared_ptr<Define> AddDefine(std::string const& name, std::string const&, std::string& errmsg);
+    std::shared_ptr<Define> CreateDefine(std::string const& name, std::string& errmsg);
     std::shared_ptr<Define> FindDefine(std::string const& name) {
-        if(define_by_name.contains(name)) return define_by_name[name];
+        if(defines.contains(name)) return defines[name];
         return nullptr;
     }
 
     template <typename F>
-    void IterateDefines(F cb) {
-        for(auto iter : define_by_name) {
-            std::shared_ptr<Define> define = iter.second;
-            cb(define);
-        }
-    }
+    void IterateDefines(F cb) { for(auto iter: defines) cb(iter.second); }
 
     // Labels
     void CreateDefaultLabels(); // for new projects
@@ -166,6 +175,34 @@ public:
     std::shared_ptr<Label> GetOrCreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
     std::shared_ptr<Label> CreateLabel(GlobalMemoryLocation const&, std::string const&, bool was_user_created = false);
     std::shared_ptr<Label> EditLabel(GlobalMemoryLocation const&, std::string const&, int nth, bool was_user_edited = false);
+
+    // Enums
+    std::shared_ptr<Enum>               CreateEnum(std::string const&);
+    std::shared_ptr<Enum>        const& GetEnum(std::string const&);
+    std::shared_ptr<EnumElement> const& GetEnumElement(std::string const&);
+    bool                                DeleteEnum(std::shared_ptr<Enum> const&);
+
+    template<typename F>
+    void IterateEnums(F f) {
+        for(auto& iter : enums) {
+            f(iter.second);
+        }
+    }
+
+    template<typename F>
+    void IterateEnumElements(F f) {
+        for(auto& iter: enum_elements_by_name) {
+            f(iter.second);
+        };
+    }
+
+    template<typename F>
+    void IterateEnumElements(F f, s64 v) {
+        if(!enum_elements_by_value.contains(v)) return;
+        for(auto& ee : enum_elements_by_value[v]) {
+            f(ee);
+        }
+    }
 
     // Comments
     void GetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, std::string& out) {
@@ -207,11 +244,18 @@ private:
     std::shared_ptr<NES::Cartridge> cartridge;
 
     // label database
-    std::unordered_map<std::string, std::shared_ptr<Label>> label_database = {};
+    std::unordered_map<std::string, std::shared_ptr<Label>> label_database{};
 
     // defines database
-    std::vector<std::shared_ptr<Define>> defines = {};
-    std::unordered_map<std::string, std::shared_ptr<Define>> define_by_name = {};
+    std::unordered_map<std::string, std::shared_ptr<Define>> defines{};
+
+    // enum database
+    void EnumElementAdded(std::shared_ptr<EnumElement> const&);
+    void EnumElementChanged(std::shared_ptr<EnumElement> const&, std::string const&, s64);
+    void EnumElementDeleted(std::shared_ptr<EnumElement> const&);
+    std::unordered_map<std::string, std::shared_ptr<Enum>> enums{};
+    std::unordered_map<std::string, std::shared_ptr<EnumElement>> enum_elements_by_name{};
+    std::unordered_map<s64, std::vector<std::shared_ptr<EnumElement>>> enum_elements_by_value{};
 
     void NoteReferences();
 
@@ -236,6 +280,9 @@ private:
         std::vector<std::string> undefined_names; // All other Names that were not labels or defines
 
         bool long_mode_labels; // call SetLongMode(true) on all labels
+
+        bool allow_enums;     // allow looking up Enums
+        std::vector<std::shared_ptr<EnumElement>> enum_elements;
     };
 
     bool ExploreExpressionNodeCallback(std::shared_ptr<BaseExpressionNode>&, std::shared_ptr<BaseExpressionNode> const&, int, void*);

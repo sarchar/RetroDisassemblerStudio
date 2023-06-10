@@ -12,7 +12,6 @@ namespace Systems::NES {
 Label::Label(GlobalMemoryLocation const& where, std::string const& label_str)
     : memory_location(where), label(label_str)
 {
-    reverse_references_changed = make_shared<reverse_references_changed_t>();
     index_changed = make_shared<index_changed_t>();
 }
 

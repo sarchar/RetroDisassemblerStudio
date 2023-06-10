@@ -27,6 +27,7 @@
 #include "systems/nes/ppu.h"
 #include "systems/nes/system.h"
 
+#include "windows/nes/enums.h"
 #include "windows/nes/emulator.h"
 #include "windows/nes/defines.h"
 #include "windows/nes/labels.h"
@@ -35,6 +36,8 @@
 #include "windows/nes/regions.h"
 
 using namespace std;
+
+using FixupFlags = Systems::NES::FixupFlags;
 
 namespace Windows::NES {
 
@@ -188,17 +191,17 @@ void SystemInstance::CreateStateVariableTable()
 {
     auto& st = state_variable_table;
 
-    st["a"]     = [=]() { return (s64)cpu->GetA(); };
-    st["x"]     = [=]() { return (s64)cpu->GetX(); };
-    st["y"]     = [=]() { return (s64)cpu->GetY(); };
-    st["s"]     = [=]() { return (s64)cpu->GetS(); };
-    st["p"]     = [=]() { return (s64)cpu->GetP(); };
-    st["pc"]    = [=]() { return (s64)cpu->GetPC(); };
-    st["istep"] = [=]() { return (s64)cpu->GetIStep(); };
+    st["a"]     = [&]() { return (s64)cpu->GetA(); };
+    st["x"]     = [&]() { return (s64)cpu->GetX(); };
+    st["y"]     = [&]() { return (s64)cpu->GetY(); };
+    st["s"]     = [&]() { return (s64)cpu->GetS(); };
+    st["p"]     = [&]() { return (s64)cpu->GetP(); };
+    st["pc"]    = [&]() { return (s64)cpu->GetPC(); };
+    st["istep"] = [&]() { return (s64)cpu->GetIStep(); };
 
-    st["scanline"] = [=]() { return (s64)ppu->GetScanline(); };
-    st["ppucycle"] = [=]() { return (s64)ppu->GetCycle(); };
-    st["frame"]    = [=]() { return (s64)ppu->GetFrame(); };
+    st["scanline"] = [&]() { return (s64)ppu->GetScanline(); };
+    st["ppucycle"] = [&]() { return (s64)ppu->GetCycle(); };
+    st["frame"]    = [&]() { return (s64)ppu->GetFrame(); };
 }
 
 void SystemInstance::RenderInstanceMenu()
@@ -206,7 +209,8 @@ void SystemInstance::RenderInstanceMenu()
     if(ImGui::BeginMenu("New Window")) {
         static char const * const window_types[] = {
             "Defines", "Regions", "Labels", "Listing", "Memory", 
-            "Screen", "PPUState", "CPUState", "Watch", "Breakpoints", "Memory"
+            "Screen", "PPUState", "CPUState", "Watch", "Breakpoints", "Memory",
+            "Enums"
         };
 
         for(int i = 0; i < IM_ARRAYSIZE(window_types); i++) {
@@ -285,9 +289,10 @@ void SystemInstance::CreateDefaultWorkspace()
     bpi->break_execute = true;
     SetBreakpoint(where, bpi);
 
-    CreateNewWindow("Regions");
+    //CreateNewWindow("Regions"); // not a default window
     CreateNewWindow("Defines");
     CreateNewWindow("Labels");
+    CreateNewWindow("Enums");
     CreateNewWindow("Listing");
     CreateNewWindow("Screen");
     CreateNewWindow("PPUState");
@@ -311,6 +316,9 @@ void SystemInstance::CreateNewWindow(string const& window_type)
         wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
     } else if(window_type == "Regions") {
         wnd = MemoryRegions::CreateWindow();
+        wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+    } else if(window_type == "Enums") {
+        wnd = Enums::CreateWindow();
         wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
     } else if(window_type == "Screen") {
         wnd = Screen::CreateWindow();
@@ -678,8 +686,9 @@ bool SystemInstance::SetBreakpointCondition(std::shared_ptr<BreakpointInfo> cons
     // before going to System::FixupExpression, set system state variables
     if(!FixupExpression(expression, errmsg)) return false;
 
-    // fixup the expression allowing labels, defines, derefs
-    if(!current_system->FixupExpression(expression, errmsg, true, true, true)) return false;
+    // fixup the expression allowing labels, defines, derefs, and enums
+    FixupFlags fixup_flags = FIXUP_DEFINES | FIXUP_LABELS | FIXUP_DEREFS | FIXUP_ENUMS;
+    if(!current_system->FixupExpression(expression, errmsg, fixup_flags)) return false;
 
     // now we need to Explore() and set the dereferences on the expression
     auto cb = [&](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
@@ -2005,13 +2014,6 @@ Watch::Watch()
     : BaseWindow()
 {
     SetTitle("Watch 1");
-
-    // TODO delete me someday
-    CreateWatch("*$00");
-    CreateWatch("*$01");
-    CreateWatch("*$02");
-    CreateWatch("*$03");
-    CreateWatch("*$04");
 }
 
 Watch::~Watch()
@@ -2329,8 +2331,9 @@ void Watch::SetWatch()
             // at the time the expression is evaluated
             if(GetMySystemInstance()->FixupExpression(expr, errmsg)) {
                 // expression was valid from a grammar point of view, now apply semantics
-                // allow labels, defines, derefs, but not addressing modes
-                if(GetSystem()->FixupExpression(expr, errmsg, true, true, true, false)) {
+                // allow labels, defines, derefs, and enums, but not addressing modes
+                FixupFlags fixup_flags = FIXUP_DEFINES | FIXUP_LABELS | FIXUP_DEREFS | FIXUP_ENUMS;
+                if(GetSystem()->FixupExpression(expr, errmsg, fixup_flags)) {
                     // Expression contained valid elements, now DereferenceOp nodes need evaluation functions set
                     if(SetDereferenceOp(watch_data)) {
                         // success, done editing and re-sort after adding
@@ -2733,7 +2736,8 @@ void Breakpoints::SetBreakpoint()
             if(GetMySystemInstance()->FixupExpression(expr, errmsg)) {
                 // expression was valid from a grammar point of view, now apply semantics
                 // allow labels, defines, no derefs, no modes
-                if(GetSystem()->FixupExpression(expr, errmsg, true, true, false, false, true)) {
+                FixupFlags fixup_flags = FIXUP_DEFINES | FIXUP_LABELS | FIXUP_ENUMS | FIXUP_LONG_LABELS;
+                if(GetSystem()->FixupExpression(expr, errmsg, fixup_flags)) {
                     // Expression contained valid elements, evaluate the function to determine where the breakpoint should be
                     s64 result;
                     if(expr->Evaluate(&result, errmsg)) {
@@ -3154,7 +3158,9 @@ void Memory::RenderAddressBar()
     // check if expression is valid
     if(expr->Set(address_text, errmsg, errloc, false)) {
         // fixup the expression, allowing labels, defines, derefs, no modes, long labels
-        if(GetSystem()->FixupExpression(expr, errmsg, true, true, true, false, true)) {
+        FixupFlags fixup_flags = FIXUP_DEFINES | FIXUP_LABELS | FIXUP_ENUMS | FIXUP_DEREFS
+                                 | FIXUP_LONG_LABELS;
+        if(GetSystem()->FixupExpression(expr, errmsg, fixup_flags)) {
             // now we need to Explore() and set the dereferences on the expression to be word lookups
             auto cb = [&](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
                 // skip everything that's not a DereferenceOp

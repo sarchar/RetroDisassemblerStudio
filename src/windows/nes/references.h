@@ -13,10 +13,12 @@
 #include "windows/basewindow.h"
 
 #include "systems/nes/memory.h"
+#include "systems/nes/referenceable.h"
 
 namespace Systems::NES {
 
 class Define;
+class EnumElement;
 class Label;
 class System;
 
@@ -27,14 +29,15 @@ namespace Windows::NES {
 class References : public BaseWindow {
 public:
     using Define               = Systems::NES::Define;
+    using EnumElement          = Systems::NES::EnumElement;
     using GlobalMemoryLocation = Systems::NES::GlobalMemoryLocation;
     using Label                = Systems::NES::Label;
     using System               = Systems::NES::System;
 
     typedef std::variant<
-        GlobalMemoryLocation,
         std::shared_ptr<Define>,
-        std::shared_ptr<Label>> reference_type;
+        std::shared_ptr<Label>,
+        std::shared_ptr<EnumElement>> reference_type;
 
     References();
     References(reference_type const&);
@@ -56,21 +59,28 @@ private:
     reference_type                   reference_to;
 
     int selected_row;
-    bool force_resort     = true;
-    bool force_repopulate = true;
+    bool need_resort     = true;
+    bool need_repopulate = true;
 
     signal_connection changed_connection;
     signal_connection label_deleted_connection;
 
     typedef std::variant<
-        GlobalMemoryLocation,
-        std::shared_ptr<Define>
+        std::shared_ptr<GlobalMemoryLocation>,
+        std::shared_ptr<Define>,
+        std::shared_ptr<EnumElement>
     > location_type;
     std::vector<location_type> locations;
 
     void PopulateLocations();
-    void PopulateDefineLocations(std::shared_ptr<Define>&);
-    void PopulateLabelLocations(std::shared_ptr<Label>&);
+
+    template <class T>
+    void PopulateLocations(std::shared_ptr<T>& target)
+    {
+        target->IterateReverseReferences([this](int i, T::reverse_reference_t const& rref) {
+			locations.push_back(variant_cast(rref));
+        }); // call to IterateReverseReferences
+    }
 };
 
 } //namespace Windows::NES

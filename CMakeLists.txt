@@ -55,6 +55,7 @@ add_executable(${PROJECT_NAME}
     src/systems/nes/cpu.cpp
     src/systems/nes/defines.cpp
     src/systems/nes/disasm.cpp
+    src/systems/nes/enum.cpp
     src/systems/nes/expressions.cpp
     src/systems/nes/label.cpp
     src/systems/nes/memory.cpp
@@ -68,6 +69,7 @@ add_executable(${PROJECT_NAME}
     
     src/windows/nes/defines.cpp
     src/windows/nes/emulator.cpp
+    src/windows/nes/enums.cpp
     src/windows/nes/labels.cpp
     src/windows/nes/listing.cpp
     src/windows/nes/listingitems.cpp

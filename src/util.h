@@ -11,6 +11,7 @@
 #include <iostream>
 #include <string>
 #include <utility>
+#include <variant>
 
 typedef unsigned char u8;
 typedef signed char s8;
@@ -134,3 +135,19 @@ inline auto quick_bind(Func f, Obj* obj)
     };
 }
 
+// from https://stackoverflow.com/questions/47203255/convert-stdvariant-to-another-stdvariant-with-super-set-of-types
+template <class... Args>
+struct variant_cast_proxy {
+    std::variant<Args...> v;
+
+    template <class... ToArgs>
+    operator std::variant<ToArgs...>() const {
+        return std::visit([](auto&& arg) -> std::variant<ToArgs...> { return arg ; }, v);
+    }
+};
+
+template <class... Args>
+auto variant_cast(const std::variant<Args...>& v) -> variant_cast_proxy<Args...>
+{
+    return {v};
+}

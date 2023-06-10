@@ -11,6 +11,7 @@
 #include "imgui_internal.h"
 
 #include "systems/nes/defines.h"
+#include "systems/nes/enum.h"
 #include "systems/nes/label.h"
 #include "systems/nes/memory.h"
 #include "systems/nes/system.h"
@@ -54,7 +55,7 @@ References::References(reference_type const& _reference_to)
         if(auto label = get_if<shared_ptr<Label>>(&reference_to)) {
             ss << (*label)->GetString();
             changed_connection = (*label)->reverse_references_changed->connect([this]() {
-                force_repopulate = true;
+                need_repopulate = true;
             });
 
             label_deleted_connection = system->label_deleted->connect([this, label](shared_ptr<Label> const& other, int nth) {
@@ -64,9 +65,14 @@ References::References(reference_type const& _reference_to)
                 }
             });
         } else if(auto define = get_if<shared_ptr<Define>>(&reference_to)) {
-            ss << (*define)->GetString();
+            ss << (*define)->GetName();
             changed_connection = (*define)->reverse_references_changed->connect([this]() {
-                force_repopulate = true;
+                need_repopulate = true;
+            });
+        } else if(auto ee = get_if<shared_ptr<EnumElement>>(&reference_to)) {
+            ss << (*ee)->GetName();
+            changed_connection = (*ee)->reverse_references_changed->connect([this]() {
+                need_repopulate = true;
             });
         }
 
@@ -84,10 +90,10 @@ References::~References()
 
 void References::Update(double deltaTime) 
 {
-    if(force_repopulate) {
+    if(need_repopulate) {
         PopulateLocations();
-        force_repopulate = false;
-        force_resort = true;
+        need_repopulate = false;
+        need_resort = true;
     }
 }
 
@@ -111,24 +117,26 @@ void References::Render()
         ImGui::TableHeadersRow();
 
         // Sort our data if sort specs have been changed!
-        if(ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs(); sort_specs->SpecsDirty || force_resort) {
+        if(ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs(); sort_specs->SpecsDirty || need_resort) {
             sort(locations.begin(), locations.end(), [&](location_type& a, location_type& b)->bool {
                 const ImGuiTableColumnSortSpecs* spec = &sort_specs->Specs[0];
 
-                bool diff; // result
+                bool diff = false; // result
 
                 // determine the types. Defines come before memory locations
-                auto a_memory = get_if<GlobalMemoryLocation>(&a);
+                auto a_memory = get_if<shared_ptr<GlobalMemoryLocation>>(&a);
                 auto a_define = get_if<shared_ptr<Define>>(&a);
-                auto b_memory = get_if<GlobalMemoryLocation>(&b);
+                auto a_ee     = get_if<shared_ptr<EnumElement>>(&a);
+                auto b_memory = get_if<shared_ptr<GlobalMemoryLocation>>(&b);
                 auto b_define = get_if<shared_ptr<Define>>(&b);
+                auto b_ee     = get_if<shared_ptr<EnumElement>>(&b);
 
-                if(a_define && b_memory) diff = true;
-                else if(a_memory && b_define) diff = false;
-                else if(a_memory && b_memory) {
-                    diff = system->GetSortableMemoryLocation(*a_memory) <= system->GetSortableMemoryLocation(*b_memory);
-                } else { // a_define && b_define
-                    diff = (*a_define)->GetString() <= (*b_define)->GetString(); // standard string compare
+                if(a_memory && b_memory) {
+                    diff = system->GetSortableMemoryLocation(**a_memory) <= system->GetSortableMemoryLocation(**b_memory);
+                } else if(a_define && b_define) {
+                    diff = (*a_define)->GetName() <= (*b_define)->GetName(); // standard string compare
+                } else if(a_ee && a_ee) {
+                    diff = (*a_ee)->GetName() <= (*b_ee)->GetName(); // standard string compare
                 }
 
                 // flip the direction if descending
@@ -145,7 +153,9 @@ void References::Render()
 
             stringstream ss;
             std::function<void()> go;
-            if(auto memory = get_if<GlobalMemoryLocation>(&location)) {
+            if(auto memory_ptr = get_if<shared_ptr<GlobalMemoryLocation>>(&location)) {
+                auto memory = *memory_ptr;
+
                 if(system->CanBank(*memory)) {
                     if(auto memory_region = system->GetMemoryRegion(*memory)) {
                         ss << memory_region->GetName() << ":";
@@ -160,14 +170,20 @@ void References::Render()
                     }
                 };
             } else if(auto define = get_if<shared_ptr<Define>>(&location)) {
-                ss << "Define: " << (*define)->GetString();
+                ss << "Define: " << (*define)->GetName();
 
-                go = [this, &define]() {
+                go = [this, define]() {
                     cout << WindowPrefix() << "TODO: Highlight define" << endl;
                     //!if(auto wnd = GetMySystemInstance()->FindMostRecentChildWindow<Windows::NES::Defines>()) {
                     //!    auto deref = *define;
                     //!    wnd->Highlight(deref);
                     //!}
+                };
+            } else if(auto ee = get_if<shared_ptr<EnumElement>>(&location)) {
+                ss << "Enum: " << (*ee)->GetFormattedName("_");
+
+                go = [this, ee]() {
+                    cout << WindowPrefix() << "TODO: Highlight enum" << endl;
                 };
             }
 
@@ -196,42 +212,8 @@ void References::Render()
 void References::PopulateLocations()
 {
     locations.clear();
-    if(auto label = get_if<shared_ptr<Label>>(&reference_to)) {
-        PopulateLabelLocations(*label);
-    } else if(auto define = get_if<shared_ptr<Define>>(&reference_to)) {
-        PopulateDefineLocations(*define);
-    }
+	std::visit([this](auto&& arg) { PopulateLocations(arg); }, reference_to);	
 }
-
-void References::PopulateDefineLocations(shared_ptr<Define>& define)
-{
-    auto system = current_system.lock();
-    if(!system) return;
-
-    define->IterateReverseReferences([this, &system](int i, Define::reverse_reference_type const& rref) {
-        if(auto where = get_if<GlobalMemoryLocation>(&rref)) {
-            locations.push_back(*where);
-        } else if(auto define_reference = get_if<shared_ptr<Define>>(&rref)) {
-            locations.push_back(*define_reference);
-        } else {
-            // unknown type
-            // TODO expressions
-            assert(false);
-            return;
-        }
-    }); // call to IterateReverseReferences
-}
-
-void References::PopulateLabelLocations(shared_ptr<Label>& label)
-{
-    auto system = current_system.lock();
-    if(!system) return;
-
-    label->IterateReverseReferences([this, &system](int i, GlobalMemoryLocation const& where) {
-        locations.push_back(where);
-    });
-}
-
 
 } //namespace Windows::NES
 

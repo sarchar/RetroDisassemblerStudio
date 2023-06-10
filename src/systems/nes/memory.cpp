@@ -869,13 +869,18 @@ void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
     // if there's no operand expresion, there are no references
     if(!operand_expression || !operand_expression->GetRoot()) return;
 
+    // Referencing always uses shared_ptr, so use where_ptr here
+    shared_ptr<GlobalMemoryLocation> where_ptr = make_shared<GlobalMemoryLocation>(where);
+
     // Explore operand_expression and mark each referenced define and label that we're referring to
-    auto cb = [this, &where](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+    auto cb = [this, &where_ptr](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
         if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
-            define_node->GetDefine()->NoteReference(where);
+            define_node->GetDefine()->NoteReference(where_ptr);
+        } else if(auto ee_node = dynamic_pointer_cast<ExpressionNodes::EnumElement>(node)) {
+            ee_node->GetEnumElement()->NoteReference(where_ptr);
         } else if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
             // tell the expression node to update the reference to the label
-            label_node->NoteReference(where);
+            label_node->NoteReference(where_ptr);
 
             // and create a callback for any label created at the target address
             auto system = GetSystem();
@@ -884,16 +889,16 @@ void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
             label_connections.push_back(make_shared<LabelCreatedData>(LabelCreatedData {
                 .target = target,
                 .created_connection = system->LabelCreatedAt(target)->connect(
-                        [this, where, label_node](shared_ptr<Label> const& label, bool was_user_created) {
+                        [this, where_ptr, label_node](shared_ptr<Label> const& label, bool was_user_created) {
                             // this will notify the new label that we're referring to it. if a different label is created
                             // at the same address, this won't reference that label since the current expression node already has
                             // a label
-                            label_node->NoteReference(where);
+                            label_node->NoteReference(where_ptr);
                         }),
                 .deleted_connection = system->LabelDeletedAt(target)->connect(
-                        [this, where, label_node](shared_ptr<Label> const& label, int nth) {
+                        [this, where_ptr, label_node](shared_ptr<Label> const& label, int nth) {
                             if(label_node->GetNth() == nth) { // only if the deleted label is the one we are referring to
-                                label_node->RemoveReference(where);
+                                label_node->RemoveReference(where_ptr);
                                 label_node->Reset();
                                 label_node->Update();
                             }
@@ -924,12 +929,17 @@ void MemoryObject::RemoveReferences(GlobalMemoryLocation const& where)
     // if there's no operand expresion, there are no references
     if(!operand_expression || !operand_expression->GetRoot()) return;
 
+    // Refereceable needs shared_ptr
+    shared_ptr<GlobalMemoryLocation> where_ptr = make_shared<GlobalMemoryLocation>(where);
+
     // Explore operand_expression and tell each referenced object we no longer care about them
-    auto cb = [&where](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+    auto cb = [&where_ptr](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
         if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
-            define_node->GetDefine()->RemoveReference(where);
+            define_node->GetDefine()->RemoveReference(where_ptr);
+        } else if(auto ee_node = dynamic_pointer_cast<ExpressionNodes::EnumElement>(node)) {
+            ee_node->GetEnumElement()->RemoveReference(where_ptr);
         } else if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
-            label_node->RemoveReference(where);
+            label_node->RemoveReference(where_ptr);
         }
         return true;
     };
@@ -957,8 +967,11 @@ void MemoryObject::ClearReferencesToLabels(GlobalMemoryLocation const& where)
 
     auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(operand_expression->GetNodeCreator());
 
+    // Refereceable needs shared_ptr
+    shared_ptr<GlobalMemoryLocation> where_ptr = make_shared<GlobalMemoryLocation>(where);
+
     // Explore the expression, changing labels to constants
-    auto cb = [&where, &nc](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+    auto cb = [&where_ptr, &nc](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
         if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
             // evaluate the label to its address
             s64 address;
@@ -968,6 +981,9 @@ void MemoryObject::ClearReferencesToLabels(GlobalMemoryLocation const& where)
 
             // convert the label_node to a constant node
             node = nc->CreateConstant(address, label_node->GetDisplay());
+
+            // remove any reference to that label here
+            label_node->RemoveReference(where_ptr);
         }
         return true;
     };

@@ -16,7 +16,7 @@
 #include "windows/basewindow.h"
 
 #define PROJECT_FILE_MAGIC         0x8781A90AFDE1F317ULL
-#define PROJECT_FILE_VERSION       0x00000102
+#define PROJECT_FILE_VERSION       0x00000103
 #define PROJECT_FILE_DEFAULT_FLAGS 0
 
 // Add a new flag equal to the version number above
@@ -26,7 +26,8 @@
 // the latest format
 enum FILE_VERSIONS {
     FILE_VERSION_BASE        = 0x00000101,
-    FILE_VERSION_SAVE_STATES = 0x00000102
+    FILE_VERSION_SAVE_STATES = 0x00000102,
+    FILE_VERSION_ENUMS       = 0x00000103
 };
 
 class BaseSystem;

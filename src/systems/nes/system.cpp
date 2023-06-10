@@ -16,10 +16,13 @@
 #include "systems/nes/cartridge.h"
 #include "systems/nes/defines.h"
 #include "systems/nes/disasm.h"
+#include "systems/nes/enum.h"
 #include "systems/nes/expressions.h"
 #include "systems/nes/label.h"
 #include "systems/nes/memory.h"
 #include "systems/nes/system.h"
+
+#include "windows/nes/project.h"
 
 #include "util.h"
 
@@ -35,6 +38,11 @@ System::System()
     define_created = make_shared<define_created_t>();
     label_created = make_shared<label_created_t>();
     label_deleted = make_shared<label_deleted_t>();
+    enum_created = make_shared<enum_created_t>();
+    enum_deleted = make_shared<enum_created_t>();
+    enum_element_added = make_shared<enum_element_added_t>();
+    enum_element_changed = make_shared<enum_element_changed_t>();
+    enum_element_deleted = make_shared<enum_element_added_t>();
     disassembly_stopped = make_shared<disassembly_stopped_t>();
 }
 
@@ -161,7 +169,7 @@ int System::GetNumMemoryRegions() const
     return 3 + cartridge->GetNumMemoryRegions();
 }
 
-std::shared_ptr<MemoryRegion> System::GetMemoryRegionByIndex(int i)
+shared_ptr<MemoryRegion> System::GetMemoryRegionByIndex(int i)
 {
     switch(i) {
     case 0:
@@ -176,7 +184,7 @@ std::shared_ptr<MemoryRegion> System::GetMemoryRegionByIndex(int i)
     return nullptr;
 }
 
-std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const& where)
+shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const& where)
 {
     assert(!where.is_chr); // TODO
 
@@ -197,7 +205,7 @@ std::shared_ptr<MemoryRegion> System::GetMemoryRegion(GlobalMemoryLocation const
     return nullptr;
 }
 
-std::shared_ptr<MemoryObject> System::GetMemoryObject(GlobalMemoryLocation const& where, int* offset)
+shared_ptr<MemoryObject> System::GetMemoryObject(GlobalMemoryLocation const& where, int* offset)
 {
     if(auto memory_region = GetMemoryRegion(where)) {
         return memory_region->GetMemoryObject(where, offset);
@@ -304,6 +312,17 @@ bool System::ExploreExpressionNodeCallback(shared_ptr<BaseExpressionNode>& node,
             }
         }
 
+        // look up enum
+        if(!was_a_thing && explore_data->allow_enums) {
+            if(auto ee = GetEnumElement(str)) {
+                // enum element exists, replace current node with EnumElement expression node
+                node = GetNodeCreator()->CreateEnumElement(ee);
+
+                explore_data->enum_elements.push_back(ee);
+                was_a_thing = true;
+            }
+        }
+
         if(!was_a_thing) {
             explore_data->undefined_names.push_back(str);
         }
@@ -359,7 +378,7 @@ bool System::ExploreExpressionNodeCallback(shared_ptr<BaseExpressionNode>& node,
     return true;
 }
 
-bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<Expression>& expr, std::string& errmsg)
+bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<Expression>& expr, string& errmsg)
 {
     auto memory_region = GetMemoryRegion(where);
     auto memory_object = GetMemoryObject(where);
@@ -374,7 +393,8 @@ bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<
     }
 
     // Loop over every node (and change them to system nodes if necessary), validating some things along the way
-    if(!FixupExpression(expr, errmsg, true, true, false, true)) return false;
+    FixupFlags fixup_flags = FIXUP_LABELS | FIXUP_DEFINES | FIXUP_ENUMS | FIXUP_ADDRESSING_MODES;
+    if(!FixupExpression(expr, errmsg, fixup_flags)) return false;
 
     // Now we need to do one more thing: determine the addressing mode of the expression and match it to
     // the addressing mode of the current opcode. the size of the operand is encoded into the addressing mode
@@ -556,15 +576,16 @@ bool System::DetermineAddressingMode(shared_ptr<Expression>& expr, ADDRESSING_MO
 }
 
 bool System::FixupExpression(shared_ptr<BaseExpression> const& expr, string& errmsg,
-        bool allow_labels, bool allow_defines, bool allow_deref, bool allow_addressing_modes, bool long_mode_labels)
+        FixupFlags fixup_flags)
 {
     ExploreExpressionNodeData explore_data {
         .errmsg           = errmsg,
-        .allow_modes      = allow_addressing_modes,
-        .allow_labels     = allow_labels,
-        .allow_defines    = allow_defines,
-        .allow_deref      = allow_deref,
-        .long_mode_labels = long_mode_labels
+        .allow_modes      = (bool)(fixup_flags & FIXUP_ADDRESSING_MODES),
+        .allow_labels     = (bool)(fixup_flags & FIXUP_LABELS),
+        .allow_defines    = (bool)(fixup_flags & FIXUP_DEFINES),
+        .allow_deref      = (bool)(fixup_flags & FIXUP_DEREFS),
+        .long_mode_labels = (bool)(fixup_flags & FIXUP_LONG_LABELS),
+        .allow_enums      = (bool)(fixup_flags & FIXUP_ENUMS)
     };
 
     // Loop over every node (and change them to system nodes if necessary), validating some things along the way
@@ -572,53 +593,35 @@ bool System::FixupExpression(shared_ptr<BaseExpression> const& expr, string& err
     return expr->Explore(cb, &explore_data);
 }
 
-shared_ptr<Define> System::AddDefine(string const& name, string const& expression_string, string& errmsg)
+shared_ptr<Define> System::CreateDefine(string const& name, string& errmsg)
 {
     int errloc;
 
     // evaluate 'name' and make sure we get a name node
     auto nameexpr = make_shared<Expression>();
-    if(!nameexpr->Set(name, errmsg, errloc) || !(bool)dynamic_pointer_cast<BaseExpressionNodes::Name>(nameexpr->GetRoot())) {
+    if(!nameexpr->Set(name, errmsg, errloc)) {
         errmsg = "Invalid name for Define";
         return nullptr;
     }
 
-    string define_name = (dynamic_pointer_cast<BaseExpressionNodes::Name>(nameexpr->GetRoot()))->GetString();
+    auto define_node = dynamic_pointer_cast<BaseExpressionNodes::Name>(nameexpr->GetRoot());
+    if(!define_node) {
+        errmsg = "Invalid name for Define";
+        return nullptr;
+    }
+
+    string define_name = define_node->GetString();
 
     // does define exist?
-    if(auto other = define_by_name.contains(define_name)) {
+    if(auto other = defines.contains(define_name)) {
         errmsg = "Define name exists already";
         return nullptr;
     }
 
-    // try parsing the expression, creating base Name nodes where necessary
-    auto expr = make_shared<Expression>();
-    if(!expr->Set(expression_string, errmsg, errloc)) return nullptr;
-
-    // explore the expression and allow only defines
-    ExploreExpressionNodeData explore_data {
-        .errmsg           = errmsg,
-        .allow_modes      = false,
-        .allow_labels     = false,
-        .allow_defines    = true,
-        .allow_deref      = false,
-        .long_mode_labels = false
-    };
-
-    auto cb = std::bind(&System::ExploreExpressionNodeCallback, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
-    if(!expr->Explore(cb, &explore_data)) return nullptr;
-
-    // and now the define must be evaluable!
-    s64 result;
-    if(!expr->Evaluate(&result, errmsg)) return nullptr;
 
     // define looks good, add to database
-    cout << "adding define name(" << *nameexpr << ") = [" << *expr << "]" << " => " << result << endl;
-
-    auto define = make_shared<Define>(define_name, expr);
-    define->SetReferences();
-    defines.push_back(define);
-    define_by_name[define_name] = define;
+    auto define = make_shared<Define>(define_name);
+    defines[define_name] = define;
 
     // notify the system of new defines
     define_created->emit(define);
@@ -648,7 +651,7 @@ shared_ptr<Label> System::GetDefaultLabelForTarget(GlobalMemoryLocation const& w
 }
 
 
-std::vector<std::shared_ptr<Label>> const& System::GetLabelsAt(GlobalMemoryLocation const& where)
+vector<shared_ptr<Label>> const& System::GetLabelsAt(GlobalMemoryLocation const& where)
 {
     static vector<shared_ptr<Label>> empty_vector;
     if(auto memory_object = GetMemoryObject(where)) {
@@ -711,7 +714,7 @@ shared_ptr<Label> System::EditLabel(GlobalMemoryLocation const& where, string co
     return nullptr;
 }
 
-void System::DeleteLabel(std::shared_ptr<Label> const& label)
+void System::DeleteLabel(shared_ptr<Label> const& label)
 {
     auto where = label->GetMemoryLocation();
     if(auto memory_region = GetMemoryRegion(where)) {
@@ -726,6 +729,92 @@ void System::DeleteLabel(std::shared_ptr<Label> const& label)
             }
         }
     }
+}
+
+shared_ptr<Enum> System::CreateEnum(string const& name)
+{
+    if(enums.contains(name)) return nullptr;
+
+    auto e = make_shared<Enum>(name);
+    enums[name] = e;
+    *e->element_added   += quick_bind(&System::EnumElementAdded  , this);
+    *e->element_changed += quick_bind(&System::EnumElementChanged, this);
+    *e->element_deleted += quick_bind(&System::EnumElementDeleted, this);
+
+    enum_created->emit(e);
+
+    return e; 
+}
+
+shared_ptr<Enum> const& System::GetEnum(string const& name)
+{
+    static shared_ptr<Enum> null_enum;
+    if(enums.contains(name)) return enums[name];
+    return null_enum; 
+}
+
+shared_ptr<EnumElement> const& System::GetEnumElement(string const& name)
+{
+    static shared_ptr<EnumElement> null_ee;
+    if(enum_elements_by_name.contains(name)) return enum_elements_by_name[name];
+    return null_ee; 
+}
+
+bool System::DeleteEnum(shared_ptr<Enum> const& e)
+{
+    enum_deleted->emit(e);
+    e->DeleteElements();
+    assert(enums.contains(e->GetName()));
+    enums.erase(e->GetName());
+    return true;
+}
+
+void System::EnumElementAdded(shared_ptr<EnumElement> const& ee)
+{
+    auto& list = enum_elements_by_value[ee->cached_value];
+    list.push_back(ee);
+
+    auto e = ee->parent_enum.lock();
+    assert(e);
+
+    enum_elements_by_name[ee->GetFormattedName("_")]  = ee;
+
+    enum_element_added->emit(ee);
+}
+
+void System::EnumElementChanged(shared_ptr<EnumElement> const& ee, std::string const& old_name, s64 old_value)
+{
+    if(ee->GetName() != old_name) {
+        auto e = ee->parent_enum.lock();
+        enum_elements_by_name.erase(e->GetName() + "_" + old_name);
+
+        enum_elements_by_name[ee->GetFormattedName("_")] = ee;
+    }
+
+    if(ee->cached_value != old_value) {
+        assert(enum_elements_by_value.contains(old_value));
+        auto& list = enum_elements_by_value[old_value];
+        auto it = find(list.begin(), list.end(), ee);
+        assert(it != list.end());
+        list.erase(it);
+
+        auto& list2 = enum_elements_by_value[ee->cached_value];
+        list2.push_back(ee);
+    }
+
+    enum_element_changed->emit(ee, old_value);
+}
+
+void System::EnumElementDeleted(shared_ptr<EnumElement> const& ee)
+{
+    enum_elements_by_name.erase(ee->GetFormattedName("_"));
+    assert(enum_elements_by_value.contains(ee->cached_value));
+    auto& list = enum_elements_by_value[ee->cached_value];
+    auto it = find(list.begin(), list.end(), ee);
+    assert(it != list.end());
+    list.erase(it);
+
+    enum_element_deleted->emit(ee);
 }
 
 void System::InitDisassembly(GlobalMemoryLocation const& where)
@@ -997,23 +1086,23 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
     }
 }
 
-bool System::Save(std::ostream& os, std::string& errmsg)
+bool System::Save(ostream& os, string& errmsg)
 {
+    // save the enums before defines, as defines can reference enums and they need to
+    // be loaded before defines in Load()
+    WriteVarInt(os, enums.size());
+    if(!os.good()) goto done;
+    for(auto& e : enums) if(!e.second->Save(os, errmsg)) return false;
+
     // save the defines
     WriteVarInt(os, defines.size());
-    if(!os.good()) {
-        errmsg = "Error saving defines";
-        return false;
-    }
-    for(auto& define : defines) if(!define->Save(os, errmsg)) return false;
+    if(!os.good()) goto done;
+    for(auto& define : defines) if(!define.second->Save(os, errmsg)) return false;
 
     // save the labels globally, as parsing expressions in memory objects that use labels
     // will need to be able to look them up at load.
     WriteVarInt(os, label_database.size());
-    if(!os.good()) {
-        errmsg = "Error saving labels";
-        return false;
-    }
+    if(!os.good()) goto done;
     for(auto& label : label_database) if(!label.second->Save(os, errmsg)) return false;
 
     // save the non-cartridge memory regions
@@ -1024,39 +1113,61 @@ bool System::Save(std::ostream& os, std::string& errmsg)
     // save the cartridge (which will save some memory regions)
     if(!cartridge->Save(os, errmsg)) return false;
 
+done:
+    errmsg = "Error saving System";
     return true;
 }
 
-bool System::Load(std::istream& is, std::string& errmsg)
+bool System::Load(istream& is, string& errmsg)
 {
+    int num_defines = 0;
+    int num_labels = 0;
+
     shared_ptr<BaseSystem> base_system = shared_from_this();
     auto selfptr = dynamic_pointer_cast<System>(base_system);
     assert(selfptr);
 
-    // load defines
-    int num_defines = ReadVarInt<int>(is);
-    if(!is.good()) {
-        errmsg = "Error loading defines";
-        return false;
+    // load enums
+    if(GetCurrentProject()->GetSaveFileVersion() >= FILE_VERSION_ENUMS) {
+        int num_enums = ReadVarInt<int>(is);
+        if(!is.good()) goto done;
+
+        for(int i = 0; i < num_enums; i++) {
+            auto e = Enum::Load(is, errmsg);
+            if(!e) return false;
+
+            enums[e->GetName()] = e;
+
+            // iterate over elements and add them to our value map
+            e->IterateElements([this](shared_ptr<EnumElement> const& ee) {
+                enum_elements_by_value[ee->cached_value].push_back(ee);
+                enum_elements_by_name[ee->GetFormattedName("_")] = ee;
+            });
+
+            // connect to the enum signals
+            *e->element_added   += quick_bind(&System::EnumElementAdded  , this);
+            *e->element_changed += quick_bind(&System::EnumElementChanged, this);
+            *e->element_deleted += quick_bind(&System::EnumElementDeleted, this);
+        }
     }
+
+    // load defines
+    num_defines = ReadVarInt<int>(is);
+    if(!is.good()) goto done;
 
     for(int i = 0; i < num_defines; i++) {
         auto define = Define::Load(is, errmsg);
         if(!define) return false;
 
         define->SetReferences();
-        defines.push_back(define);
-        define_by_name[define->GetString()] = define;
+        defines[define->GetName()] = define;
     }
 
     cout << "[System::Load] loaded " << num_defines << " defines." << endl;
 
     // load labels
-    int num_labels = ReadVarInt<int>(is);
-    if(!is.good()) {
-        errmsg = "Error loading labels";
-        return false;
-    }
+    num_labels = ReadVarInt<int>(is);
+    if(!is.good()) goto done;
 
     for(int i = 0; i < num_labels; i++) {
         auto label = Label::Load(is, errmsg);
@@ -1086,6 +1197,8 @@ bool System::Load(std::istream& is, std::string& errmsg)
     // note all references
     NoteReferences();
 
+done:
+    errmsg = "Error loading System";
     return true;
 }
 

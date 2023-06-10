@@ -13,6 +13,7 @@
 
 namespace Systems::NES {
     class Define;
+    class EnumElement;
     class Label;
     class GlobalMemoryLocation;
     class MemoryObject;
@@ -29,6 +30,7 @@ class SystemInstance;
 class ListingItem {
 public:
     using Define = Systems::NES::Define;
+    using EnumElement = Systems::NES::EnumElement;
     using Label  = Systems::NES::Label;
     using GlobalMemoryLocation = Systems::NES::GlobalMemoryLocation;
     using MemoryObject = Systems::NES::MemoryObject;
@@ -123,7 +125,8 @@ private:
 
     typedef std::variant<
         std::shared_ptr<Define>,
-        std::shared_ptr<Label>
+        std::shared_ptr<Label>,
+        std::shared_ptr<EnumElement>
     > suggestion_type;
     std::vector<suggestion_type> suggestions;
 

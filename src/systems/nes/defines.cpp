@@ -7,19 +7,57 @@
 
 #include "systems/nes/defines.h"
 #include "systems/nes/expressions.h"
+#include "systems/nes/system.h"
+
+#include "windows/nes/project.h"
 
 using namespace std;
 
 namespace Systems::NES {
 
-Define::Define(std::string const& _name, shared_ptr<Expression>& _expression)
-    : name(_name), expression(_expression)
+Define::Define(std::string const& _name)
+    : name(_name)
 {
     reverse_references_changed = make_shared<reverse_references_changed_t>();
+    expression = Expression::FromString("0");
 }
 
 Define::~Define()
 {
+}
+
+bool Define::SetExpression(std::string const& s, string& errmsg)
+{
+    auto expr = make_shared<Expression>();
+    int errloc;
+    if(!expr->Set(s, errmsg, errloc)) {
+        stringstream ss;
+        ss << "Could not parse expression: " << errmsg << " (at offset " << errloc << ")";
+        errmsg = ss.str();
+        return false;
+    }
+
+    return SetExpression(expr, errmsg);
+}
+
+bool Define::SetExpression(std::shared_ptr<BaseExpression> const& expr, string& errmsg)
+{
+    // fixup the expression and allow only defines
+    // no labels, allow defines, no deref, no modes, no long labels, allow enums
+    FixupFlags fixup_flags = FIXUP_DEFINES | FIXUP_ENUMS;
+    if(!GetSystem()->FixupExpression(expr, errmsg, fixup_flags)) return false;
+
+    // and now the define must be evaluable!
+    s64 result;
+    if(!expr->Evaluate(&result, errmsg)) return false;
+
+    // looks good, update references
+    ClearReferences();
+    expression = expr;
+    cached_value = result;
+    SetReferences();
+
+    return true;
 }
 
 void Define::SetReferences()
@@ -28,6 +66,23 @@ void Define::SetReferences()
     auto cb = [this](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
         if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
             define_node->GetDefine()->NoteReference(shared_from_this());
+        } else if(auto ee_node = dynamic_pointer_cast<ExpressionNodes::EnumElement>(node)) {
+            ee_node->GetEnumElement()->NoteReference(shared_from_this());
+        }
+        return true;
+    };
+
+    if(!expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
+}
+
+void Define::ClearReferences()
+{
+    // Explore expression and mark each referenced Define() that we're no longer referring to it
+    auto cb = [this](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+        if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
+            define_node->GetDefine()->RemoveReference(shared_from_this());
+        } else if(auto ee_node = dynamic_pointer_cast<ExpressionNodes::EnumElement>(node)) {
+            ee_node->GetEnumElement()->RemoveReference(shared_from_this());
         }
         return true;
     };
@@ -44,14 +99,11 @@ s64 Define::Evaluate()
     return cached_value;
 }
 
-std::string const& Define::GetExpressionString()
+std::string Define::GetExpressionString()
 {
-    if(cached_expression_string) return expression_string;
     stringstream ss;
     ss << *expression;
-    expression_string = ss.str();
-    cached_expression_string = true;
-    return expression_string;
+    return ss.str();
 }
 
 bool Define::Save(std::ostream& os, std::string& errmsg)
@@ -74,7 +126,9 @@ shared_ptr<Define> Define::Load(std::istream& is, std::string& errmsg)
     }
     auto expression = make_shared<Expression>();
     if(!expression->Load(is, errmsg)) return nullptr;
-    return make_shared<Define>(name, expression);
+    auto define = make_shared<Define>(name);
+    define->expression = expression;
+    return define;
 }
 
 }
