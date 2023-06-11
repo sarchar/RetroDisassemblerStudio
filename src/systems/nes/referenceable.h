@@ -84,7 +84,7 @@ private:
         return std::find_if(reverse_references.begin(), reverse_references.end(), 
             [&t](reverse_reference_t const& v)->bool {
                 if(auto vt = std::get_if<T>(&v)) {
-                    return *(*vt).get() == *t.get();
+                    return (*vt).get()->operator==(*t.get());
                 }
                 return false;
             }
