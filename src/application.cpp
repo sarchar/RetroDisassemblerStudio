@@ -17,12 +17,15 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
+#include "util.h"
 #include "application.h"
 #include "windows/basewindow.h"
 
 using namespace std::literals;
 
-static char const * const DOCKSPACE_NAME = "RootDockspace";
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+UTIL_READVARINT_VERSION util_readvarint_version = UTIL_READVARINT_VERSION_INVALID;
 
 // Boilerplate needed to wrap the glfw callback to our class method
 // thank you to https://stackoverflow.com/questions/1000663/using-a-c-class-member-function-as-a-c-callback-function
@@ -230,60 +233,6 @@ void Application::DestroyPlatformWindow()
     glfwDestroyWindow((GLFWwindow*)_glfw_window);
     glfwTerminate();
 }
-
-//!void Application::ShowDockSpace(bool dockSpaceHasBackground)
-//!{
-//!    ImGui::PopStyleVar(2);
-//
-//!    window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-//!    window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-//!    
-//!    // Important: note that we proceed even if Begin() returns false (aka window is collapsed).
-//!    // This is because we want to keep our DockSpace() active. If a DockSpace() is inactive, 
-//!    // all active windows docked into it will lose their parent and become undocked.
-//!    // We cannot preserve the docking relationship between an active window and an inactive docking, otherwise 
-//!    // any change of dockspace/settings would lead to windows being stuck in limbo and never being visible.
-//!    ImGui::Begin("DockSpace", nullptr, window_flags);
-//!    
-//!    // DockSpace
-//!    ImGuiIO& io = ImGui::GetIO();
-//!    if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
-//!
-//!        imgui_dockspace_id = ImGui::GetID(DOCKSPACE_NAME);
-//!        ImGui::DockSpace(imgui_dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
-//!
-//!        if (!has_dock_builder)
-//!        {
-//!            ImGui::DockBuilderRemoveNode(imgui_dockspace_id); // clear any previous layout
-//!
-//!            // Create the root node, which we can use to dock windows
-//!            imgui_dock_builder_root_id = ImGui::DockBuilderAddNode(imgui_dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
-//!
-//!            // And make it take the entire viewport
-//!            ImGui::DockBuilderSetNodeSize(imgui_dockspace_id, viewport->Size);
-//!
-//!            // split the dockspace into left and right, with the right side a temporary ID
-//!            ImGuiID right_id;
-//!            imgui_dock_builder_left_id = ImGui::DockBuilderSplitNode(imgui_dock_builder_root_id, ImGuiDir_Left, 0.3f, nullptr, &right_id);
-//!
-//!            // split the right area, creating a temporary top/bottom
-//!            ImGuiID top_id;
-//!            imgui_dock_builder_bottom_id = ImGui::DockBuilderSplitNode(right_id, ImGuiDir_Down, 0.5f, nullptr, &top_id);
-//!
-//!            // now split the top area into a middle and right
-//!            imgui_dock_builder_right_id = ImGui::DockBuilderSplitNode(top_id, ImGuiDir_Right, 0.5f, nullptr, nullptr);
-//!
-//!            ImGui::DockBuilderFinish(imgui_dockspace_id);
-//!
-//!            // do this last for race conditions
-//!            has_dock_builder = true;
-//!        }
-//!    }
-//!
-//!    RenderMainMenuBar();
-//!    _RenderMainToolBar();
-//!    ImGui::End();
-//!}
 
 void Application::KeyPressHandler(GLFWwindow* _window, int key, int scancode, int action, int mods)
 {

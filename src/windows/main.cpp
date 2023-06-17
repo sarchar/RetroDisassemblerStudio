@@ -853,6 +853,10 @@ void MainWindow::LoadProjectThread()
         is.read((char*)&version, sizeof(version));
         is.read((char*)&flags, sizeof(flags));
 
+        // set the ReadVarInt 
+        util_readvarint_version = (version < FILE_VERSION_READVARINT2) 
+                    ? UTIL_READVARINT_VERSION_OLD : UTIL_READVARINT_VERSION2;
+
         if(!is.good()) {
             popups.load_project.errmsg = "Could not read from file";
             popups.load_project.errored = true;
