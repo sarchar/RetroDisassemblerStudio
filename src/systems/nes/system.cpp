@@ -409,7 +409,7 @@ bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<
     switch(memory_object->type) {
     case MemoryObject::TYPE_CODE:
     {
-        ADDRESSING_MODE opmode = disassembler->GetAddressingMode(memory_object->code.opcode);
+        ADDRESSING_MODE opmode = disassembler->GetAddressingMode(*memory_object->data_ptr);
 
         // Some special case exceptions:
         // 1. when the opcode is absolute but fits zero page
@@ -435,9 +435,9 @@ bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<
         }
 
         // Now we need to validate that operand_value matches the actual data
-        u16 operand = (u16)memory_object->code.operands[0];
+        u16 operand = (u16)memory_object->data_ptr[1];
         if(memory_object->GetSize() == 3) {
-            operand |= ((u16)memory_object->code.operands[1] << 8);
+            operand |= ((u16)memory_object->data_ptr[2] << 8);
             operand_value = (u64)operand_value & 0xFFFF;
         }
 
@@ -850,19 +850,18 @@ int System::DisassemblyThread()
                 break;
             }
 
-            u8 op = memory_object->bval;
+            u8 op = *memory_object->data_ptr;
             string inst = disassembler->GetInstruction(op);
 
-            int size = disassembler->GetInstructionSize(op);
-
             // stop disassembling on unknown opcodes
+            int size = disassembler->GetInstructionSize(op);
             if(size == 0) {
-                cout << "[NES::System::DisassemblyThread] stopping because invalid opcode $" << hex << uppercase << (int)memory_object->bval << " (" << inst << ") at "  << current_loc << endl;
+                cout << "[NES::System::DisassemblyThread] stopping because invalid opcode $" << hex << uppercase << (int)*memory_object->data_ptr << " (" << inst << ") at "  << current_loc << endl;
                 break; // break on unimplemented opcodes (TODO remove me)
             }
 
             // convert the memory to code
-            if(!memory_region->MarkMemoryAsCode(current_loc, size)) {
+            if(!memory_region->MarkMemoryAsCode(current_loc)) {
                 assert(false); // this shouldn't happen
                 break;
             }
@@ -880,7 +879,7 @@ int System::DisassemblyThread()
                 // fall through
             case 0x20: // JSR absolute
             {
-                u16 target = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
+                u16 target = (u16)memory_object->data_ptr[1] | ((u16)memory_object->data_ptr[2] << 8);
                 GlobalMemoryLocation target_location(current_loc);
                 target_location.address = target;
 
@@ -902,7 +901,7 @@ int System::DisassemblyThread()
             case 0xD0:
             case 0xF0:
             {
-                u16 target = (u16)((s16)(current_loc.address + 2) + (s16)(s8)memory_object->code.operands[0]);
+                u16 target = (u16)((s16)(current_loc.address + 2) + (s16)(s8)memory_object->data_ptr[1]);
 
                 GlobalMemoryLocation target_location(current_loc);
                 target_location.address = target;
@@ -943,7 +942,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
     // only create operand expressions for code
     if(code_object->type != MemoryObject::TYPE_CODE) return;
 
-    switch(auto am = disassembler->GetAddressingMode(code_object->code.opcode)) {
+    switch(auto am = disassembler->GetAddressingMode(*code_object->data_ptr)) {
     case AM_ABSOLUTE:
     case AM_ABSOLUTE_X:
     case AM_ABSOLUTE_Y:
@@ -959,9 +958,9 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
         bool is16 = (am == AM_ABSOLUTE || am == AM_ABSOLUTE_X || am == AM_ABSOLUTE_Y);
         bool isrel = (am == AM_RELATIVE);
 
-        u16 target = isrel ? (u16)((s16)(where.address + 2) + (s16)(s8)code_object->code.operands[0])
-                           : (is16 ? ((u16)code_object->code.operands[0] | ((u16)code_object->code.operands[1] << 8))
-                                   : (u16)code_object->code.operands[0]);
+        u16 target = isrel ? (u16)((s16)(where.address + 2) + (s16)(s8)code_object->data_ptr[1])
+                           : (is16 ? ((u16)code_object->data_ptr[1] | ((u16)code_object->data_ptr[2] << 8))
+                                   : (u16)code_object->data_ptr[1]);
 
         GlobalMemoryLocation target_location;
         target_location.address = target;
@@ -1036,7 +1035,7 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
 
     case AM_IMMEDIATE: // Immediate instructions don't get labels
     {
-        u8 imm = code_object->code.operands[0];
+        u8 imm = code_object->data_ptr[1];
 
         auto expr = make_shared<Expression>();
         auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());

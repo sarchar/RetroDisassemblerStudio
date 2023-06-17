@@ -187,7 +187,7 @@ void MainWindow::RenderMenuBar()
                 this->OpenROMInfosPane();
             };
 
-            ImGuiFileDialog::Instance()->OpenDialog("OpenROMFileDialog", "Choose ROM for project", "NES ROMs (*.nes){.nes}", "./roms/", "",
+            ImGuiFileDialog::Instance()->OpenDialog("OpenROMFileDialog", "Choose ROM for project", "NES ROMs (*.nes){.nes,(.*\\.nes)}", "./roms/", "",
                                                    bind(infos_pane_cb, placeholders::_1, placeholders::_2, placeholders::_3),
                                                    250, 1, IGFDUserDatas("InfosPane"), ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_CaseInsensitiveExtention
                                                                                        | ImGuiFileDialogFlags_DisableCreateDirectoryButton);

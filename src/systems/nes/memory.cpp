@@ -149,7 +149,7 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
     if(obj->comments.post) obj->listing_items.push_back(make_shared<Windows::NES::ListingItemPrePostComment>(0, true));
 }
 
-void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_node, u32 region_offset, u8* data, int count)
+void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_node, u32 region_offset, int count)
 {
     // stop the iteration when there's one byte left
     if(count == 1) {
@@ -162,7 +162,7 @@ void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_no
         // set the data
         obj->type = MemoryObject::TYPE_UNDEFINED;
         obj->backed = true;
-        obj->bval = *data;
+        obj->data_ptr = &flat_memory[region_offset];
 
         // set the element in the node
         tree_node->obj = obj;
@@ -172,12 +172,12 @@ void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_no
     } else {
         // initialize the tree by splitting the data into left and right halves
         tree_node->left  = make_shared<MemoryObjectTreeNode>(tree_node);
-        _InitializeFromData(tree_node->left , region_offset, &data[0], count / 2);
+        _InitializeFromData(tree_node->left , region_offset, count / 2);
 
         // handle odd number of elements by putting the odd one on the right side
         tree_node->right = make_shared<MemoryObjectTreeNode>(tree_node);
         int fixed_count = (count / 2) + (count % 2);
-        _InitializeFromData(tree_node->right, region_offset + count / 2, &data[count / 2], fixed_count);
+        _InitializeFromData(tree_node->right, region_offset + count / 2, fixed_count);
     }
 }
 
@@ -192,9 +192,10 @@ void MemoryRegion::_InitializeEmpty(shared_ptr<MemoryObjectTreeNode>& tree_node,
         shared_ptr<MemoryObject> obj = make_shared<MemoryObject>();
         obj->parent = tree_node;
 
-        // set the data
+        // set the data info
         obj->type = MemoryObject::TYPE_UNDEFINED;
         obj->backed = false;
+        obj->data_ptr = nullptr;
 
         // set the element in the node
         tree_node->obj = obj;
@@ -222,11 +223,12 @@ void MemoryRegion::_ReinializeFromObjectRefs(shared_ptr<MemoryObjectTreeNode>& t
         // don't create or the object, since we already have it
         auto obj = object_refs[objmap[uid_start]];
 
-        // just set the parent
+        // set the parent
         obj->parent = tree_node;
 
         // and the obj pointer
         tree_node->obj = obj;
+
     } else {
         // initialize the tree by splitting the data into left and right halves
         tree_node->left  = make_shared<MemoryObjectTreeNode>(tree_node);
@@ -250,6 +252,11 @@ void MemoryRegion::InitializeFromData(u8* data, int count)
     // the refs list is a object lookup by address map, and will always be the size of the memory region
     object_refs.resize(count);
 
+    // allocate storage for the flat memory and copy it over
+    if(flat_memory) delete [] flat_memory;
+    flat_memory = new u8[count];
+    memcpy(flat_memory, data, count);
+
     // We need a root for the tree first and foremost
     object_tree_root = make_shared<MemoryObjectTreeNode>(nullptr);
 
@@ -257,8 +264,8 @@ void MemoryRegion::InitializeFromData(u8* data, int count)
     assert(count >= 2); // minimum region size, albeit silly
     object_tree_root->left  = make_shared<MemoryObjectTreeNode>(object_tree_root);
     object_tree_root->right = make_shared<MemoryObjectTreeNode>(object_tree_root);
-    _InitializeFromData(object_tree_root->left , 0        , &data[0]        , count / 2);
-    _InitializeFromData(object_tree_root->right, count / 2, &data[count / 2], (count / 2) + (count % 2));
+    _InitializeFromData(object_tree_root->left , 0        ,  count / 2);
+    _InitializeFromData(object_tree_root->right, count / 2,  (count / 2) + (count % 2));
 
     // first pass create listing items
     RecreateListingItems();
@@ -364,13 +371,6 @@ bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where, u32 
 
         int size = memory_object->GetSize();
 
-        // store the memory's actual raw data if it exists
-        u8* tmp = nullptr;
-        if(memory_object->backed) {
-            tmp = (u8*)_alloca(size);
-            memory_object->Read(tmp, size);
-        }
-
         // save the is_object tree node before clearing memory_object from the tree
         auto tree_node = memory_object->parent.lock();
 
@@ -388,7 +388,9 @@ bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where, u32 
         tree_node->is_object = false;
         u32 region_offset = ConvertToRegionOffset(where.address + offset);
         if(memory_object->backed) {
-            _InitializeFromData(tree_node, region_offset, tmp, size);
+            // we don't need to save the memory object's data_ptr as it is reinitialized 
+            // in _InitializeFromData
+            _InitializeFromData(tree_node, region_offset, size);
         } else {
             _InitializeEmpty(tree_node, region_offset, size);
         }
@@ -461,9 +463,8 @@ bool MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte
 
             RemoveMemoryObjectFromTree(next_object);
 
-            // change the current object to a word
+            // change the current object to a word, data_ptr doesn't change
             memory_object->type = MemoryObject::TYPE_WORD;
-            memory_object->hval = (u16)memory_object->bval | ((u16)next_object->bval << 8);
 
             // update the object_refs
             u32 x = ConvertToRegionOffset((where + i + 1).address);
@@ -483,10 +484,24 @@ bool MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte
     return true;
 }
 
-bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_count)
+// mark one piece of memory as an instruction
+bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where)
 {
+    auto system = parent_system.lock();
+    if(!system) return false;
+
+    auto disassembler = system->GetDisassembler();
+
+    // The first object will be changed into code
+    auto inst = GetMemoryObject(where);
+
+    // regardless of data type, we can always read *data_ptr if the memory is backed
+    assert(inst->backed);
+    int instruction_size = disassembler->GetInstructionSize(*inst->data_ptr);
+
     // Check to see if all selected memory can be converted
-    for(u32 i = 0; i < byte_count; i++) {
+    // opcode and operands must be valid type to convert
+    for(u32 i = 0; i < instruction_size; i++) {
         auto memory_object = GetMemoryObject(where + i);
         if(memory_object->type != MemoryObject::TYPE_BYTE && memory_object->type != MemoryObject::TYPE_UNDEFINED) {
             cout << "[MemoryRegion::MarkMemoryAsCode] address " << (where + i) << " cannot be converted to code (currently type " << magic_enum::enum_name(memory_object->type) << ")" << endl;
@@ -494,20 +509,15 @@ bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_
         }
     }
 
-    // The first object will be changed into code
-    auto inst = GetMemoryObject(where);
+    // don't have to change data_ptr as it already points at the opcode
 
-    // don't have to set the opcode because it's already the bval in the union
-    // inst->code.opcode = inst->bval;
-
-    // get the operand bytes and remove them
-    for(u32 i = 1; i < byte_count; i++) {
+    // remove the operand objects from the tree
+    for(u32 i = 1; i < instruction_size; i++) {
         auto operand_object = GetMemoryObject(where + i);
         assert(operand_object->type == MemoryObject::TYPE_BYTE || operand_object->type == MemoryObject::TYPE_UNDEFINED);
         RemoveMemoryObjectFromTree(operand_object);
 
-        // steal data from operand_object
-        inst->code.operands[i-1] = operand_object->bval;
+        // don't have to copy the operands as they're sequential in memory from inst->data_ptr
 
         // update the object_refs
         u32 x = ConvertToRegionOffset((where + i).address);
@@ -536,19 +546,13 @@ bool MemoryRegion::MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byt
     auto str_object = GetMemoryObject(where);
 
     // allocate the storage for the data
-    u8 first_byte = str_object->bval;
-    str_object->str.data = new u8[byte_count];
-    str_object->str.data[0] = first_byte;
-    str_object->str.len = byte_count;
+    str_object->string_length = byte_count;
 
-    // get the rest of the string bytes and remove them from the tree, adding them to the string object
+    // remove the rest of the objects from the tree
     for(u32 i = 1; i < byte_count; i++) {
         auto next_byte_object = GetMemoryObject(where + i);
         assert(next_byte_object->type == MemoryObject::TYPE_BYTE || next_byte_object->type == MemoryObject::TYPE_UNDEFINED);
         RemoveMemoryObjectFromTree(next_byte_object);
-
-        // steal data from next_byte_object
-        str_object->str.data[i] = next_byte_object->bval;
 
         // update the object_refs
         u32 x = ConvertToRegionOffset((where + i).address);
@@ -1021,10 +1025,10 @@ u32 MemoryObject::GetSize(shared_ptr<Disassembler> disassembler)
         return 2;
 
     case MemoryObject::TYPE_CODE:
-        return disassembler->GetInstructionSize(code.opcode);
+        return disassembler->GetInstructionSize(*data_ptr);
 
     case MemoryObject::TYPE_STRING:
-        return str.len;
+        return string_length;
 
     default:
         assert(false);
@@ -1040,11 +1044,8 @@ void MemoryObject::Read(u8* buf, int count)
     case MemoryObject::TYPE_UNDEFINED:
     case MemoryObject::TYPE_WORD:
     case MemoryObject::TYPE_CODE:
-        memcpy(buf, (void*)&bval, count);
-        break;
-
     case MemoryObject::TYPE_STRING:
-        memcpy(buf, str.data, count);
+        memcpy(buf, (void*)data_ptr, count);
         break;
 
     default:
@@ -1072,10 +1073,10 @@ string MemoryObject::FormatInstructionField(shared_ptr<Disassembler> disassemble
         break;
 
     case MemoryObject::TYPE_CODE:
-        ss << disassembler->GetInstruction(code.opcode);
+        ss << disassembler->GetInstruction(*data_ptr);
 
         // For word instructions with an operand address of less than $100, force the word instruction
-        if(GetSize() == 3 && code.operands[1] == 0) ss << ".W";
+        if(GetSize() == 3 && data_ptr[2] == 0) ss << ".W";
 
         break;
 
@@ -1106,18 +1107,20 @@ string MemoryObject::FormatOperandField(u32 /* internal_offset */, shared_ptr<Di
             switch(type) {
             case MemoryObject::TYPE_UNDEFINED:
             case MemoryObject::TYPE_BYTE:
-                ss << "$" << setw(2) << (int)bval;
+                ss << "$" << setw(2) << (int)*data_ptr;
                 break;
 
-            case MemoryObject::TYPE_WORD:
+            case MemoryObject::TYPE_WORD: {
+                u16 hval = (u16)data_ptr[0] | ((u16)data_ptr[1] << 8);
                 ss << "$" << setw(4) << hval;
                 break;
+            }
 
             case MemoryObject::TYPE_STRING:
                 ss << "\"";
-                for(int i = 0; i < GetSize(); i++) {
-                    if(isprint(str.data[i])) ss << (char)str.data[i];
-                    else ss << "\\x" << setw(2) << (int)str.data[i];
+                for(int i = 0; i < string_length; i++) {
+                    if(isprint(data_ptr[i])) ss << (char)data_ptr[i];
+                    else ss << "\\x" << setw(2) << (int)data_ptr[i];
                 }
                 ss << "\"";
                 break;
@@ -1144,15 +1147,8 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
     assert(sizeof(backed) == 1);
     os.write((char*)&backed, sizeof(backed));
 
-    // save the data (for now, TODO: don't save data and instead read from the rom file?)
-    if(backed) {
-        WriteVarInt(os, GetSize());
-        if(type == MemoryObject::TYPE_STRING) {
-            os.write((char*)str.data, GetSize());
-        } else {
-            os.write((char*)&bval, GetSize());
-        }
-    }
+    // save string_length for string types
+    if(type == MemoryObject::TYPE_STRING) WriteVarInt(os, string_length);
 
     if(!os.good()) {
         errmsg = "Error writing MemoryObject";
@@ -1201,16 +1197,18 @@ bool MemoryObject::Load(std::istream& is, std::string& errmsg)
     //cout << "MemoryObject::type = " << magic_enum::enum_name(type) << endl;
     //cout << "MemoryObject::backed = " << backed << endl;
 
-    if(backed) {
-        u32 size = ReadVarInt<u32>(is);
-        //cout << "MemoryObject::size = " << size << endl;
-        if(type == MemoryObject::TYPE_STRING) {
-            str.data = new u8[size];
-            str.len = size;
-            is.read((char*)str.data, str.len);
-        } else {
-            is.read((char*)&bval, size);
+    // before flat_memory, MemoryObjects saved their data here
+    // so we allocate memory of the appropriate size and load it there
+    if(GetCurrentProject()->GetSaveFileVersion() < FILE_VERSION_FLATMEMORY) {
+        if(backed) {
+            u32 size = ReadVarInt<u32>(is);
+            if(type == MemoryObject::TYPE_STRING) string_length = (int)size;
+            data_ptr = new u8[size];
+            is.read((char*)data_ptr, size);
         }
+    } else {
+        // now we just read string_length for string types
+        if(type == MemoryObject::TYPE_STRING) string_length = ReadVarInt<int>(is);
     }
 
     int nlabels = ReadVarInt<int>(is);
@@ -1262,34 +1260,6 @@ bool MemoryObject::Load(std::istream& is, std::string& errmsg)
     return true;
 }
 
-u8 MemoryRegion::ReadByte(int offset)
-{
-    int region_offset = ConvertToRegionOffset(offset);
-    auto& memory_object = object_refs[region_offset];
-
-    // TODO might be worth having this cached in a new table object_refs_offsets
-    int obj_offset = 0;
-    while(region_offset > 0 && object_refs[region_offset - 1] == memory_object) {
-        region_offset -= 1;
-        obj_offset += 1;
-    };
-
-    if(memory_object->type == MemoryObject::TYPE_STRING) {
-        return memory_object->str.data[obj_offset];
-    } else {
-        return ((u8*)&memory_object->bval)[obj_offset];
-    }
-}
-
-void MemoryRegion::Copy(u8* dest, int offset, int size)
-{
-    // oh god this is gonna be slow. TODO need a cache badly
-    for(int i = offset; i < offset+size; i++) {
-        *dest++ = ReadByte(i);
-    }
-}
-
-
 bool MemoryRegion::Save(std::ostream& os, std::string& errmsg)
 {
     // save name
@@ -1302,6 +1272,10 @@ bool MemoryRegion::Save(std::ostream& os, std::string& errmsg)
         errmsg = "Error writing data";
         return false;
     }
+
+    // save the flat memory here
+    WriteVarInt(os, (int)(bool)(flat_memory));
+    if(flat_memory) os.write((char*)flat_memory, region_size);
 
     // save all the unique memory objects
     for(u32 offset = 0; offset < region_size; ) {
@@ -1330,6 +1304,16 @@ bool MemoryRegion::Load(GlobalMemoryLocation const& base, std::istream& is, std:
     //cout << "MemoryRegion::base_address = " << hex << base_address << endl;
     //cout << "MemoryRegion::region_size = " << hex << region_size << endl;
 
+    // flat_memory is stored here. before FILE_VERSION_FLATMEMORY, we can't yet
+    // tell if our memory is backed, so we have to wait until objects are loaded
+    if(GetCurrentProject()->GetSaveFileVersion() >= FILE_VERSION_FLATMEMORY) {
+        bool backed = (bool)ReadVarInt<int>(is);
+        if(backed) {
+            flat_memory = new u8[region_size];
+            is.read((char*)flat_memory, region_size);
+        }
+    }
+
     // initialize memory object storage
     Erase();
     object_refs.resize(region_size);
@@ -1340,7 +1324,26 @@ bool MemoryRegion::Load(GlobalMemoryLocation const& base, std::istream& is, std:
 
         auto obj = make_shared<MemoryObject>();
         if(!obj->Load(is, errmsg)) return false;
-        
+
+        // old projects stored their data in the memory object, so we need to copy 
+        // that over to flat_memory.
+        if(GetCurrentProject()->GetSaveFileVersion() < FILE_VERSION_FLATMEMORY) {
+            if(obj->backed) {
+                // allocate memory when we encounter the first backed object
+                if(!flat_memory) flat_memory = new u8[region_size];
+
+                // copy the data
+                memcpy(&flat_memory[offset], obj->data_ptr, obj->GetSize());
+
+                // free the objects pointer
+                delete [] obj->data_ptr;
+                obj->data_ptr = nullptr;
+            }
+        }
+
+        // set data_ptr here so that GetSize() works correctly
+        if(obj->backed) obj->data_ptr = &flat_memory[offset];
+
         // we used to call obj->NoteReference() here, but we need all memory locations to be loaded
         // (and therefore assigned all their labels) before we can note any references. 
         // It's a problem if there's a label reference at $8000 referring to $9000, but memory object $9000
@@ -1350,8 +1353,10 @@ bool MemoryRegion::Load(GlobalMemoryLocation const& base, std::istream& is, std:
         for(u32 i = 0; i < obj->GetSize(); i++) object_refs[offset + i] = obj;
 
         // next offset
+        auto obj_offset = offset;
         offset += obj->GetSize();
-    }
+
+     }
 
     // Rebuild the object tree using the list of object references
     ReinitializeFromObjectRefs();

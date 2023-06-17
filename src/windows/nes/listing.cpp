@@ -116,13 +116,14 @@ void Listing::Follow()
         } else if(memory_object->type == MemoryObject::TYPE_CODE) {
             u16 dest = 0;
             if(memory_object->GetSize() == 2) {
-                dest = (u16)memory_object->code.operands[0];
+                dest = (u16)memory_object->data_ptr[1];
             } else if(memory_object->GetSize() == 3) {
-                dest = (u16)memory_object->code.operands[0] | ((u16)memory_object->code.operands[1] << 8);
+                dest = (u16)memory_object->data_ptr[1] | ((u16)memory_object->data_ptr[2] << 8);
             }
             GoToAddress(dest, true);
         } else if(memory_object->type == MemoryObject::TYPE_WORD) {
-            GoToAddress(memory_object->hval, true);
+            u16 hval = (u16)memory_object->data_ptr[0] | ((u16)memory_object->data_ptr[1] << 8);
+            GoToAddress(hval, true);
         }
     }
 }
@@ -348,7 +349,7 @@ void Listing::CreateDestinationLabel()
     if(memory_object->type != MemoryObject::TYPE_WORD) return;
 
     // use the word data as a pointer to memory
-    u16 target = memory_object->hval;
+    u16 target = (u16)memory_object->data_ptr[0] | ((u16)memory_object->data_ptr[1] << 8);
 
     // set up a default address using the current bank/address
     GlobalMemoryLocation label_address(current_selection);

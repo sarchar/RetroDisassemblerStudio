@@ -250,10 +250,7 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
             stringstream ss;
             ss << hex << setfill('0') << uppercase;
             for(int i = 0; i < objsize; i++) {
-                int bval = (int)((u8*)&memory_object->bval)[i];
-                if(memory_object->type == MemoryObject::TYPE_STRING) {
-                    bval = memory_object->str.data[i];
-                }
+                int bval = (int)memory_object->data_ptr[i];
                 ss << setw(2) << bval;
                 if(i != (objsize - 1)) ss << " ";
             }
@@ -321,7 +318,7 @@ void ListingItemPrimary::EditOperandExpression(shared_ptr<System>& system, Globa
     auto disassembler = system->GetDisassembler();
     if(auto memory_object = system->GetMemoryObject(where)) {
         if(memory_object->type == MemoryObject::TYPE_CODE) {
-            switch(disassembler->GetAddressingMode(memory_object->code.opcode)) {
+            switch(disassembler->GetAddressingMode(*memory_object->data_ptr)) {
             case Systems::NES::AM_IMPLIED:
             case Systems::NES::AM_ACCUM:
                 break;

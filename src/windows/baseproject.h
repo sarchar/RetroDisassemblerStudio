@@ -16,7 +16,7 @@
 #include "windows/basewindow.h"
 
 #define PROJECT_FILE_MAGIC         0x8781A90AFDE1F317ULL
-#define PROJECT_FILE_VERSION       FILE_VERSION_READVARINT2
+#define PROJECT_FILE_VERSION       FILE_VERSION_FLATMEMORY
 #define PROJECT_FILE_DEFAULT_FLAGS 0
 
 // Add a new flag equal to the version number above
@@ -28,7 +28,8 @@ enum FILE_VERSIONS {
     FILE_VERSION_BASE        = 0x00000101,
     FILE_VERSION_SAVE_STATES = 0x00000102,   // support for Save States
     FILE_VERSION_ENUMS       = 0x00000103,   // support for Enums
-    FILE_VERSION_READVARINT2 = 0x00000104    // support for negative and 64-bit values in Read/WriteVarInt
+    FILE_VERSION_READVARINT2 = 0x00000104,   // support for negative and 64-bit values in Read/WriteVarInt
+    FILE_VERSION_FLATMEMORY  = 0x00000105    // change memory objects view of memory to MemoryRegion::flat_memory
 };
 
 class BaseSystem;

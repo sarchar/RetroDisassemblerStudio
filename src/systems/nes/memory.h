@@ -186,28 +186,15 @@ struct MemoryObject {
         std::shared_ptr<std::string> post;
     } comments;
 
-    union {
-        u8  bval;
-        u16 hval;
+    // data is now indirectly read from the region's flat memory view
+    // this also technically lets a MemoryObject determine its own offset into the region
+    u8* data_ptr;
 
-        struct {
-            u8* data;
-            int len;
-        } str;
-
-        struct {
-            u8 opcode;
-            u8 operands[2]; // max 2 per opcode
-        } code;
-
-        // TODO array
-        std::vector<std::shared_ptr<MemoryObject>> array = {};
-    };
+    // used only for string data
+    int string_length;
 
     MemoryObject() {}
-    ~MemoryObject() {
-        if(type == TYPE_STRING) delete [] str.data;
-    }
+    ~MemoryObject() {}
 
     void NoteReferences(GlobalMemoryLocation const&);
     void RemoveReferences(GlobalMemoryLocation const&);
@@ -302,8 +289,12 @@ public:
 
     u32  GetListingIndexByAddress(GlobalMemoryLocation const&);
 
-    u8  ReadByte(int offset);
-    void Copy(u8* dest, int offset, int size);
+    inline u8 ReadByte(int offset) { 
+        return flat_memory[ConvertToRegionOffset(offset)]; 
+    }
+    inline void Copy(u8* dest, int offset, int size) {
+        memcpy(dest, flat_memory + ConvertToRegionOffset(offset), size);
+    }
 
     // Labels
     void ApplyLabel(std::shared_ptr<Label>&);
@@ -317,7 +308,7 @@ public:
     bool MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byte_count);
 
     // Code
-    bool MarkMemoryAsCode(GlobalMemoryLocation const& where, u32 byte_count);
+    bool MarkMemoryAsCode(GlobalMemoryLocation const& where);
     void SetOperandExpression(GlobalMemoryLocation const& where, std::shared_ptr<Expression> const&);
 
     // Comments
@@ -348,6 +339,7 @@ protected:
 
 private:
     std::string name;
+    u8* flat_memory = nullptr;
 
     void Erase();
 
@@ -359,7 +351,7 @@ private:
     std::shared_ptr<MemoryObjectTreeNode> object_tree_root = nullptr;
 
     void _InitializeEmpty(std::shared_ptr<MemoryObjectTreeNode>&, u32, int);
-    void _InitializeFromData(std::shared_ptr<MemoryObjectTreeNode>&, u32, u8*, int);
+    void _InitializeFromData(std::shared_ptr<MemoryObjectTreeNode>&, u32, int);
     void _ReinializeFromObjectRefs(std::shared_ptr<MemoryObjectTreeNode>&, std::vector<int> const&, u32, int);
     void _UpdateMemoryObject(std::shared_ptr<MemoryObject>&, u32);
     void RemoveMemoryObjectFromTree(std::shared_ptr<MemoryObject>&, bool save_tree_node = false);
