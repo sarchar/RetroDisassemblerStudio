@@ -14,6 +14,7 @@ source code for old games.
 * Watches, breakpoints, labels, defines, enums
 * Multiple running instances with separate state
 * Each instance contains its own collection of save states
+* Comments with embeddable expressions and code links
 
 ## TODO
 
@@ -22,7 +23,7 @@ Still to do are some pretty large tasks:
 * Ability to export the project as source code (.ASM files)
 * Search and filter changes in memory
 * For the emulator: audio, more mappers, optimizations
-* For the editor: quality of life changes, multi-line comments, and plenty more
+* For the editor: opcode editing
 
 ## Screenshots
 
