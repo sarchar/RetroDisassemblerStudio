@@ -14,10 +14,14 @@
 #include "systems/nes/memory.h"
 #include "systems/nes/referenceable.h"
 
+namespace Systems {
+    class BaseComment;
+}
+
 namespace Systems::NES {
 
 class Label : public std::enable_shared_from_this<Label>, 
-              public Systems::Referenceable<GlobalMemoryLocation> {
+              public Systems::Referenceable<GlobalMemoryLocation, Systems::BaseComment> {
 public:
     Label(GlobalMemoryLocation const&, std::string const&);
     ~Label();

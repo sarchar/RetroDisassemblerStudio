@@ -41,6 +41,8 @@ public:
     void GoToCurrentInstruction();
     void Refocus(); // re focus on the current selection
     void Follow();
+    void GoBack(); // go back in the location history
+    void GoForward(); // go forward in the location history
 
     // signals
 

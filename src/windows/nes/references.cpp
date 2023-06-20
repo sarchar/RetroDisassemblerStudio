@@ -10,6 +10,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
+#include "systems/nes/comment.h"
 #include "systems/nes/defines.h"
 #include "systems/nes/enum.h"
 #include "systems/nes/label.h"
@@ -127,16 +128,20 @@ void References::Render()
                 auto a_memory = get_if<shared_ptr<GlobalMemoryLocation>>(&a);
                 auto a_define = get_if<shared_ptr<Define>>(&a);
                 auto a_ee     = get_if<shared_ptr<EnumElement>>(&a);
+                auto a_com    = get_if<shared_ptr<BaseComment>>(&a);
                 auto b_memory = get_if<shared_ptr<GlobalMemoryLocation>>(&b);
                 auto b_define = get_if<shared_ptr<Define>>(&b);
                 auto b_ee     = get_if<shared_ptr<EnumElement>>(&b);
+                auto b_com    = get_if<shared_ptr<BaseComment>>(&b);
 
                 if(a_memory && b_memory) {
                     diff = system->GetSortableMemoryLocation(**a_memory) <= system->GetSortableMemoryLocation(**b_memory);
                 } else if(a_define && b_define) {
                     diff = (*a_define)->GetName() <= (*b_define)->GetName(); // standard string compare
-                } else if(a_ee && a_ee) {
+                } else if(a_ee && b_ee) {
                     diff = (*a_ee)->GetName() <= (*b_ee)->GetName(); // standard string compare
+                } else if(a_com && b_com) {
+                    diff = false; // TODO compare location of comment
                 }
 
                 // flip the direction if descending
@@ -155,6 +160,7 @@ void References::Render()
             std::function<void()> go;
             if(auto memory_ptr = get_if<shared_ptr<GlobalMemoryLocation>>(&location)) {
                 auto memory = *memory_ptr;
+                ss << "Operand: ";
 
                 if(system->CanBank(*memory)) {
                     if(auto memory_region = system->GetMemoryRegion(*memory)) {
@@ -184,6 +190,25 @@ void References::Render()
 
                 go = [this, ee]() {
                     cout << WindowPrefix() << "TODO: Highlight enum" << endl;
+                };
+            } else if(auto pcom = get_if<shared_ptr<BaseComment>>(&location)) {
+                auto com = dynamic_pointer_cast<Systems::NES::Comment>(*pcom);
+                auto memory = com->GetLocation();
+
+                ss << "Comment: ";
+
+                if(system->CanBank(memory)) {
+                    if(auto memory_region = system->GetMemoryRegion(memory)) {
+                        ss << memory_region->GetName() << ":";
+                    }
+                }
+
+                memory.FormatAddress(ss, false, false);
+
+                go = [this, memory]() {
+                    if(auto listing = GetMyListing()) {
+                        listing->GoToAddress(memory, true);
+                    }
                 };
             }
 

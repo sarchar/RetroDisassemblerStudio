@@ -21,6 +21,7 @@
 #include "windows/nes/listingitems.h"
 #include "windows/nes/references.h"
 
+#include "systems/nes/comment.h"
 #include "systems/nes/disasm.h"
 #include "systems/nes/enum.h"
 #include "systems/nes/expressions.h"
@@ -73,7 +74,29 @@ void ListingItemBlankLine::Render(shared_ptr<Windows::NES::SystemInstance> const
     }
 }
 
-void ListingItemPrePostComment::Render(shared_ptr<Windows::NES::SystemInstance> const& system_instance, shared_ptr<System>& system, 
+static void SetupPrimaryTableColumns()
+{
+    float bp_size = ImGui::GetTextLineHeight();
+    ImGui::TableSetupColumn("##Break"   , ImGuiTableColumnFlags_WidthFixed, bp_size);
+    ImGui::TableSetupColumn("Address"   , ImGuiTableColumnFlags_WidthFixed, 92); // some saner default sizes, taken from the printout below
+    ImGui::TableSetupColumn("Spacing0"  , ImGuiTableColumnFlags_WidthFixed, 31);
+    ImGui::TableSetupColumn("Raw"       , ImGuiTableColumnFlags_WidthFixed, 88);
+    ImGui::TableSetupColumn("Mnemonic"  , ImGuiTableColumnFlags_WidthFixed, 63);
+    ImGui::TableSetupColumn("Operand"   , ImGuiTableColumnFlags_WidthFixed, 257);
+    ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthStretch); // stretch comment to EOL
+
+    // uncomment to print out column widths. TODO allow user to decide to save the widths as a global default
+    //!if(selected && ImGui::IsMouseClicked(0)) {
+    //!    ImGuiTable* table = ImGui::GetCurrentTable();
+    //!    for(int i = 0; i < table->ColumnsCount; i++) {
+    //!        ImGuiTableColumn& col = table->Columns[i];
+    //!        cout << (float)col.WidthGiven << " ";
+    //!    }
+    //!    cout << endl;
+    //!}
+}
+
+void ListingItemCommentOnly::Render(shared_ptr<Windows::NES::SystemInstance> const& system_instance, shared_ptr<System>& system, 
         GlobalMemoryLocation const& where, u32 flags, 
         bool focused, bool selected, bool hovered, postponed_changes& changes)
 {
@@ -83,31 +106,115 @@ void ListingItemPrePostComment::Render(shared_ptr<Windows::NES::SystemInstance> 
         table_flags |= ImGuiTableFlags_BordersInnerV;
     }
 
-    if(ImGui::BeginTable(is_post ? "listing_item_postcomment" : "listing_item_precomment", 2, table_flags)) {
-        ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed, 4.0f);
-        ImGui::TableSetupColumn("Comment", ImGuiTableColumnFlags_WidthStretch);
+    auto memory_object = system->GetMemoryObject(where);
+    if(!memory_object) return;
+    auto comment = memory_object->GetComment(comment_type);
+    if(!comment) return;
 
-        ImGui::TableNextRow();
-        
-        ImGui::TableNextColumn();
-        ImGui::Text("        ");
+    // For EOL comments we use the same table name as Primary listing items
+    // so that the columns align with the ListingItemPrimary items
+    char const* table_name = 
+        (comment_type == MemoryObject::COMMENT_TYPE_PRE) ? "listing_item_precomment"
+            : (comment_type == MemoryObject::COMMENT_TYPE_POST) ? "listing_item_postcomment"
+                : "listing_item_primary";
+
+    // the listing_item_primary table has 7 columns, while the others have two
+    int num_columns = (comment_type == MemoryObject::COMMENT_TYPE_EOL) ? 7 : 2;
+
+    if(ImGui::BeginTable(table_name, num_columns, table_flags)) {
+        // set up the columns and select the final column
+        switch(comment_type) {
+        case MemoryObject::COMMENT_TYPE_PRE:
+        case MemoryObject::COMMENT_TYPE_POST:
+            ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed, 4.0f);
+            ImGui::TableSetupColumn("Comment", ImGuiTableColumnFlags_WidthStretch);
+
+            ImGui::TableNextRow();
+            
+            ImGui::TableNextColumn();
+            ImGui::Text("        ");
     
-        ImGui::TableNextColumn();
-        string comment;
-        system->GetComment(where, is_post ? MemoryObject::COMMENT_TYPE_POST : MemoryObject::COMMENT_TYPE_PRE, comment); // TODO multiline
-        //!if(selected) {
-        //!    ImGui::InputTextMultiline("", &comment, ImVec2(0, 0), 0);
-        //!} else {
-            ImGui::Text("; %s", comment.c_str());
-        //!}
+            ImGui::TableNextColumn();
+            break;
+
+        case MemoryObject::COMMENT_TYPE_EOL:
+            SetupPrimaryTableColumns();
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn(); // Break
+            ImGui::TableNextColumn(); // Address
+            ImGui::TableNextColumn(); // Spacing0
+            ImGui::TableNextColumn(); // Raw
+            ImGui::TableNextColumn(); // Mnemonic
+            ImGui::TableNextColumn(); // Operand
+            ImGui::TableNextColumn(); // EOLComment
+            break;
+
+        default:
+            assert(false); // unimplemented
+            break;
+        }
+
+        RenderCommentContent(system_instance, comment, comment_line, changes);
 
         ImGui::EndTable();
     }
 }
 
-bool ListingItemPrePostComment::IsEditing() const 
+void ListingItemCommentOnly::RenderCommentContent(shared_ptr<Windows::NES::SystemInstance> const& system_instance,
+        shared_ptr<BaseComment> const& comment, int comment_line, ListingItem::postponed_changes& changes)
 {
-    return false;
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0,-1));
+    ImGui::Text("; ");
+    for(int j = 0; j < comment->GetLineItemCount(comment_line); j++) {
+        string item;
+
+        auto t = comment->FormatLineItem(comment_line, j, item, false);
+        switch(t) {
+        case BaseComment::LINE_ITEM_TYPE::STRING:
+            break;
+        case BaseComment::LINE_ITEM_TYPE::EXPRESSION:
+            ImGui::PushStyleColor(ImGuiCol_Text, (ImU32)ImColor(0, 0, 255, 255));
+            break;
+        case BaseComment::LINE_ITEM_TYPE::ERROR:
+            ImGui::PushStyleColor(ImGuiCol_Text, (ImU32)ImColor(255, 0, 0, 255));
+            break;
+        }
+
+        ImGui::SameLine();
+        ImGui::Text("%s", item.c_str());
+
+        switch(t) {
+        case BaseComment::LINE_ITEM_TYPE::ERROR:
+        case BaseComment::LINE_ITEM_TYPE::EXPRESSION: {
+            ImGui::PopStyleColor(1);
+            ImVec2 line_end = ImGui::GetItemRectMax();
+            line_end.y -= 1;
+            ImVec2 line_start = line_end;
+            line_start.x = ImGui::GetItemRectMin().x;
+            ImGui::GetWindowDrawList()->AddLine(line_start, line_end, ImColor(0, 0, 0, 255));
+            break;
+        }
+        default:
+            break;
+        }
+
+        if((t == BaseComment::LINE_ITEM_TYPE::EXPRESSION) && ImGui::IsItemHovered()) {
+            s64 long_address;
+            comment->FormatLineItem(comment_line, j, item, true, &long_address);
+            if(ImGui::IsMouseDoubleClicked(0)) {
+                auto listing = system_instance->GetMostRecentListingWindow();
+                if(listing) {
+                    GlobalMemoryLocation dest;
+                    system_instance->GetSystem()->GetLocationFromLongAddress(long_address, dest);
+                    changes.push_back([dest, listing]() {
+                        listing->GoToAddress(dest, true);
+                    });
+                }
+            }
+            ImGui::SetTooltip("%s", item.c_str());
+        }
+    }
+    ImGui::PopStyleVar(1);
 }
 
 void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& system_instance, shared_ptr<System>& system, 
@@ -123,15 +230,13 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
     auto memory_object = system->GetMemoryObject(where);
     if(!memory_object) return;
     auto disassembler = system->GetDisassembler();
+    auto comment = memory_object->GetComment(MemoryObject::COMMENT_TYPE_EOL);
 
     // only receive keyboard input if the window the listing item is in is in focus
-    if(focused) {
+    // and only respond on the primary line
+    if(focused && line == 0) {
         if(selected && edit_mode == EDIT_NONE) {
-            if(ImGui::IsKeyPressed(ImGuiKey_Semicolon)) { // edit the EOL comment
-                system->GetComment(where, MemoryObject::COMMENT_TYPE_EOL, edit_buffer);
-                edit_mode = EDIT_EOL_COMMENT;
-                started_editing = true;
-            } else if(ImGui::IsKeyPressed(ImGuiKey_Enter)) { // edit the operand expression
+            if(ImGui::IsKeyPressed(ImGuiKey_Enter)) { // edit the operand expression
                 EditOperandExpression(system, where);
             } else if(ImGui::IsKeyPressed(ImGuiKey_Backspace)) { // clear labels
                 ResetOperandExpression(system, where);
@@ -152,9 +257,7 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
     }
 
     // losing selection can happen without focus
-    if(!selected) {
-        edit_mode = EDIT_NONE;
-    }
+    if(!selected) edit_mode = EDIT_NONE;
 
     // make sure the suggestion popup is closed when not editing
     if(edit_mode == EDIT_NONE && ImGui::IsPopupOpen("##suggestion")) {
@@ -165,32 +268,14 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
         }
     }
 
-    float bp_size = ImGui::GetTextLineHeight();
-
     if(ImGui::BeginTable("listing_item_primary", 7, table_flags)) { // using the same name for each data TYPE allows column sizes to line up
-        ImGui::TableSetupColumn("##Break", ImGuiTableColumnFlags_WidthFixed, bp_size);
-        ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed , 92); // some saner default sizes, taken from the printout below
-        ImGui::TableSetupColumn("Spacing0", ImGuiTableColumnFlags_WidthFixed, 31);
-        ImGui::TableSetupColumn("Raw", ImGuiTableColumnFlags_WidthFixed     , 88);
-        ImGui::TableSetupColumn("Mnemonic", ImGuiTableColumnFlags_WidthFixed, 63);
-        ImGui::TableSetupColumn("Operand", ImGuiTableColumnFlags_WidthFixed , 257);
-        ImGui::TableSetupColumn("EOLComment", ImGuiTableColumnFlags_WidthStretch); // stretch comment to EOL
-
-        // uncomment to print out column widths. TODO allow user to decide to save the widths as a global default
-        //!if(selected && ImGui::IsMouseClicked(0)) {
-        //!    ImGuiTable* table = ImGui::GetCurrentTable();
-        //!    for(int i = 0; i < table->ColumnsCount; i++) {
-        //!        ImGuiTableColumn& col = table->Columns[i];
-        //!        cout << (float)col.WidthGiven << " ";
-        //!    }
-        //!    cout << endl;
-        //!}
+        SetupPrimaryTableColumns();
 
         ImGui::TableNextRow();
     
         ImGui::TableNextColumn();   // same color as the address field
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200, (selected || hovered) ? 128 : 255));
-        {
+        if(line == 0) {
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200, (selected || hovered) ? 128 : 255));
             Windows::NES::SystemInstance::breakpoint_list_t bplist = system_instance->GetBreakpointsAt(where);
 
             // extend bplist with the non-bank-specific breakpoints
@@ -239,13 +324,15 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
         }
 
         ImGui::TableNextColumn();
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200, (selected || hovered) ? 128 : 255));
-        ImGui::Text("$%02X:%04X", where.prg_rom_bank, where.address);
+        if(line == 0) {
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, (ImU32)ImColor(200, 200, 200, (selected || hovered) ? 128 : 255));
+            ImGui::Text("$%02X:%04X", where.prg_rom_bank, where.address);
+        }
 
         ImGui::TableNextColumn(); // spacing
 
         ImGui::TableNextColumn(); // Raw bytes display
-        {
+        if(line == 0) { // TODO this will need improvement one day
             int objsize = memory_object->GetSize();
             stringstream ss;
             ss << hex << setfill('0') << uppercase;
@@ -259,51 +346,33 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
         }
 
         ImGui::TableNextColumn();
-        ImGui::Text("%s", memory_object->FormatInstructionField(disassembler).c_str());
+        if(line == 0) ImGui::Text("%s", memory_object->FormatInstructionField(disassembler).c_str());
 
         ImGui::TableNextColumn();
-        if(edit_mode == EDIT_OPERAND_EXPRESSION) {
-            // when editing, we want this column to take the rest of the row
-            RenderEditOperandExpression(system);
-            goto end_table;
-        } else {
-            // TODO The line value will be used to index into the middle of data arrays, so that
-            // multiple data listing items can show something like:
-            // 
-            // .DB $01, $02, $03,
-            //     $04, $05, $06
-            //     $07
-            //
-            string operand = memory_object->FormatOperandField(line, disassembler);
-            ImGui::Text("%s", operand.c_str());
-            if(hovered && ImGui::IsMouseDoubleClicked(0)) { // edit on double click
-                EditOperandExpression(system, where);
-            }
-        }
-
-        ImGui::TableNextColumn();
-        if(edit_mode == EDIT_EOL_COMMENT) {
-            if(started_editing) {
-                ImGui::SetKeyboardFocusHere();
-                started_editing = false;
-            }
-            ImGui::PushItemWidth(-FLT_MIN);
-            if(ImGui::InputText("", &edit_buffer, ImGuiInputTextFlags_EnterReturnsTrue)) {
-                system->SetComment(where, MemoryObject::COMMENT_TYPE_EOL, edit_buffer);
-                edit_mode = EDIT_NONE;
-            }
-        } else {
-            string eol_comment;
-            system->GetComment(where, MemoryObject::COMMENT_TYPE_EOL, eol_comment); // TODO multiline
-            if(eol_comment.size()) {
-                ImGui::Text("; %s", eol_comment.c_str());
-                if(hovered && ImGui::IsMouseDoubleClicked(0)) { // edit on double click
-                    edit_buffer = eol_comment;
-                    edit_mode = EDIT_EOL_COMMENT;
-                    started_editing = true;
+        if(line == 0) {
+            if(edit_mode == EDIT_OPERAND_EXPRESSION) {
+                // when editing, we want this column to take the rest of the row
+                RenderEditOperandExpression(system);
+                goto end_table;
+            } else {
+                // TODO The line value will be used to index into the middle of data arrays, so that
+                // multiple data listing items can show something like:
+                // 
+                // .DB $01, $02, $03,
+                //     $04, $05, $06
+                //     $07
+                //
+                string operand = memory_object->FormatOperandField(line, disassembler);
+                ImGui::Text("%s", operand.c_str());
+                if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) { // edit on double click
+                    EditOperandExpression(system, where);
                 }
             }
         }
+
+        // Comment
+        ImGui::TableNextColumn();
+        if(comment) ListingItemCommentOnly::RenderCommentContent(system_instance, comment, 0, changes);
 
 end_table:
         ImGui::EndTable();

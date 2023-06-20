@@ -13,6 +13,7 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <vector>
 
 typedef unsigned char u8;
 typedef signed char s8;
@@ -185,6 +186,43 @@ inline void ReadString(std::istream& is, std::string& s)
     auto len = ReadVarInt<u32>(is);
     s.resize(len);
     is.read(&s[0], len);
+}
+
+// implement WriteVectorElement and ReadVectorElement for vectors you want to write
+template<class T> inline bool WriteVectorElement(std::ostream& os, std::string& errmsg, T const& val);
+template<class T> inline bool ReadVectorElement(std::istream& is, std::string& errmsg, T& out, void* userdata);
+
+template<class T>
+inline bool WriteVector(std::ostream& os, std::string& errmsg, std::vector<T> const& vec)
+{
+    WriteVarInt(os, (int)vec.size());
+    for(auto& elem : vec) if(!WriteVectorElement(os, errmsg, elem)) return false;
+    return true;
+}
+
+template<class T>
+inline bool ReadVector(std::istream& is, std::string& errmsg, std::vector<T>& vec, void* userdata = nullptr)
+{
+    vec.clear();
+    int size = ReadVarInt<int>(is);
+    for(int i = 0; i < size; i++) {
+        T elem;
+        if(!ReadVectorElement(is, errmsg, elem, userdata)) return false;
+        vec.push_back(elem);
+    }
+    return true;
+}
+
+template<class T>
+inline bool WriteVectorElement(std::ostream& os, std::string& errmsg, std::vector<T> const& vec)
+{
+    return WriteVector(os, errmsg, vec);
+}
+
+template<class T>
+inline bool ReadVectorElement(std::istream& is, std::string& errmsg, std::vector<T>& vec, void* userdata)
+{
+    return ReadVector(is, errmsg, vec, userdata);
 }
 
 template<class T>

@@ -15,6 +15,7 @@
 #include "magic_enum.hpp"
 #include "util.h"
 
+#include "systems/nes/comment.h"
 #include "systems/nes/disasm.h"
 #include "systems/nes/expressions.h"
 #include "systems/nes/label.h"
@@ -133,20 +134,41 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
         obj->listing_items.push_back(make_shared<Windows::NES::ListingItemBlankLine>());
     }
 
+    // create the pre comment
+    if(obj->comments.pre) {
+        for(int i = 0; i < obj->comments.pre->GetLineCount(); i++) {
+            obj->listing_items.push_back(make_shared<Windows::NES::ListingItemCommentOnly>(MemoryObject::COMMENT_TYPE_PRE, i));
+        }
+    }
+
+    // create an item for each label
     for(int nth = 0; nth < obj->labels.size(); nth++) {
         auto& label = obj->labels[nth];
         obj->listing_items.push_back(make_shared<Windows::NES::ListingItemLabel>(label, nth));
     }
 
-    // create the pre comment
-    if(obj->comments.pre) obj->listing_items.push_back(make_shared<Windows::NES::ListingItemPrePostComment>(0, false));
-
     // the primary index is used to focus on code or data when moving to locations in the listing windows
     obj->primary_listing_item_index = obj->listing_items.size();
-    obj->listing_items.push_back(make_shared<Windows::NES::ListingItemPrimary>(0));
+
+    // create the primary memory object line
+    {
+        int index = 0;
+        obj->listing_items.push_back(make_shared<Windows::NES::ListingItemPrimary>(index++));
+
+        // add EOL comments not including the first (printed in the Primary item)
+        if(obj->comments.eol) {
+            for(int i = 1; i < obj->comments.eol->GetLineCount(); i++) {
+                obj->listing_items.push_back(make_shared<Windows::NES::ListingItemCommentOnly>(MemoryObject::COMMENT_TYPE_EOL, i));
+            }
+        }
+    }
 
     // create the post comment
-    if(obj->comments.post) obj->listing_items.push_back(make_shared<Windows::NES::ListingItemPrePostComment>(0, true));
+    if(obj->comments.post) {
+        for(int i = 0; i < obj->comments.pre->GetLineCount(); i++) {
+            obj->listing_items.push_back(make_shared<Windows::NES::ListingItemCommentOnly>(MemoryObject::COMMENT_TYPE_POST, i));
+        }
+    }
 }
 
 void MemoryRegion::_InitializeFromData(shared_ptr<MemoryObjectTreeNode>& tree_node, u32 region_offset, int count)
@@ -884,7 +906,9 @@ void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
             ee_node->GetEnumElement()->NoteReference(where_ptr);
         } else if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
             // tell the expression node to update the reference to the label
-            label_node->NoteReference(where_ptr);
+            label_node->Update();
+            auto label = label_node->GetLabel();
+            if(label) label->NoteReference(where_ptr);
 
             // and create a callback for any label created at the target address
             auto system = GetSystem();
@@ -893,16 +917,16 @@ void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
             label_connections.push_back(make_shared<LabelCreatedData>(LabelCreatedData {
                 .target = target,
                 .created_connection = system->LabelCreatedAt(target)->connect(
-                        [this, where_ptr, label_node](shared_ptr<Label> const& label, bool was_user_created) {
+                        [this, where_ptr](shared_ptr<Label> const& label, bool was_user_created) {
                             // this will notify the new label that we're referring to it. if a different label is created
                             // at the same address, this won't reference that label since the current expression node already has
                             // a label
-                            label_node->NoteReference(where_ptr);
+                            label->NoteReference(where_ptr);
                         }),
                 .deleted_connection = system->LabelDeletedAt(target)->connect(
                         [this, where_ptr, label_node](shared_ptr<Label> const& label, int nth) {
                             if(label_node->GetNth() == nth) { // only if the deleted label is the one we are referring to
-                                label_node->RemoveReference(where_ptr);
+                                label->RemoveReference(where_ptr);
                                 label_node->Reset();
                                 label_node->Update();
                             }
@@ -914,6 +938,11 @@ void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
 
     // TODO clear all label_created signal handlers before recreating them
     if(!operand_expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
+
+    // note references in comments as well
+    if(comments.pre) comments.pre->NoteReferences();
+    if(comments.eol) comments.eol->NoteReferences();
+    if(comments.post) comments.post->NoteReferences();
 }
 
 void MemoryObject::RemoveReferences(GlobalMemoryLocation const& where)
@@ -943,7 +972,8 @@ void MemoryObject::RemoveReferences(GlobalMemoryLocation const& where)
         } else if(auto ee_node = dynamic_pointer_cast<ExpressionNodes::EnumElement>(node)) {
             ee_node->GetEnumElement()->RemoveReference(where_ptr);
         } else if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
-            label_node->RemoveReference(where_ptr);
+            auto label = label_node->GetLabel();
+            if(label) label->RemoveReference(where_ptr);
         }
         return true;
     };
@@ -987,7 +1017,8 @@ void MemoryObject::ClearReferencesToLabels(GlobalMemoryLocation const& where)
             node = nc->CreateConstant(address, label_node->GetDisplay());
 
             // remove any reference to that label here
-            label_node->RemoveReference(where_ptr);
+            auto label = label_node->GetLabel();
+            if(label) label->RemoveReference(where_ptr);
         }
         return true;
     };
@@ -1174,9 +1205,9 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
     if(operand_expression && !operand_expression->Save(os, errmsg)) return false;
 
     // comments
-    if(comments.eol)  WriteString(os, *comments.eol);
-    if(comments.pre)  WriteString(os, *comments.pre);
-    if(comments.post) WriteString(os, *comments.post);
+    if(comments.eol  && !comments.eol->Save(os, errmsg)) return false;
+    if(comments.pre  && !comments.pre->Save(os, errmsg)) return false;
+    if(comments.post && !comments.post->Save(os, errmsg)) return false;
 
     if(!os.good()) {
         errmsg = "Error writing MemoryObject data";
@@ -1237,23 +1268,38 @@ bool MemoryObject::Load(std::istream& is, std::string& errmsg)
     }
 
     if(fields_present & (1 << 1)) {
-        string s;
-        ReadString(is, s);
-        comments.eol = make_shared<string>(s);
+        if(GetCurrentProject()->GetSaveFileVersion() < FILE_VERSION_COMMENTS) {
+            string s;
+            ReadString(is, s);
+            comments.eol = make_shared<Comment>();
+            comments.eol->Set(s);
+        } else {
+            if(!(comments.eol = Comment::Load(is, errmsg))) return false;
+        }
         //cout << "comment.eol: " << *comments.eol << endl;
     }
 
     if(fields_present & (1 << 2)) {
-        string s;
-        ReadString(is, s);
-        comments.pre = make_shared<string>(s);
+        if(GetCurrentProject()->GetSaveFileVersion() < FILE_VERSION_COMMENTS) {
+            string s;
+            ReadString(is, s);
+            comments.pre = make_shared<Comment>();
+            comments.pre->Set(s);
+        } else {
+            if(!(comments.pre = Comment::Load(is, errmsg))) return false;
+        }
         //cout << "comment.pre: " << *comments.pre << endl;
     }
 
     if(fields_present & (1 << 3)) {
-        string s;
-        ReadString(is, s);
-        comments.post = make_shared<string>(s);
+        if(GetCurrentProject()->GetSaveFileVersion() < FILE_VERSION_COMMENTS) {
+            string s;
+            ReadString(is, s);
+            comments.post = make_shared<Comment>();
+            comments.post->Set(s);
+        } else {
+            if(!(comments.post = Comment::Load(is, errmsg))) return false;
+        }
         //cout << "comment.post: " << *comments.post << endl;
     }
 
@@ -1344,6 +1390,20 @@ bool MemoryRegion::Load(GlobalMemoryLocation const& base, std::istream& is, std:
         // set data_ptr here so that GetSize() works correctly
         if(obj->backed) obj->data_ptr = &flat_memory[offset];
 
+        // set all the comments to their location
+        if(obj->comments.pre) {
+            auto com = dynamic_pointer_cast<Comment>(obj->comments.pre);
+            com->SetLocation(where);
+        }
+        if(obj->comments.eol) {
+            auto com = dynamic_pointer_cast<Comment>(obj->comments.eol);
+            com->SetLocation(where);
+        }
+        if(obj->comments.post) {
+            auto com = dynamic_pointer_cast<Comment>(obj->comments.post);
+            com->SetLocation(where);
+        }
+
         // we used to call obj->NoteReference() here, but we need all memory locations to be loaded
         // (and therefore assigned all their labels) before we can note any references. 
         // It's a problem if there's a label reference at $8000 referring to $9000, but memory object $9000
@@ -1362,6 +1422,18 @@ bool MemoryRegion::Load(GlobalMemoryLocation const& base, std::istream& is, std:
     ReinitializeFromObjectRefs();
 
     return true;
+}
+
+void MemoryRegion::SetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, 
+                shared_ptr<BaseComment> const& comment) {
+    if(auto memory_object = GetMemoryObject(where)) {
+        memory_object->SetComment(type, comment);
+        // TODO when GlobalMemoryLocation is no longer part of Systems::NES
+        // then we don't need the cast anymore and SetLocation can be part of BaseComment
+        auto nes_comment = dynamic_pointer_cast<Comment>(comment);
+        nes_comment->SetLocation(where);
+        UpdateMemoryObject(where);
+    }
 }
 
 void MemoryRegion::NoteReferences(GlobalMemoryLocation const& base)

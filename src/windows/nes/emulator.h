@@ -153,6 +153,7 @@ public:
     std::shared_ptr<PPU>        const& GetPPU()        { return ppu; }
     u32                         const* GetFramebuffer() const { return framebuffer; }
     std::shared_ptr<MemoryView> const& GetMemoryView() { return memory_view; }
+    std::shared_ptr<System>     const& GetSystem()     { return current_system; }
 
     template<class T>
     std::shared_ptr<T> GetMemoryViewAs() { return dynamic_pointer_cast<T>(memory_view); }

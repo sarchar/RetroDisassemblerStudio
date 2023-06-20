@@ -11,6 +11,10 @@
 #include "systems/nes/defs.h"
 #include "systems/nes/memory.h"
 
+namespace Systems {
+    class BaseComment;
+}
+
 namespace Systems::NES {
     class Define;
     class EnumElement;
@@ -76,19 +80,25 @@ public:
     bool IsEditing() const override { return false; }
 };
 
-class ListingItemPrePostComment : public ListingItem {
+class ListingItemCommentOnly : public ListingItem {
 public:
-    ListingItemPrePostComment(int _line, bool _is_post)
-        : ListingItem(), line(_line), is_post(_is_post)
+    using BaseComment = Systems::BaseComment;
+
+    ListingItemCommentOnly(MemoryObject::COMMENT_TYPE _comment_type, int _comment_line)
+        : ListingItem(), comment_type(_comment_type), comment_line(_comment_line)
     { }
-    virtual ~ListingItemPrePostComment() { }
+    virtual ~ListingItemCommentOnly() { }
 
     void Render(std::shared_ptr<Windows::NES::SystemInstance> const&, std::shared_ptr<System>&, GlobalMemoryLocation const&, 
             u32, bool, bool, bool, postponed_changes&) override;
-    bool IsEditing() const override;
+
+    static void RenderCommentContent(std::shared_ptr<Windows::NES::SystemInstance> const&, 
+            std::shared_ptr<BaseComment> const&, int, postponed_changes&);
+
+    bool IsEditing() const override { return false; };
 private:
-    int line;
-    bool is_post;
+    MemoryObject::COMMENT_TYPE comment_type;
+    int comment_line;
 };
 
 class ListingItemPrimary : public ListingItem {
@@ -111,7 +121,6 @@ private:
     enum {
         // reverse order of the columns so that they hide when editing
         EDIT_NONE,
-        EDIT_EOL_COMMENT,
         EDIT_OPERAND_EXPRESSION
     } edit_mode = EDIT_NONE;
 

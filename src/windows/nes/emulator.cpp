@@ -2744,13 +2744,13 @@ void Breakpoints::SetBreakpoint()
                         // result contains the address of our breakpoint!
                         if(result < 0) {
                             errmsg = "Invalid address";
-                        } else if(result < 0x10000) { // no bank specified
+                        } else if(result < 0x10000) { // long labels have 0x01xxxxxx or 0x02..
+                                                      // so a 16-bit address will break in all banks
                             editing_breakpoint_info->address = {
                                 .address = (u16)(result & 0xFFFF),
                                 .is_chr = false,
                                 .prg_rom_bank = 0,
                             };
-
 
                             editing_breakpoint_info->has_bank = false;
                             editing_breakpoint_info->enabled = true;
@@ -2760,11 +2760,8 @@ void Breakpoints::SetBreakpoint()
                             editing_breakpoint_info = nullptr;
                         } else { // user specified a bank via a label or manually
                             // use the bank byte to build a GlobalMemoryLocation and make sure it's valid
-                            editing_breakpoint_info->address = {
-                                .address      = (u16)(result & 0xFFFF),
-                                .is_chr       = false,
-                                .prg_rom_bank = (u16)((result >> 16) & 0xFF),
-                            };
+                            auto system = GetSystem();
+                            system->GetLocationFromLongAddress(result, editing_breakpoint_info->address);
 
                             editing_breakpoint_info->has_bank = true;
                             editing_breakpoint_info->enabled = true;

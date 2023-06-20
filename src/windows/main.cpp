@@ -94,16 +94,11 @@ void MainWindow::PreRender()
 
 void MainWindow::Render()
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-
     // Show the ImGui demo window if requested
     if(show_imgui_demo) ImGui::ShowDemoWindow(&show_imgui_demo);
 
     // Process all popups here
     RenderPopups();
-
-    // CLean up style vars
-    ImGui::PopStyleVar(1);
 
     if(ImGuiFileDialog::Instance()->Display("OpenROMFileDialog")) {
         if(ImGuiFileDialog::Instance()->IsOk()) {
@@ -538,6 +533,10 @@ bool MainWindow::StartPopup(std::string const& title, bool resizeable, bool alwa
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, always_centered ? ImGuiCond_Always : ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
+    // set border in the Window
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3.0f, 3.0f));
+
     // configure flags
     ImGuiWindowFlags popup_flags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize;
     if(!resizeable) popup_flags |= ImGuiWindowFlags_NoResize;
@@ -571,6 +570,9 @@ int MainWindow::EndPopup(int ret, bool show_ok, bool show_cancel, bool allow_esc
         current_popup_title = "";
         ImGui::CloseCurrentPopup();
     }
+
+    // restore style
+    ImGui::PopStyleVar(2);
 
     // Always end
     ImGui::EndPopup();

@@ -213,6 +213,7 @@ void BaseWindow::InternalRender()
         }
 
         auto visible = ImGui::Begin(window_title.c_str(), &local_open, window_flags);
+        if(is_dockspace) ImGui::PopStyleVar(3);
 
         if(print_id) {
             auto imgui_window = ImGui::GetCurrentWindow();
@@ -235,9 +236,6 @@ void BaseWindow::InternalRender()
         }
 
         activated = focused && !was_focused;
-
-        // for dockspace children, return style var back to normal
-        if(is_dockspace) ImGui::PopStyleVar(3);
 
         // render child windows inside Begin/End to keep the ID stack healthy,
         // but outside the success of ImGui::Begin() so that if the contents of that

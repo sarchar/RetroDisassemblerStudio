@@ -92,9 +92,6 @@ namespace ExpressionNodes {
         static int base_expression_node_id;
         int GetExpressionNodeType() const override { return Label::base_expression_node_id; }
 
-        bool NoteReference(std::shared_ptr<GlobalMemoryLocation> const&);
-        void RemoveReference(std::shared_ptr<GlobalMemoryLocation> const&);
-
         void SetLongMode(bool _v) { long_mode = _v; }
 
         // You're expected to call RemoveReference before and NoteReference() after
@@ -110,16 +107,8 @@ namespace ExpressionNodes {
         std::string const&          GetDisplay() const { return display; }
         int                         GetNth() const { return nth; }
 
-        // Labels evaluate to their address, whether they be zero page or not
-        bool Evaluate(s64* result, std::string& errmsg) const override {
-            if(long_mode) {
-                *result = where.address + offset;
-                *result += (where.is_chr ? where.chr_rom_bank : where.prg_rom_bank) * 0x10000;
-            } else {
-                *result = where.address + offset;
-            }
-            return true;
-        }
+        // Labels evaluate to their address
+        bool Evaluate(s64* result, std::string& errmsg) const override;
 
         // Label has no child ExpressionNode
         bool Explore(explore_callback_t explore_callback, int depth, void* userdata) override {

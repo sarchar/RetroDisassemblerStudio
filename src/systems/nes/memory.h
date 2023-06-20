@@ -6,12 +6,17 @@
 #pragma once
 
 #include <cassert>
+#ifdef ERROR
+#  undef ERROR
+#endif
+
 #include <iostream>
 #include <iomanip>
 #include <vector>
 
 #include "util.h"
 
+#include "systems/comment.h"
 #include "systems/nes/defs.h"
 
 namespace Windows::NES {
@@ -20,6 +25,7 @@ namespace Windows::NES {
 
 namespace Systems::NES {
 
+class Comment;
 class Disassembler;
 class Expression;
 class Label;
@@ -147,6 +153,7 @@ struct MemoryObjectTreeNode {
 };
 
 struct MemoryObject {
+    using BaseComment = Systems::BaseComment;
     using ListingItem = Windows::NES::ListingItem;
 
     enum TYPE {
@@ -181,9 +188,9 @@ struct MemoryObject {
     std::shared_ptr<Expression> operand_expression;
 
     struct {
-        std::shared_ptr<std::string> eol;
-        std::shared_ptr<std::string> pre;
-        std::shared_ptr<std::string> post;
+        std::shared_ptr<BaseComment> eol;
+        std::shared_ptr<BaseComment> pre;
+        std::shared_ptr<BaseComment> post;
     } comments;
 
     // data is now indirectly read from the region's flat memory view
@@ -205,19 +212,17 @@ struct MemoryObject {
     std::string FormatInstructionField(std::shared_ptr<Disassembler> disassembler = nullptr);
     std::string FormatOperandField(u32 = 0, std::shared_ptr<Disassembler> disassembler = nullptr);
 
-    void GetComment(COMMENT_TYPE type, std::string& out) {
-        out.clear();
-
+    std::shared_ptr<BaseComment> GetComment(COMMENT_TYPE type) const {
         switch(type) {
         case COMMENT_TYPE_EOL:
-            if(comments.eol) out = std::string(*comments.eol);
-            break;
+            return comments.eol;
         case COMMENT_TYPE_PRE:
-            if(comments.pre) out = std::string(*comments.pre);
-            break;
+            return comments.pre;
         case COMMENT_TYPE_POST:
-            if(comments.post) out = std::string(*comments.post);
-            break;
+            return comments.post;
+        default:
+            assert(false);
+            return nullptr;
         }
     }
 
@@ -232,17 +237,25 @@ private:
     void NextLabelReference(GlobalMemoryLocation const& where);
     int  DeleteLabel(std::shared_ptr<Label> const&); // call MemoryRegion::DeleteLabel
 
-    void SetComment(COMMENT_TYPE type, std::string const& comment) {
+    void SetComment(COMMENT_TYPE type, std::shared_ptr<BaseComment> const& comment) {
+        comment->NoteReferences();
+
         switch(type) {
         case COMMENT_TYPE_EOL:
-            comments.eol = std::make_shared<std::string>(comment);
+            if(comments.eol) comments.eol->ClearReferences();
+            comments.eol = comment;
             break;
+
         case COMMENT_TYPE_PRE:
-            comments.pre = std::make_shared<std::string>(comment);
+            if(comments.pre) comments.pre->ClearReferences();
+            comments.pre = comment;
             break;
+
         case COMMENT_TYPE_POST:
-            comments.post = std::make_shared<std::string>(comment);
+            if(comments.post) comments.post->ClearReferences();
+            comments.post = comment;
             break;
+
         default:
             assert(false);
             break;
@@ -257,6 +270,7 @@ private:
 // But because lookups would be slow with blocks of content, we still have a pointer into the content table for each address in the region
 class MemoryRegion : public std::enable_shared_from_this<MemoryRegion> {
 public:
+    using BaseComment = Systems::BaseComment;
     typedef std::vector<std::shared_ptr<MemoryObject>> ObjectRefListType;
 
     MemoryRegion(std::shared_ptr<System>&, std::string const&);
@@ -312,18 +326,15 @@ public:
     void SetOperandExpression(GlobalMemoryLocation const& where, std::shared_ptr<Expression> const&);
 
     // Comments
-    void GetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, std::string& out) {
+    std::shared_ptr<BaseComment> GetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type) {
         if(auto memory_object = GetMemoryObject(where)) {
-            memory_object->GetComment(type, out);
+            return memory_object->GetComment(type);
         }
+        return nullptr;
     }
 
-    void SetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, std::string const& s) {
-        if(auto memory_object = GetMemoryObject(where)) {
-            memory_object->SetComment(type, s);
-            UpdateMemoryObject(where);
-        }
-    }
+    void SetComment(GlobalMemoryLocation const&, MemoryObject::COMMENT_TYPE, 
+                    std::shared_ptr<BaseComment> const&);
 
     // References
     void NoteReferences(GlobalMemoryLocation const&);

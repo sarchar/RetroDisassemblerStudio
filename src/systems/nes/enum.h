@@ -16,12 +16,16 @@
 
 class BaseExpression;
 
+namespace Systems {
+    class BaseComment;
+}
+
 namespace Systems::NES {
 
 class Define;
 class EnumElement;
 
-using EnumReferenceable = Systems::Referenceable<GlobalMemoryLocation, Define>;
+using EnumReferenceable = Systems::Referenceable<GlobalMemoryLocation, Define, Systems::BaseComment>;
 
 // An Enum is a collection of expressions under a named category. 
 //

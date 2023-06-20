@@ -62,7 +62,7 @@ bool Define::SetExpression(std::shared_ptr<BaseExpression> const& expr, string& 
 
 void Define::SetReferences()
 {
-    // Explore expression and mark each referenced Define() that we're referring to it
+    // Explore expression and mark each referenced Define and Enum that we're referring to it
     auto cb = [this](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
         if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
             define_node->GetDefine()->NoteReference(shared_from_this());
@@ -77,7 +77,7 @@ void Define::SetReferences()
 
 void Define::ClearReferences()
 {
-    // Explore expression and mark each referenced Define() that we're no longer referring to it
+    // Explore expression and mark each referenced Define and Enum that we're no longer referring to it
     auto cb = [this](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
         if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
             define_node->GetDefine()->RemoveReference(shared_from_this());

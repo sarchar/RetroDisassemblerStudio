@@ -15,6 +15,10 @@
 #include "systems/nes/memory.h"
 #include "systems/nes/referenceable.h"
 
+namespace Systems {
+    class BaseComment;
+}
+
 namespace Systems::NES {
 
 class Define;
@@ -28,6 +32,7 @@ namespace Windows::NES {
 
 class References : public BaseWindow {
 public:
+    using BaseComment          = Systems::BaseComment;
     using Define               = Systems::NES::Define;
     using EnumElement          = Systems::NES::EnumElement;
     using GlobalMemoryLocation = Systems::NES::GlobalMemoryLocation;
@@ -68,7 +73,8 @@ private:
     typedef std::variant<
         std::shared_ptr<GlobalMemoryLocation>,
         std::shared_ptr<Define>,
-        std::shared_ptr<EnumElement>
+        std::shared_ptr<EnumElement>,
+        std::shared_ptr<BaseComment>
     > location_type;
     std::vector<location_type> locations;
 

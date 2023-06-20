@@ -100,24 +100,6 @@ Label::Label(GlobalMemoryLocation const& _where, int _nth, string const& _displa
     : where(_where), nth(_nth), display(_display), offset(0xDEADBEEF), long_mode(false)
 { }
 
-bool Label::NoteReference(shared_ptr<GlobalMemoryLocation> const& source) {
-    if(auto t = label.lock()) {
-        // valid label
-        t->NoteReference(source);
-        return true;
-    }
-
-    if(Update()) return NoteReference(source);
-
-    return false;
-}
-
-void Label::RemoveReference(shared_ptr<GlobalMemoryLocation> const& where) {
-    if(auto t = label.lock()) {
-        t->RemoveReference(where);
-    }
-}
-
 bool Label::Update()
 {
     // look up the labels at the saved address and use the nth one
@@ -139,6 +121,16 @@ void Label::NextLabel()
 {
     nth += 1;
     Reset();
+}
+
+bool Label::Evaluate(s64* result, string& errmsg) const 
+{
+    if(long_mode) {
+        *result = (s64)GetSystem()->GetSortableMemoryLocation(where + offset);
+    } else {
+        *result = (s64)((where.address + offset) & 0xFFFF);
+    }
+    return true;
 }
 
 void Label::Print(std::ostream& ostream) {

@@ -13,11 +13,15 @@
 
 class BaseExpression;
 
+namespace Systems {
+    class BaseComment;
+}
+
 namespace Systems::NES {
 
 // Defines can be referenced by memory and other defines
 class Define : public std::enable_shared_from_this<Define>, 
-               public Systems::Referenceable<GlobalMemoryLocation, Define> {
+               public Systems::Referenceable<GlobalMemoryLocation, Define, Systems::BaseComment> {
 public:
     Define(std::string const&);
     ~Define();

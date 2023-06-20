@@ -18,6 +18,7 @@
 #include "util.h"
 
 #include "systems/nes/cartridge.h"
+#include "systems/nes/comment.h"
 #include "systems/nes/expressions.h"
 #include "systems/nes/label.h"
 #include "systems/nes/system.h"
@@ -152,6 +153,7 @@ void Listing::GoToAddress(GlobalMemoryLocation const& address, bool save)
         selection_history_back.push(current_selection); // save the current location to the history
         ClearForwardHistory();                          // and clear the forward history
     }
+
     current_selection = address;
 
     if(auto memory_object = current_system->GetMemoryObject(current_selection)) {
@@ -230,6 +232,26 @@ void Listing::MoveSelectionDown()
     }
 }
 
+void Listing::GoBack()
+{
+    if(!selection_history_back.size()) return;
+
+    selection_history_forward.push(current_selection);
+    GlobalMemoryLocation dest = selection_history_back.top();
+    selection_history_back.pop();
+    GoToAddress(dest, false);
+}
+
+void Listing::GoForward()
+{
+    if(!selection_history_forward.size()) return;
+
+    selection_history_back.push(current_selection);
+    GlobalMemoryLocation dest = selection_history_forward.top();
+    selection_history_forward.pop();
+    GoToAddress(dest, false);
+}
+
 void Listing::CheckInput()
 {
     ImGuiIO& io = ImGui::GetIO();
@@ -241,25 +263,11 @@ void Listing::CheckInput()
     bool shift_only = !(io.KeyCtrl || io.KeyAlt || io.KeySuper) && io.KeyShift;
 
     if(no_mods) {
-        // handle back button
-        if(ImGui::IsKeyPressed(ImGuiKey_MouseX1) && selection_history_back.size()) {
-            if(selection_history_back.size()) {
-                selection_history_forward.push(current_selection);
-                GlobalMemoryLocation dest = selection_history_back.top();
-                selection_history_back.pop();
-                GoToAddress(dest, false);
-            }
-        }
+        // handle back mouse button
+        if(ImGui::IsKeyPressed(ImGuiKey_MouseX1)) GoBack();
 
-        // handle forward button
-        if(ImGui::IsKeyPressed(ImGuiKey_MouseX2) && selection_history_forward.size()) {
-            if(selection_history_forward.size()) {
-                selection_history_back.push(current_selection);
-                GlobalMemoryLocation dest = selection_history_forward.top();
-                selection_history_forward.pop();
-                GoToAddress(dest, false);
-            }
-        }
+        // handle forward mouse button
+        if(ImGui::IsKeyPressed(ImGuiKey_MouseX2)) GoForward();
 
         // Move selection up
         if(ImGui::IsKeyPressed(ImGuiKey_UpArrow) || ImGui::IsKeyPressed(ImGuiKey_K)) MoveSelectionUp();
@@ -314,7 +322,22 @@ void Listing::CheckInput()
             popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_POST;
             popups.edit_comment.show  = true;
             popups.edit_comment.where = current_selection;
-            current_system->GetComment(current_selection, popups.edit_comment.type, popups.edit_comment.buf);
+            auto comment = current_system->GetComment(current_selection, popups.edit_comment.type);
+            string ctext = "";
+            if(comment) comment->GetFullCommentText(ctext);
+            popups.edit_comment.buf = ctext;
+        }
+
+        // edit EOL comment
+        if(ImGui::IsKeyPressed(ImGuiKey_Semicolon)) {
+            popups.edit_comment.title = "Edit EOL-comment";
+            popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_EOL;
+            popups.edit_comment.show  = true;
+            popups.edit_comment.where = current_selection;
+            auto comment = current_system->GetComment(current_selection, popups.edit_comment.type);
+            string ctext = "";
+            if(comment) comment->GetFullCommentText(ctext);
+            popups.edit_comment.buf = ctext;
         }
 
         if(ImGui::IsKeyPressed(ImGuiKey_P)) {
@@ -332,8 +355,12 @@ void Listing::CheckInput()
             popups.edit_comment.type  = MemoryObject::COMMENT_TYPE_PRE;
             popups.edit_comment.show  = true;
             popups.edit_comment.where = current_selection;
-            current_system->GetComment(current_selection, popups.edit_comment.type, popups.edit_comment.buf);
+            auto comment = current_system->GetComment(current_selection, popups.edit_comment.type);
+            string ctext = "";
+            if(comment) comment->GetFullCommentText(ctext);
+            popups.edit_comment.buf = ctext;
         }
+
     }
 }
 
@@ -409,20 +436,12 @@ void Listing::Render()
     // reset currently hovered item when window is not in focus
     if(!focused) hovered_listing_item_index = -1;
 
-    {
-        bool need_pop = false;
-        if(adjust_columns) {
-            ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor(255, 0, 0));
-            need_pop = true;
-        }
-
-        if(ImGui::SmallButton("R")) adjust_columns = !adjust_columns;
-        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Show Column Resizers");
-
-        if(need_pop) ImGui::PopStyleColor(1);
-
-        ImGui::Separator();
-    }
+    if(ImGuiFlagButton(nullptr, "<", "Back (Alt-Left)")) GoBack();
+    ImGui::SameLine(); 
+    if(ImGuiFlagButton(nullptr, ">", "Forward (Alt-Right)")) GoForward();
+    ImGui::SameLine(); 
+    ImGuiFlagButton(&adjust_columns, "R", "Show Column Resizers");
+    ImGui::Separator();
 
     // Let's not render content while disassembling
     if(!current_system->IsDisassembling()) {
@@ -629,9 +648,10 @@ void Listing::RenderPopups()
             && (ret = GetMainWindow()->InputMultilinePopup(popups.edit_comment.title, "Comment", &popups.edit_comment.buf)) != 0) {
         if(ret > 0) {
             if(popups.edit_comment.buf.size() > 0) {
-                current_system->SetComment(popups.edit_comment.where, popups.edit_comment.type, popups.edit_comment.buf);
-            } else {
-                cout << "TODO: delete comment";
+                auto comment = make_shared<Systems::NES::Comment>();
+                comment->Set(popups.edit_comment.buf);
+                cout << "Setting comment:" << endl << *comment;
+                current_system->SetComment(popups.edit_comment.where, popups.edit_comment.type, comment);
             }
         }
         popups.edit_comment.show = false;

@@ -129,6 +129,9 @@ bool MainApplication::OnPlatformReady()
     style.CellPadding.y      = 1;
     style.ItemSpacing.x      = 8;
     style.ItemSpacing.y      = 5;
+    style.WindowRounding     = 8;
+    style.FrameRounding      = 4;
+    style.FrameBorderSize    = 1;
     style.ScrollbarSize      = 12;
     style.GrabMinSize        = 13;
     style.WindowTitleAlign.x = 0.5f;

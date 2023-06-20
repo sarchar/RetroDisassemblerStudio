@@ -17,6 +17,10 @@
 class BaseExpression;
 class BaseExpressionNode;
 
+namespace Systems {
+    class BaseComment;
+}
+
 namespace Systems::NES {
 
 class Cartridge;
@@ -41,6 +45,8 @@ typedef int FixupFlags;
 
 class System : public ::BaseSystem {
 public:
+    using BaseComment = Systems::BaseComment;
+
     System();
     virtual ~System();
 
@@ -126,7 +132,7 @@ public:
     std::shared_ptr<ExpressionNodeCreator> GetNodeCreator();
 
     int GetSortableMemoryLocation(GlobalMemoryLocation const& s) {
-        int ret = s.address;
+        int ret = 0x01000000 | s.address;
         if(CanBank(s)) {
             int bank = s.prg_rom_bank;
             if(s.is_chr) {
@@ -136,6 +142,13 @@ public:
             ret += 0x010000 * bank;
         }
         return ret;
+    }
+
+    void GetLocationFromLongAddress(int long_address, GlobalMemoryLocation& out) {
+        int bank = (long_address & 0xFF0000) >> 16;
+        out.is_chr = (bool)(long_address & 0x02000000);
+        out.chr_rom_bank = out.prg_rom_bank = bank;
+        out.address = long_address & 0xFFFF;
     }
 
     std::shared_ptr<MemoryView> CreateMemoryView(std::shared_ptr<MemoryView> const& ppu_view, std::shared_ptr<MemoryView> const& apu_io_view);
@@ -205,13 +218,15 @@ public:
     }
 
     // Comments
-    void GetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, std::string& out) {
+    std::shared_ptr<BaseComment> GetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type) {
         if(auto memory_region = GetMemoryRegion(where)) {
-            memory_region->GetComment(where, type, out);
+            return memory_region->GetComment(where, type);
         }
+        return nullptr;
     }
 
-    void SetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, std::string const& comment) {
+    void SetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type, 
+                    std::shared_ptr<BaseComment> const& comment) {
         if(auto memory_region = GetMemoryRegion(where)) {
             memory_region->SetComment(where, type, comment);
         }

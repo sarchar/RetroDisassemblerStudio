@@ -48,10 +48,12 @@ add_executable(${PROJECT_NAME}
     src/application.cpp
     src/main_application.cpp
     
+    src/systems/comment.cpp
     src/systems/expressions.cpp
     src/systems/system.cpp
     src/systems/nes/apu_io.cpp
     src/systems/nes/cartridge.cpp
+    src/systems/nes/comment.cpp
     src/systems/nes/cpu.cpp
     src/systems/nes/defines.cpp
     src/systems/nes/disasm.cpp
