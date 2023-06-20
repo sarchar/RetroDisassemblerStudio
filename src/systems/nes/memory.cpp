@@ -128,9 +128,13 @@ void MemoryRegion::RecreateListingItemsForMemoryObject(shared_ptr<MemoryObject>&
     // but in the future, we need to count up labels, comments, etc
     obj->listing_items.clear();
 
-    // create a blank line inbetween other memory and labels, unless at the start of the bank
-    // TODO or if it's a local label
-    if(obj->labels.size() && region_offset != 0) {
+    if(obj->default_blank_line) {
+        // create a blank line inbetween other memory and labels, unless at the start of the bank
+        // TODO or if it's a local label
+        obj->blank_lines = (obj->labels.size() && region_offset != 0) ? 1 : 0;
+    }
+
+    for(int i = 0; i < obj->blank_lines; i++) {
         obj->listing_items.push_back(make_shared<Windows::NES::ListingItemBlankLine>());
     }
 
@@ -707,6 +711,9 @@ int MemoryRegion::DeleteLabel(shared_ptr<Label> const& label)
     auto where = label->GetMemoryLocation();
     if(auto memory_object = GetMemoryObject(where)) {
         ret = memory_object->DeleteLabel(label);
+        if(memory_object->blank_lines == 0 && memory_object->labels.size() == 0) {
+            memory_object->default_blank_line = true;
+        }
         UpdateMemoryObject(where);
     }
 
@@ -1199,6 +1206,7 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
     fields_present |= (int)(bool)comments.eol       << 1;
     fields_present |= (int)(bool)comments.pre       << 2;
     fields_present |= (int)(bool)comments.post      << 3;
+    fields_present |= (int)(!default_blank_line)    << 4;
     WriteVarInt(os, fields_present);
 
     // operand expression
@@ -1208,6 +1216,9 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
     if(comments.eol  && !comments.eol->Save(os, errmsg)) return false;
     if(comments.pre  && !comments.pre->Save(os, errmsg)) return false;
     if(comments.post && !comments.post->Save(os, errmsg)) return false;
+
+    // blank line count
+    if(!default_blank_line) WriteVarInt(os, blank_lines);
 
     if(!os.good()) {
         errmsg = "Error writing MemoryObject data";
@@ -1301,6 +1312,11 @@ bool MemoryObject::Load(std::istream& is, std::string& errmsg)
             if(!(comments.post = Comment::Load(is, errmsg))) return false;
         }
         //cout << "comment.post: " << *comments.post << endl;
+    }
+
+    if(fields_present & (1 << 4)) {
+        blank_lines = ReadVarInt<int>(is);
+        default_blank_line = false;
     }
 
     return true;
@@ -1432,6 +1448,30 @@ void MemoryRegion::SetComment(GlobalMemoryLocation const& where, MemoryObject::C
         // then we don't need the cast anymore and SetLocation can be part of BaseComment
         auto nes_comment = dynamic_pointer_cast<Comment>(comment);
         nes_comment->SetLocation(where);
+        UpdateMemoryObject(where);
+    }
+}
+
+void MemoryRegion::AddBlankLine(GlobalMemoryLocation const& where)
+{
+    if(auto memory_object = GetMemoryObject(where)) {
+        memory_object->blank_lines++;
+        memory_object->default_blank_line = false;
+        UpdateMemoryObject(where);
+    }
+}
+
+void MemoryRegion::RemoveBlankLine(GlobalMemoryLocation const& where)
+{
+    if(auto memory_object = GetMemoryObject(where)) {
+        if(memory_object->blank_lines > 0) {
+            memory_object->blank_lines--;
+            memory_object->default_blank_line = false;
+
+            if(memory_object->blank_lines == 0 && memory_object->labels.size() == 0) {
+                memory_object->default_blank_line = true;
+            }
+        }
         UpdateMemoryObject(where);
     }
 }

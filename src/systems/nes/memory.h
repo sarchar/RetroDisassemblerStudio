@@ -229,6 +229,9 @@ struct MemoryObject {
     struct LabelCreatedData;
     std::vector<std::shared_ptr<LabelCreatedData>> label_connections; // usually empty, rarely contains more than 1
 
+    int blank_lines = 0;
+    bool default_blank_line = true;
+
     bool Save(std::ostream&, std::string&);
     bool Load(std::istream&, std::string&);
 
@@ -335,6 +338,10 @@ public:
 
     void SetComment(GlobalMemoryLocation const&, MemoryObject::COMMENT_TYPE, 
                     std::shared_ptr<BaseComment> const&);
+
+    // Blank lines
+    void AddBlankLine(GlobalMemoryLocation const&);
+    void RemoveBlankLine(GlobalMemoryLocation const&);
 
     // References
     void NoteReferences(GlobalMemoryLocation const&);

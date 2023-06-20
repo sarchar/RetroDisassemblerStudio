@@ -344,6 +344,9 @@ void Listing::CheckInput()
             CreateDestinationLabel();
         }
 
+        if(ImGui::IsKeyPressed(ImGuiKey_Minus)) {
+            GetSystem()->RemoveBlankLine(current_selection);
+        }
     } 
 
     if(shift_only) {
@@ -361,6 +364,9 @@ void Listing::CheckInput()
             popups.edit_comment.buf = ctext;
         }
 
+        if(ImGui::IsKeyPressed(ImGuiKey_Equal)) {
+            GetSystem()->AddBlankLine(current_selection);
+        }
     }
 }
 

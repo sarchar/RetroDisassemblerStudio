@@ -239,6 +239,18 @@ public:
         }
     }
 
+    // Blank lines
+    void AddBlankLine(GlobalMemoryLocation const& where) {
+        if(auto memory_region = GetMemoryRegion(where)) {
+            memory_region->AddBlankLine(where);
+        }
+    }
+
+    void RemoveBlankLine(GlobalMemoryLocation const& where) {
+        if(auto memory_region = GetMemoryRegion(where)) {
+            memory_region->RemoveBlankLine(where);
+        }
+    }
     // Disassembly
     std::shared_ptr<Disassembler> GetDisassembler() { return disassembler; }
     bool IsDisassembling() const { return disassembling; }
