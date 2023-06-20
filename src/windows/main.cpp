@@ -808,6 +808,12 @@ void MainWindow::DeleteInstancePopup()
 
 void MainWindow::SaveProjectThread()
 {
+    // rename the old file if it exists, can just ignore errors
+    stringstream ss;
+    ss << project_file_path << ".bak";
+    rename(project_file_path.c_str(), ss.str().c_str());
+
+    // write new project to project_file_path
     ofstream out(project_file_path, ios::binary);
     if(out.good()) {
         u64 magic = PROJECT_FILE_MAGIC; 

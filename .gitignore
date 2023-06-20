@@ -6,3 +6,4 @@ roms/*.lst
 *.rdsproj
 ext/*.ttf
 *~
+*.rdsproj.bak
