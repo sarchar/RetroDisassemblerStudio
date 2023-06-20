@@ -55,12 +55,12 @@ bool Define::SetExpression(std::shared_ptr<BaseExpression> const& expr, string& 
     ClearReferences();
     expression = expr;
     cached_value = result;
-    SetReferences();
+    NoteReferences();
 
     return true;
 }
 
-void Define::SetReferences()
+void Define::NoteReferences()
 {
     // Explore expression and mark each referenced Define and Enum that we're referring to it
     auto cb = [this](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {

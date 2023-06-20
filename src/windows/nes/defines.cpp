@@ -101,6 +101,27 @@ void Defines::Resort()
     });
 }
 
+void Defines::DeleteDefine(int row)
+{
+    if(row >= 0 && row < defines.size()) {
+        auto define = defines[row].lock();
+        if(define) {
+            if(define->GetNumReverseReferences()) {
+                wait_dialog_message = "The define is in use and cannot be deleted";
+                wait_dialog = true;
+                return;
+            }
+            GetSystem()->DeleteDefine(define);
+        }
+        defines.erase(defines.begin() + row);
+    }
+}
+
+void Defines::CheckInput()
+{
+    if(ImGui::IsKeyPressed(ImGuiKey_Delete)) DeleteDefine(selected_row);
+}
+
 void Defines::Update(double deltaTime) 
 {
     // rebuild the defines list
@@ -222,10 +243,13 @@ void Defines::Render()
     ImGui::PopStyleVar(2);
 
     if(ImGui::BeginPopupContextItem("define_context_menu")) {
-        if(ImGui::Selectable("View References")) {
+        if(ImGui::MenuItem("View References")) {
             auto wnd = References::CreateWindow(defines[context_row].lock());
             wnd->SetInitialDock(BaseWindow::DOCK_RIGHTTOP);
             GetMySystemInstance()->AddChildWindow(wnd);
+        }
+        if(ImGui::MenuItem("Delete Define")) {
+            DeleteDefine(context_row);
         }
         ImGui::EndPopup();
     }

@@ -26,7 +26,7 @@ public:
     Define(std::string const&);
     ~Define();
 
-    void SetReferences();
+    void NoteReferences();
     void ClearReferences();
 
     void SetString(std::string const& s) { name = s; }

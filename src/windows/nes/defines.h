@@ -40,6 +40,7 @@ public:
 protected:
     void Update(double deltaTime) override;
     void Render() override;
+    void CheckInput() override;
 
 private:
     void RenderToolBar();
@@ -69,10 +70,12 @@ private:
     std::string wait_dialog_message;
     std::shared_ptr<Systems::NES::Define> edit_define;
 
+    // deleting
+    void DeleteDefine(int);
+
     std::shared_ptr<Systems::NES::Define> highlight;
 
     signal_connection define_created_connection;
-
 };
 
 } //namespace NES

@@ -53,6 +53,7 @@ public:
     // Signals
     typedef signal<std::function<void(std::shared_ptr<Define> const&)>> define_created_t;
     std::shared_ptr<define_created_t> define_created;
+    std::shared_ptr<define_created_t> define_deleted;
 
     typedef signal<std::function<void(std::shared_ptr<Label> const&, bool)>> label_created_t;
     std::shared_ptr<label_created_t> label_created;
@@ -159,6 +160,12 @@ public:
     std::shared_ptr<Define> FindDefine(std::string const& name) {
         if(defines.contains(name)) return defines[name];
         return nullptr;
+    }
+
+    bool DeleteDefine(std::shared_ptr<Define> const&);
+    bool DeleteDefine(std::string const& name) {
+        if(!defines.contains(name)) return false;
+        return DeleteDefine(defines[name]);
     }
 
     template <typename F>

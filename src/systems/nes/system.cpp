@@ -36,6 +36,7 @@ System::System()
     disassembler = make_shared<Disassembler>();
 
     define_created = make_shared<define_created_t>();
+    define_deleted = make_shared<define_created_t>();
     label_created = make_shared<label_created_t>();
     label_deleted = make_shared<label_deleted_t>();
     enum_created = make_shared<enum_created_t>();
@@ -629,6 +630,19 @@ shared_ptr<Define> System::CreateDefine(string const& name, string& errmsg)
     return define;
 }
 
+bool System::DeleteDefine(shared_ptr<Define> const& define)
+{
+    if(define->GetNumReverseReferences()) {
+        cout << "[Systems::NES::System] warning: deleting define with nonzero RRefs" << endl;
+    }
+
+    defines.erase(define->GetName());
+    define_deleted->emit(define);
+    define->ClearReferences();
+
+    return true;
+}
+
 shared_ptr<Label> System::GetDefaultLabelForTarget(GlobalMemoryLocation const& where, bool was_user_created, int* target_offset, bool wide, string const& prefix)
 {
     if(auto memory_object = GetMemoryObject(where, target_offset)) {
@@ -1158,7 +1172,7 @@ bool System::Load(istream& is, string& errmsg)
         auto define = Define::Load(is, errmsg);
         if(!define) return false;
 
-        define->SetReferences();
+        define->NoteReferences();
         defines[define->GetName()] = define;
     }
 
