@@ -320,7 +320,9 @@ public:
     void NextLabelReference(GlobalMemoryLocation const& where);
 
     // Data
+    // TODO maybe MarkDataAs* can be generic and take a MemoryObject::TYPE parameter
     bool MarkMemoryAsUndefined(GlobalMemoryLocation const& where, u32 byte_count);
+    bool MarkMemoryAsBytes(GlobalMemoryLocation const& where, u32 byte_count);
     bool MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count);
     bool MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byte_count);
 

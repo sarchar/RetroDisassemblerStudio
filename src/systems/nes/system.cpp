@@ -222,6 +222,12 @@ void System::MarkMemoryAsUndefined(GlobalMemoryLocation const& where, u32 byte_c
     memory_region->MarkMemoryAsUndefined(where, byte_count);
 }
 
+void System::MarkMemoryAsBytes(GlobalMemoryLocation const& where, u32 byte_count)
+{
+    auto memory_region = GetMemoryRegion(where);
+    memory_region->MarkMemoryAsBytes(where, byte_count);
+}
+
 void System::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count)
 {
     auto memory_region = GetMemoryRegion(where);
@@ -468,7 +474,7 @@ bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<
         }
 
         // validate the word value is equal to the expression_value
-        u8 operand = memory_object->data_ptr[1];
+        u8 operand = memory_object->data_ptr[0];
         if(operand != expression_value) {
             stringstream ss;
             ss << hex << setfill('0') << uppercase;
@@ -491,7 +497,7 @@ bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<
         }
 
         // validate the word value is equal to the expression_value
-        u16 operand = (u16)memory_object->data_ptr[1] | ((u16)memory_object->data_ptr[2] << 8);
+        u16 operand = (u16)memory_object->data_ptr[0] | ((u16)memory_object->data_ptr[1] << 8);
         if(operand != expression_value) {
             stringstream ss;
             ss << hex << setfill('0') << uppercase;

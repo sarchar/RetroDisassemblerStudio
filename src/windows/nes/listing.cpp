@@ -288,7 +288,14 @@ void Listing::CheckInput()
             }
         }
 
-        // mark data as word
+        // mark data as bytes
+        if(ImGui::IsKeyPressed(ImGuiKey_B)) {
+            if(int len = GetSelection(); len > 0) {
+                current_system->MarkMemoryAsBytes(current_selection, len);
+            }
+        }
+
+        // mark data as words
         if(ImGui::IsKeyPressed(ImGuiKey_W)) {
             if(int len = GetSelection(); len > 0) {
                 current_system->MarkMemoryAsWords(current_selection, len);

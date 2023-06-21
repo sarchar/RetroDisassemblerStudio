@@ -389,7 +389,7 @@ bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where, u32 
         auto memory_object = GetMemoryObject(where + offset);
         assert(memory_object);
 
-        // Don't convert already dead objects
+        // Don't convert already undefined objects
         if(memory_object->type == MemoryObject::TYPE_UNDEFINED) {
             offset += memory_object->GetSize();
             continue;
@@ -446,23 +446,54 @@ bool MemoryRegion::MarkMemoryAsUndefined(GlobalMemoryLocation const& where, u32 
     return true;
 }
 
+bool MemoryRegion::MarkMemoryAsBytes(GlobalMemoryLocation const& where, u32 byte_count)
+{
+    // Check to see if all selected memory is undefined. other data cannot be converted
+    for(u32 i = 0; i < byte_count; i++) {
+        auto memory_object = GetMemoryObject(where + i);
+        if(memory_object->type == MemoryObject::TYPE_BYTE) continue;
+
+        if(memory_object->type != MemoryObject::TYPE_UNDEFINED) {
+            cout << "[MemoryRegion::MarkMemoryAsBytes] address 0x" << (where.address + i) 
+                 << " cannot be converted to a byte (currently type " 
+                 << magic_enum::enum_name(memory_object->type) << ")" << endl;
+            return false;
+        }
+    }
+
+    // OK, convert them
+    for(u32 i = 0; i < byte_count; i++) {
+        auto memory_object = GetMemoryObject(where + i);
+        if(memory_object->type == MemoryObject::TYPE_BYTE) continue;
+        assert(memory_object->type == MemoryObject::TYPE_UNDEFINED);
+
+        // change the object to a byte
+        memory_object->type = MemoryObject::TYPE_BYTE;
+
+        // object_refs don't change
+
+        // listing items may have changed
+        _UpdateMemoryObject(memory_object, ConvertToRegionOffset(where.address));
+    }
+
+    return true;
+}
+
 bool MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count)
 {
     // Round up
     if((byte_count % 2) == 1) byte_count++;
 
-    // Check to see if all selected memory can be converted
+    // Check to see if all selected memory is undefined. other data cannot be converted
     for(u32 i = 0; i < byte_count; i += 2) {
         auto memory_object = GetMemoryObject(where + i);
         if(memory_object->type == MemoryObject::TYPE_WORD) continue;
 
         switch(memory_object->type) {
-        case MemoryObject::TYPE_UNDEFINED:
-        case MemoryObject::TYPE_BYTE:
-        {
+        case MemoryObject::TYPE_UNDEFINED: { // need two TYPE_UNDEFINEDs together
             auto next_object = GetMemoryObject(where + i + 1);
 
-            if(next_object->type != MemoryObject::TYPE_UNDEFINED && next_object->type != MemoryObject::TYPE_BYTE) {
+            if(next_object->type != MemoryObject::TYPE_UNDEFINED) {
                 cout << "[MemoryRegion::MarkMemoryAsWords] address 0x" << (where.address + i) << "+1 cannot be converted to a word (currently type " << magic_enum::enum_name(next_object->type) << ")" << endl;
                 return false;
             }
@@ -470,7 +501,7 @@ bool MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte
             break;
         }
 
-        default:
+        default: // all other types aren't convertable
             cout << "[MemoryRegion::MarkMemoryAsWords] address 0x" << (where.address + i) << " cannot be converted to a word (currently type " << magic_enum::enum_name(memory_object->type) << ")" << endl;
             return false;
         }
@@ -480,31 +511,21 @@ bool MemoryRegion::MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte
     for(u32 i = 0; i < byte_count; i += 2) {
         auto memory_object = GetMemoryObject(where + i);
         if(memory_object->type == MemoryObject::TYPE_WORD) continue;
+        assert(memory_object->type == MemoryObject::TYPE_UNDEFINED);
 
-        switch(memory_object->type) {
-        case MemoryObject::TYPE_UNDEFINED:
-        case MemoryObject::TYPE_BYTE:
-        {
-            auto next_object = GetMemoryObject(where + i + 1);
+        // remove the high byte from the object tree
+        auto next_object = GetMemoryObject(where + i + 1);
+        RemoveMemoryObjectFromTree(next_object);
 
-            RemoveMemoryObjectFromTree(next_object);
+        // change the current object to a word, data_ptr doesn't change
+        memory_object->type = MemoryObject::TYPE_WORD;
 
-            // change the current object to a word, data_ptr doesn't change
-            memory_object->type = MemoryObject::TYPE_WORD;
+        // update the object_refs
+        u32 x = ConvertToRegionOffset((where + i + 1).address);
+        object_refs[x] = memory_object;
 
-            // update the object_refs
-            u32 x = ConvertToRegionOffset((where + i + 1).address);
-            object_refs[x] = memory_object;
-
-            // listings may have changed
-            _UpdateMemoryObject(memory_object, ConvertToRegionOffset(where.address));
-            break;
-        }
-
-        default:
-            assert(false);
-            return false;
-        }
+        // listing items have changed
+        _UpdateMemoryObject(memory_object, ConvertToRegionOffset(where.address));
     }
 
     return true;
@@ -526,10 +547,10 @@ bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where)
     int instruction_size = disassembler->GetInstructionSize(*inst->data_ptr);
 
     // Check to see if all selected memory can be converted
-    // opcode and operands must be valid type to convert
+    // opcode and operands must be TYPE_UNDEFINED to convert
     for(u32 i = 0; i < instruction_size; i++) {
         auto memory_object = GetMemoryObject(where + i);
-        if(memory_object->type != MemoryObject::TYPE_BYTE && memory_object->type != MemoryObject::TYPE_UNDEFINED) {
+        if(memory_object->type != MemoryObject::TYPE_UNDEFINED) {
             cout << "[MemoryRegion::MarkMemoryAsCode] address " << (where + i) << " cannot be converted to code (currently type " << magic_enum::enum_name(memory_object->type) << ")" << endl;
             return false;
         }
@@ -540,7 +561,7 @@ bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where)
     // remove the operand objects from the tree
     for(u32 i = 1; i < instruction_size; i++) {
         auto operand_object = GetMemoryObject(where + i);
-        assert(operand_object->type == MemoryObject::TYPE_BYTE || operand_object->type == MemoryObject::TYPE_UNDEFINED);
+        assert(operand_object->type == MemoryObject::TYPE_UNDEFINED);
         RemoveMemoryObjectFromTree(operand_object);
 
         // don't have to copy the operands as they're sequential in memory from inst->data_ptr
@@ -550,7 +571,7 @@ bool MemoryRegion::MarkMemoryAsCode(GlobalMemoryLocation const& where)
         object_refs[x] = inst;
     }
 
-    // convert the inst to TYPE_CODE and update the tree
+    // convert the inst to TYPE_CODE and update the tree and object
     inst->type = MemoryObject::TYPE_CODE;
     UpdateMemoryObject(where);
 
@@ -562,7 +583,7 @@ bool MemoryRegion::MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byt
     // Check to see if all selected memory can be converted
     for(u32 i = 0; i < byte_count; i++) {
         auto memory_object = GetMemoryObject(where + i);
-        if(memory_object->type != MemoryObject::TYPE_BYTE && memory_object->type != MemoryObject::TYPE_UNDEFINED) {
+        if(memory_object->type != MemoryObject::TYPE_UNDEFINED) {
             cout << "[MemoryRegion::MarkMemoryAsString] address " << (where + i) << " cannot be converted to code (currently type " << magic_enum::enum_name(memory_object->type) << ")" << endl;
             return false;
         }
@@ -571,13 +592,13 @@ bool MemoryRegion::MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byt
     // The first object will be changed into the string
     auto str_object = GetMemoryObject(where);
 
-    // allocate the storage for the data
+    // set the string length
     str_object->string_length = byte_count;
 
     // remove the rest of the objects from the tree
     for(u32 i = 1; i < byte_count; i++) {
         auto next_byte_object = GetMemoryObject(where + i);
-        assert(next_byte_object->type == MemoryObject::TYPE_BYTE || next_byte_object->type == MemoryObject::TYPE_UNDEFINED);
+        assert(next_byte_object->type == MemoryObject::TYPE_UNDEFINED);
         RemoveMemoryObjectFromTree(next_byte_object);
 
         // update the object_refs
@@ -585,7 +606,7 @@ bool MemoryRegion::MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byt
         object_refs[x] = str_object;
     }
 
-    // convert the str_object to TYPE_STRING and update the tree
+    // convert the str_object to TYPE_STRING and update the tree and object
     str_object->type = MemoryObject::TYPE_STRING;
     UpdateMemoryObject(where);
 
@@ -1083,6 +1104,7 @@ void MemoryObject::Read(u8* buf, int count)
     case MemoryObject::TYPE_WORD:
     case MemoryObject::TYPE_CODE:
     case MemoryObject::TYPE_STRING:
+        assert(count <= GetSize());
         memcpy(buf, (void*)data_ptr, count);
         break;
 

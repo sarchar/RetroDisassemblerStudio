@@ -124,6 +124,7 @@ public:
     std::shared_ptr<MemoryObject> GetMemoryObject(GlobalMemoryLocation const&, int* offset = NULL);
 
     void MarkMemoryAsUndefined(GlobalMemoryLocation const&, u32 byte_count);
+    void MarkMemoryAsBytes(GlobalMemoryLocation const&, u32 byte_count);
     void MarkMemoryAsWords(GlobalMemoryLocation const&, u32 byte_count);
     void MarkMemoryAsString(GlobalMemoryLocation const&, u32 byte_count);
 
