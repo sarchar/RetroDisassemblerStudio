@@ -1098,6 +1098,9 @@ string MemoryObject::FormatInstructionField(shared_ptr<Disassembler> disassemble
 
     switch(type) {
     case MemoryObject::TYPE_UNDEFINED:
+        ss << "<unk>";
+        break;
+
     case MemoryObject::TYPE_BYTE:
         ss << ".DB";
         break;
