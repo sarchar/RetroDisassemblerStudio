@@ -76,6 +76,7 @@ add_executable(${PROJECT_NAME}
     src/windows/nes/listing.cpp
     src/windows/nes/listingitems.cpp
     src/windows/nes/project.cpp
+    src/windows/nes/quickexpressions.cpp
     src/windows/nes/references.cpp
     src/windows/nes/regions.cpp
 )

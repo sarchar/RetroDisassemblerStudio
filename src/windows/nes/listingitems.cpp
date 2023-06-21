@@ -385,23 +385,23 @@ end_table:
 void ListingItemPrimary::EditOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
 {
     auto disassembler = system->GetDisassembler();
-    if(auto memory_object = system->GetMemoryObject(where)) {
-        if(memory_object->type == MemoryObject::TYPE_CODE) {
-            switch(disassembler->GetAddressingMode(*memory_object->data_ptr)) {
-            case Systems::NES::AM_IMPLIED:
-            case Systems::NES::AM_ACCUM:
-                break;
+    expression_value = -1;
 
-            default:
-                edit_buffer = memory_object->FormatOperandField(0, disassembler);
-                edit_mode = EDIT_OPERAND_EXPRESSION;
-                started_editing = true;
-                break;
-            }
-        } else {
+    if(auto memory_object = system->GetMemoryObject(where)) {
+        bool editable = memory_object->type == MemoryObject::TYPE_CODE
+                        || memory_object->type == MemoryObject::TYPE_BYTE
+                        || memory_object->type == MemoryObject::TYPE_WORD;
+        if(editable) {
             edit_buffer = memory_object->FormatOperandField(0, disassembler);
             edit_mode = EDIT_OPERAND_EXPRESSION;
             started_editing = true;
+
+            // determine expression value for the quick expression search
+            if(memory_object->GetSize() == 3) {
+                expression_value = (u16)memory_object->data_ptr[1] | ((u16)memory_object->data_ptr[2] << 8);
+            } else if(memory_object->GetSize() == 2) {
+                expression_value = memory_object->data_ptr[1];
+            }
         }
     }
 
@@ -444,22 +444,34 @@ void ListingItemPrimary::RecalculateSuggestions(shared_ptr<System>& system)
             suggestions.push_back(ee);
         }
     });
+
+    system->IterateQuickExpressionsByValue([this](string const& expression_string) {
+        if(expression_string.find(edit_buffer) == 0) {
+            suggestions.push_back(expression_string);
+        }
+    }, expression_value);
     
     sort(suggestions.begin(), suggestions.end(), [](suggestion_type const& a, suggestion_type const& b) {
         string a_str, b_str;
+
         if(auto const label = get_if<shared_ptr<Label>>(&a)) {
             a_str = (*label)->GetString();
         } else if(auto const define = get_if<shared_ptr<Define>>(&a)) {
             a_str = (*define)->GetName();
         } else if(auto const ee = get_if<shared_ptr<EnumElement>>(&a)) {
             a_str = (*ee)->GetName();
+        } else if(auto const qe = get_if<string>(&a)) {
+            a_str = *qe;
         }
+
         if(auto const label = get_if<shared_ptr<Label>>(&b)) {
             b_str = (*label)->GetString();
         } else if(auto const define = get_if<shared_ptr<Define>>(&b)) {
             b_str = (*define)->GetName();
         } else if(auto const ee = get_if<shared_ptr<EnumElement>>(&b)) {
             b_str = (*ee)->GetName();
+        } else if(auto const qe = get_if<string>(&b)) {
+            b_str = *qe;
         }
                 
         return a_str <= b_str;
@@ -538,6 +550,7 @@ void ListingItemPrimary::RenderEditOperandExpression(shared_ptr<System>& system)
 
         for(int i = 0; i < suggestions.size(); i++) {
             stringstream disp, repl;
+            bool replace_all = false;
             if(auto label = get_if<shared_ptr<Label>>(&suggestions[i])) {
                 disp << (*label)->GetString() << " (label)";  
                 repl << (*label)->GetString();
@@ -549,14 +562,24 @@ void ListingItemPrimary::RenderEditOperandExpression(shared_ptr<System>& system)
                 if(!e) continue;
                 disp << (*ee)->GetFormattedName("_") << " (enum)";
                 repl << (*ee)->GetFormattedName("_");
+            } else if(auto qe = get_if<string>(&suggestions[i])) {
+                disp << *qe;
+                repl << *qe;
+                replace_all = true;
             }
     
+            // TODO we can use tables to make a selectable row and then colorize
+            // the quick expressions a different color
             string display_str = disp.str();
             if(ImGui::Selectable(display_str.c_str())) {
                 ImGui::ClearActiveID();
 
-                if(suggestion_start != -1) {
-                    edit_buffer = edit_buffer.substr(0, suggestion_start) + repl.str();
+                if(suggestion_start != -1 || replace_all) {
+                    if(replace_all) {
+                        edit_buffer = repl.str();
+                    } else {
+                        edit_buffer = edit_buffer.substr(0, suggestion_start) + repl.str();
+                    }
                     RecalculateSuggestions(system);
 
                     // Close the popup, and restart editing which will refocus on the inputtext
@@ -576,7 +599,6 @@ void ListingItemPrimary::RenderEditOperandExpression(shared_ptr<System>& system)
         ImGui::EndPopup();
     }
 }
-
 
 bool ListingItemPrimary::ParseOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
 {

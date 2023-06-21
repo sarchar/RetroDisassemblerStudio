@@ -56,13 +56,6 @@ MainWindow::MainWindow()
 
     // show a status bar
     SetShowStatusBar(true);
-
-    // register all the windows here
-#   define REGISTER_WINDOW_TYPE(className) \
-        create_window_functions[className::GetWindowClassStatic()] = std::bind(&className::CreateWindow);
-    //!REGISTER_WINDOW_TYPE(NES::Windows::Listing);
-    //!REGISTER_WINDOW_TYPE(NES::Windows::MemoryRegions);
-#   undef REGISTER_WINDOW_TYPE
 }
 
 MainWindow::~MainWindow()

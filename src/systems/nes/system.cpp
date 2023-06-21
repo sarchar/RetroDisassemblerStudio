@@ -44,6 +44,7 @@ System::System()
     enum_element_added = make_shared<enum_element_added_t>();
     enum_element_changed = make_shared<enum_element_changed_t>();
     enum_element_deleted = make_shared<enum_element_added_t>();
+    new_quick_expression = make_shared<new_quick_expression_t>();
     disassembly_stopped = make_shared<disassembly_stopped_t>();
 }
 
@@ -242,7 +243,8 @@ shared_ptr<ExpressionNodeCreator> System::GetNodeCreator()
 // at the root, convert Immediate, Accum, and IndexedX/Y
 bool System::ExploreExpressionNodeCallback(shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const& parent, int depth, void* userdata)
 {
-    ExploreExpressionNodeData* explore_data = (ExploreExpressionNodeData*)userdata;
+    auto explore_data = static_cast<ExploreExpressionNodeData*>(userdata);
+    explore_data->num_nodes++;
 
     // check names, and convert them into appropriate expression nodes
     if(auto name = dynamic_pointer_cast<BaseExpressionNodes::Name>(node)) {
@@ -395,14 +397,15 @@ bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<
 
     // Loop over every node (and change them to system nodes if necessary), validating some things along the way
     FixupFlags fixup_flags = FIXUP_LABELS | FIXUP_DEFINES | FIXUP_ENUMS | FIXUP_ADDRESSING_MODES;
-    if(!FixupExpression(expr, errmsg, fixup_flags)) return false;
+    int num_nodes;
+    if(!FixupExpression(expr, errmsg, fixup_flags, &num_nodes)) return false;
 
     // Now we need to do one more thing: determine the addressing mode of the expression and match it to
     // the addressing mode of the current opcode. the size of the operand is encoded into the addressing mode
     // so we also need to make sure the expression evaluates to something that fits in that size
     ADDRESSING_MODE expression_mode;
-	s64 operand_value;
-    if(!DetermineAddressingMode(expr, &expression_mode, &operand_value, errmsg)) return false;
+	s64 expression_value;
+    if(!DetermineAddressingMode(expr, &expression_mode, &expression_value, errmsg)) return false;
 
     // Now we check that the resulting mode matches the addressing mode of the opcode
     // TODO in the future, we will allow changing of the opcode to match the new addressing mode, but that requires a little 
@@ -429,23 +432,23 @@ bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<
             return false;
         }
 
-        // Convert relative operand_value 
+        // Convert relative expression_value 
         if(expression_mode == AM_RELATIVE) {
-            operand_value = operand_value - (where.address + 2);
-            operand_value = (u64)operand_value & 0xFF;
+            expression_value = expression_value - (where.address + 2);
+            expression_value = (u64)expression_value & 0xFF;
         }
 
-        // Now we need to validate that operand_value matches the actual data
+        // Now we need to validate that expression_value matches the actual data
         u16 operand = (u16)memory_object->data_ptr[1];
         if(memory_object->GetSize() == 3) {
             operand |= ((u16)memory_object->data_ptr[2] << 8);
-            operand_value = (u64)operand_value & 0xFFFF;
+            expression_value = (u64)expression_value & 0xFFFF;
         }
 
-        if(operand != operand_value) {
+        if(operand != expression_value) {
             stringstream ss;
             ss << hex << setfill('0') << uppercase;
-            ss << "Expression value ($" << setw(4) << (int)operand_value 
+            ss << "Expression value ($" << setw(4) << (int)expression_value 
                << ") does not evaluate to instruction operand value ($" << setw(4) << operand << ")";
             errmsg = ss.str();
             return false;
@@ -455,15 +458,71 @@ bool System::SetOperandExpression(GlobalMemoryLocation const& where, shared_ptr<
         break;
     }
 
-    case MemoryObject::TYPE_BYTE:
+    case MemoryObject::TYPE_BYTE: {
         // Only allow AM_ZEROPAGE
-    case MemoryObject::TYPE_WORD:
-        // Only allow AM_ABSOLUTE
+        if(expression_mode != AM_ZEROPAGE) {
+            stringstream ss;
+            ss << "Expression must evaluate to a value between 0-255";
+            errmsg = ss.str();
+            return false;
+        }
+
+        // validate the word value is equal to the expression_value
+        u8 operand = memory_object->data_ptr[1];
+        if(operand != expression_value) {
+            stringstream ss;
+            ss << hex << setfill('0') << uppercase;
+            ss << "Expression value ($" << setw(4) << (int)expression_value 
+               << ") does not evaluate to data value ($" << setw(2) << operand << ")";
+            errmsg = ss.str();
+            return false;
+        }
         break;
+    }
+
+    case MemoryObject::TYPE_WORD: {
+        // Only allow AM_ABSOLUTE
+        if(expression_mode != AM_ABSOLUTE) {
+            stringstream ss;
+            ss << "Expression addressing mode (" << magic_enum::enum_name(expression_mode) 
+               << ") must be an absolute value";
+            errmsg = ss.str();
+            return false;
+        }
+
+        // validate the word value is equal to the expression_value
+        u16 operand = (u16)memory_object->data_ptr[1] | ((u16)memory_object->data_ptr[2] << 8);
+        if(operand != expression_value) {
+            stringstream ss;
+            ss << hex << setfill('0') << uppercase;
+            ss << "Expression value ($" << setw(4) << (int)expression_value 
+               << ") does not evaluate to data value ($" << setw(4) << operand << ")";
+            errmsg = ss.str();
+            return false;
+        }
+        break;
+    }
 
     default:
         assert(false);
         break;
+    }
+
+    // save the expression and its value in the list of common expressions
+    // we're only saving expressions that have 3 or more nodes so that
+    // basic labels or constant usage doesn't get added to the set
+    if(num_nodes >= 3) {
+        // get the string representation of the expression
+        stringstream ss;
+        ss << *expr;
+        string expression_string = ss.str();
+
+        // add it to the set of the corresponding value
+        auto& expression_set = quick_expressions_by_value[expression_value];
+        auto res = expression_set.insert(expression_string);
+
+        // only if the expression is new, emit the signal
+        if(res.second) new_quick_expression->emit(expression_value, expression_string);
     }
 
     memory_region->SetOperandExpression(where, expr);
@@ -577,7 +636,7 @@ bool System::DetermineAddressingMode(shared_ptr<Expression>& expr, ADDRESSING_MO
 }
 
 bool System::FixupExpression(shared_ptr<BaseExpression> const& expr, string& errmsg,
-        FixupFlags fixup_flags)
+        FixupFlags fixup_flags, int* num_nodes)
 {
     ExploreExpressionNodeData explore_data {
         .errmsg           = errmsg,
@@ -591,7 +650,9 @@ bool System::FixupExpression(shared_ptr<BaseExpression> const& expr, string& err
 
     // Loop over every node (and change them to system nodes if necessary), validating some things along the way
     auto cb = std::bind(&System::ExploreExpressionNodeCallback, this, placeholders::_1, placeholders::_2, placeholders::_3, placeholders::_4);
-    return expr->Explore(cb, &explore_data);
+    auto res = expr->Explore(cb, &explore_data);
+    if(num_nodes) *num_nodes = explore_data.num_nodes;
+    return res;
 }
 
 shared_ptr<Define> System::CreateDefine(string const& name, string& errmsg)
@@ -1123,12 +1184,22 @@ bool System::Save(ostream& os, string& errmsg)
     if(!ppu_registers->Save(os, errmsg)) return false;
     if(!io_registers->Save(os, errmsg)) return false;
 
-    // save the cartridge (which will save some memory regions)
+    // save the cartridge
     if(!cartridge->Save(os, errmsg)) return false;
+
+    // save the quick expressions
+    WriteVarInt(os, (int)quick_expressions_by_value.size());
+    for(auto& qe: quick_expressions_by_value) {
+        WriteVarInt(os, qe.first);
+        WriteVarInt(os, (int)qe.second.size());
+        for(auto qe_string: qe.second) {
+            WriteString(os, qe_string);
+        }
+    }
 
 done:
     errmsg = "Error saving System";
-    return true;
+    return os.good();
 }
 
 bool System::Load(istream& is, string& errmsg)
@@ -1207,12 +1278,28 @@ bool System::Load(istream& is, string& errmsg)
     cartridge     = make_shared<Cartridge>(selfptr);          // 0x6000-0xFFFF
     if(!cartridge->Load(is, errmsg, selfptr)) return false;
 
+    // load the quick expressions
+    if(GetCurrentProject()->GetSaveFileVersion() >= FILE_VERSION_QUICKEXP) {
+        int num_quick_expressions_values = ReadVarInt<int>(is);
+        for(int i = 0; i < num_quick_expressions_values; i++) {
+            int quick_expressions_value = ReadVarInt<s64>(is);
+            int num_quick_expressions = ReadVarInt<int>(is);
+            auto& quick_expressions = quick_expressions_by_value[quick_expressions_value];
+            for(int j = 0; j < num_quick_expressions; j++) {
+                string s;
+                ReadString(is, s);
+                if(!is.good()) goto done;
+                quick_expressions.insert(s);
+            }
+        }
+    }
+
     // note all references
     NoteReferences();
 
 done:
     errmsg = "Error loading System";
-    return true;
+    return is.good();
 }
 
 void System::NoteReferences()

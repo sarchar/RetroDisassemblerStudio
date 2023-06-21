@@ -135,9 +135,11 @@ private:
     typedef std::variant<
         std::shared_ptr<Define>,
         std::shared_ptr<Label>,
-        std::shared_ptr<EnumElement>
+        std::shared_ptr<EnumElement>,
+        std::string // quick expressions
     > suggestion_type;
     std::vector<suggestion_type> suggestions;
+    s64 expression_value;
 
     int suggestion_start;
     bool deselect_input = false;

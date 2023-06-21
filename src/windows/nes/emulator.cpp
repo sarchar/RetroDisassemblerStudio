@@ -33,6 +33,7 @@
 #include "windows/nes/labels.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/project.h"
+#include "windows/nes/quickexpressions.h"
 #include "windows/nes/regions.h"
 
 using namespace std;
@@ -210,7 +211,7 @@ void SystemInstance::RenderInstanceMenu()
         static char const * const window_types[] = {
             "Defines", "Regions", "Labels", "Listing", "Memory", 
             "Screen", "PPUState", "CPUState", "Watch", "Breakpoints", "Memory",
-            "Enums"
+            "Enums", "Expressions"
         };
 
         for(int i = 0; i < IM_ARRAYSIZE(window_types); i++) {
@@ -319,6 +320,9 @@ void SystemInstance::CreateNewWindow(string const& window_type)
         wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
     } else if(window_type == "Enums") {
         wnd = Enums::CreateWindow();
+        wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
+    } else if(window_type == "Expressions") {
+        wnd = QuickExpressions::CreateWindow();
         wnd->SetInitialDock(BaseWindow::DOCK_LEFT);
     } else if(window_type == "Screen") {
         wnd = Screen::CreateWindow();

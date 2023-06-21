@@ -5,6 +5,7 @@
 // LICENSE file in the root directory of this source tree. 
 #pragma once
 
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -71,6 +72,9 @@ public:
     std::shared_ptr<enum_element_changed_t> enum_element_changed;
     std::shared_ptr<enum_element_added_t>   enum_element_deleted;
 
+    typedef signal<std::function<void(s64, std::string const&)>> new_quick_expression_t;
+    std::shared_ptr<new_quick_expression_t> new_quick_expression;
+
     // On-demand new signal handlers for specific addresses
     std::shared_ptr<label_created_t> LabelCreatedAt(GlobalMemoryLocation const& where) {
         if(!label_created_at.contains(where)) {
@@ -124,7 +128,7 @@ public:
     void MarkMemoryAsString(GlobalMemoryLocation const&, u32 byte_count);
 
     // Convert units like Names into defines and labels 
-    bool FixupExpression(std::shared_ptr<BaseExpression> const&, std::string&, FixupFlags);
+    bool FixupExpression(std::shared_ptr<BaseExpression> const&, std::string&, FixupFlags, int* num_nodes = nullptr);
 
     // Set the operand_expression at a memory location. System::SetOperandExpression performs a FixupExpression and
     // checks the addressing mode. Calling MemoryRegion::SetOperandExpression bypasses this
@@ -224,6 +228,24 @@ public:
         }
     }
 
+    // quick expressions
+    template<typename F>
+    void IterateQuickExpressions(F f) {
+        for(auto qe_value : quick_expressions_by_value) {
+            for(auto& qe : qe_value.second) {
+                f(qe_value.first, qe);
+            }
+        }
+    }
+
+    template<typename F>
+    void IterateQuickExpressionsByValue(F f, s64 v) {
+        if(!quick_expressions_by_value.contains(v)) return;
+        for(auto& qe : quick_expressions_by_value[v]) {
+            f(qe);
+        }
+    }
+
     // Comments
     std::shared_ptr<BaseComment> GetComment(GlobalMemoryLocation const& where, MemoryObject::COMMENT_TYPE type) {
         if(auto memory_region = GetMemoryRegion(where)) {
@@ -291,6 +313,9 @@ private:
     std::unordered_map<std::string, std::shared_ptr<EnumElement>> enum_elements_by_name{};
     std::unordered_map<s64, std::vector<std::shared_ptr<EnumElement>>> enum_elements_by_value{};
 
+    // reusable quick expressions
+    std::unordered_map<s64, std::set<std::string>> quick_expressions_by_value{};
+
     void NoteReferences();
 
     bool disassembling;
@@ -317,6 +342,8 @@ private:
 
         bool allow_enums;     // allow looking up Enums
         std::vector<std::shared_ptr<EnumElement>> enum_elements;
+
+        int  num_nodes = 0;   // total number of expression nodes in the expression
     };
 
     bool ExploreExpressionNodeCallback(std::shared_ptr<BaseExpressionNode>&, std::shared_ptr<BaseExpressionNode> const&, int, void*);
