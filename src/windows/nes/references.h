@@ -22,6 +22,7 @@ namespace Systems {
 namespace Systems::NES {
 
 class Define;
+class Enum;
 class EnumElement;
 class Label;
 class System;
@@ -32,16 +33,20 @@ namespace Windows::NES {
 
 class References : public BaseWindow {
 public:
-    using BaseComment          = Systems::BaseComment;
-    using Define               = Systems::NES::Define;
-    using EnumElement          = Systems::NES::EnumElement;
-    using GlobalMemoryLocation = Systems::NES::GlobalMemoryLocation;
-    using Label                = Systems::NES::Label;
-    using System               = Systems::NES::System;
+    using BaseComment                  = Systems::BaseComment;
+    using Define                       = Systems::NES::Define;
+    using Enum                         = Systems::NES::Enum;
+    using EnumElement                  = Systems::NES::EnumElement;
+    using GlobalMemoryLocation         = Systems::NES::GlobalMemoryLocation;
+    using Label                        = Systems::NES::Label;
+    using MemoryObjectTypeReference    = Systems::NES::MemoryObjectTypeReference;
+    using MemoryObjectOperandReference = Systems::NES::MemoryObjectOperandReference;
+    using System                       = Systems::NES::System;
 
     typedef std::variant<
         std::shared_ptr<Define>,
         std::shared_ptr<Label>,
+        std::shared_ptr<Enum>,
         std::shared_ptr<EnumElement>> reference_type;
 
     References();
@@ -71,7 +76,8 @@ private:
     signal_connection label_deleted_connection;
 
     typedef std::variant<
-        std::shared_ptr<GlobalMemoryLocation>,
+        std::shared_ptr<MemoryObjectTypeReference>,
+        std::shared_ptr<MemoryObjectOperandReference>,
         std::shared_ptr<Define>,
         std::shared_ptr<EnumElement>,
         std::shared_ptr<BaseComment>

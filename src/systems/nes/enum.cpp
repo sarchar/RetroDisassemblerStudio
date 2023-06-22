@@ -10,6 +10,8 @@
 #include "systems/nes/enum.h"
 #include "systems/nes/expressions.h"
 
+#include "windows/nes/project.h"
+
 using namespace std;
 
 namespace Systems::NES {
@@ -82,20 +84,23 @@ bool Enum::ChangeElementExpression(shared_ptr<EnumElement> const& ee, shared_ptr
         }
     }
 
+    // update cached_value and expression now
+    auto old_value = ee->cached_value;
+    ee->cached_value = result;
+    ee->expression = expression;
+
     // change this element to a different value_map if necessary
-    if(result != ee->cached_value) {
-        auto& list = value_map[ee->cached_value];
+    if(old_value != ee->cached_value) {
+        auto& list = value_map[old_value];
         auto it = find(list.begin(), list.end(), ee);
         assert(it != list.end());
         list.erase(it);
 
+        // insert element with new value
         InsertElement(ee);
     }
 
-    // update value and expression and done
-    s64 old_value = ee->cached_value;
-    ee->cached_value = result;
-    ee->expression = expression;
+    // emit changed signal
     element_changed->emit(ee, ee->name, old_value);
     return true;
 }
@@ -133,6 +138,9 @@ void Enum::DeleteElements()
 
 bool Enum::Save(ostream& os, string& errmsg) const
 {
+    WriteVarInt(os, 0); // reserved
+    WriteVarInt(os, size);
+
     WriteString(os, name);
     WriteVarInt(os, elements.size());
     if(!os.good()) goto done;
@@ -148,6 +156,12 @@ done:
 
 shared_ptr<Enum> Enum::Load(istream& is, string& errmsg)
 {
+    int size = 1;
+    if(GetCurrentProject()->GetSaveFileVersion() >= FILE_VERSION_ENUMSIZE) {
+        ReadVarInt<int>(is); // reserved
+        size = ReadVarInt<int>(is);
+    }
+
     string name;
     ReadString(is, name);
 
@@ -158,6 +172,7 @@ shared_ptr<Enum> Enum::Load(istream& is, string& errmsg)
     }
 
     auto e = make_shared<Enum>(name);
+    e->size = size;
     for(int i = 0; i < count; i++) {
         auto ee = make_shared<EnumElement>();
         if(!ee->Load(is, errmsg)) return nullptr;

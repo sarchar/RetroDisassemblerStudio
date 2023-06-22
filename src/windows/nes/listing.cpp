@@ -24,6 +24,7 @@
 #include "systems/nes/system.h"
 
 #include "windows/nes/emulator.h"
+#include "windows/nes/enums.h"
 #include "windows/nes/listing.h"
 #include "windows/nes/listingitems.h"
 #include "windows/nes/project.h"
@@ -306,6 +307,20 @@ void Listing::CheckInput()
         if(ImGui::IsKeyPressed(ImGuiKey_S)) {
             if(int len = GetSelection(); len > 0) {
                 current_system->MarkMemoryAsString(current_selection, len);
+            }
+        }
+
+        // mark data as enum
+        if(ImGui::IsKeyPressed(ImGuiKey_E)) {
+            if(int len = GetSelection(); len > 0) {
+                auto wnd = Enums::CreateWindow(true);
+                AddChildWindow(wnd);
+                // copy the selection
+                auto system = current_system;
+                auto selection = current_selection;
+                *wnd->enum_selected += [system, selection, len](shared_ptr<Systems::NES::Enum> const& enum_type) {
+                    system->MarkMemoryAsEnum(selection, len, enum_type);
+                };
             }
         }
 

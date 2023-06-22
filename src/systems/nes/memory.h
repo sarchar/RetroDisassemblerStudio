@@ -12,10 +12,12 @@
 
 #include <iostream>
 #include <iomanip>
+#include <variant>
 #include <vector>
 
 #include "util.h"
 
+#include "signals.h"
 #include "systems/comment.h"
 #include "systems/nes/defs.h"
 
@@ -27,6 +29,8 @@ namespace Systems::NES {
 
 class Comment;
 class Disassembler;
+class Enum;
+class EnumElement;
 class Expression;
 class Label;
 class System;
@@ -115,7 +119,7 @@ struct GlobalMemoryLocation {
 
 };
 
-class MemoryObject;
+struct MemoryObject;
 class MemoryRegion;
 
 // The job of the tree is to keep memory objects ordered, provide iterators over objects
@@ -157,17 +161,14 @@ struct MemoryObject {
     using ListingItem = Windows::NES::ListingItem;
 
     enum TYPE {
-        TYPE_UNDEFINED, // for NES undefined data shows up as bytes
+        // Do not change the order of this enum, as the values are stored
+        // directly in project files.
+        TYPE_UNDEFINED,
         TYPE_BYTE,
         TYPE_WORD,
         TYPE_CODE,
         TYPE_STRING,
-
-        // Even though LIST and ARRAY function interally very similarly,
-        // a LIST type is internal to the editor (it's a list of memory objects), whereas
-        // the ARRAY type is indexable in code statements.
-        TYPE_LIST,
-        TYPE_ARRAY
+        TYPE_ENUM
     };
 
     enum COMMENT_TYPE {
@@ -178,6 +179,20 @@ struct MemoryObject {
 
     TYPE type = TYPE_UNDEFINED;
     bool backed = false; // false if the data is uninitialized memory
+
+    // user_type used for TYPE_ENUM and TODO TYPE_STRUCT
+    // do not change the order of the variant types
+    std::variant<
+        std::monostate,
+        std::shared_ptr<Enum>
+    > user_type{};
+
+    // if this is valid, then a reference is set
+    std::shared_ptr<EnumElement> enum_element;
+
+    // connections used to monitor user_type changes
+    signal_connection user_type_conn1;
+    signal_connection user_type_conn2;
 
     std::weak_ptr<MemoryObjectTreeNode> parent;
 
@@ -268,6 +283,12 @@ private:
     friend class MemoryRegion;
 };
 
+// These two types are because a MemoryObject will have several different ways
+// to reference objects like enums, defines. using a proper type makes it so
+// we can distinguish which part of the object is the reference
+struct MemoryObjectTypeReference : public GlobalMemoryLocation {};
+struct MemoryObjectOperandReference : public GlobalMemoryLocation {};
+
 // MemoryRegion represents a region of memory on the system
 // Memory regions are a list of content ordered by the contents offset in the block
 // But because lookups would be slow with blocks of content, we still have a pointer into the content table for each address in the region
@@ -325,6 +346,7 @@ public:
     bool MarkMemoryAsBytes(GlobalMemoryLocation const& where, u32 byte_count);
     bool MarkMemoryAsWords(GlobalMemoryLocation const& where, u32 byte_count);
     bool MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byte_count);
+    bool MarkMemoryAsEnum(GlobalMemoryLocation const& where, u32 byte_count, std::shared_ptr<Enum> const&);
 
     // Code
     bool MarkMemoryAsCode(GlobalMemoryLocation const& where);

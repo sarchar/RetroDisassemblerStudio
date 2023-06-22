@@ -14,6 +14,7 @@
 #include "windows/basewindow.h"
 
 namespace Systems::NES {
+    class Enum;
     class GlobalMemoryLocation;
     class Label;
     class System;

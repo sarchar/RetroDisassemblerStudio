@@ -26,12 +26,17 @@ public:
     using Enum        = Systems::NES::Enum;
     using EnumElement = Systems::NES::EnumElement;
 
-    Enums();
+    Enums(bool _select_enum);
     virtual ~Enums();
 
     virtual char const * const GetWindowClass() { return Enums::GetWindowClassStatic(); }
     static char const * const GetWindowClassStatic() { return "Windows::NES::Enums"; }
     static std::shared_ptr<Enums> CreateWindow();
+    static std::shared_ptr<Enums> CreateWindow(bool select_enum);
+
+    // select enum signals
+    typedef signal<std::function<void(std::shared_ptr<Enum>)>> enum_selected_t;
+    std::shared_ptr<enum_selected_t> enum_selected{std::make_shared<enum_selected_t>()};
 
 protected:
     void CheckInput() override;
@@ -42,6 +47,12 @@ protected:
     bool LoadWindow(std::istream&, std::string&) override;
 
 private:
+    // selecting vs editing
+    bool select_enum;
+    bool select_enum_first_focus = true;
+    void RenderEnumTable();
+    void RenderSelectEnum();
+
     // sort
     void Resort();
     bool need_resort = false;
@@ -79,7 +90,7 @@ private:
 
 
     // our list of enums can be grouped by enum or just a list of all the elements
-    void RenderEnumRows();
+    void RenderEnumRows(bool* = nullptr);
     void RenderEnumElement(std::shared_ptr<EnumElement> const&, bool);
     std::vector<std::shared_ptr<Enum>> enums;
     std::vector<std::shared_ptr<EnumElement>> all_enum_elements;

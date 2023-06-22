@@ -21,7 +21,7 @@ namespace Systems {
 namespace Systems::NES {
 
 class Label : public std::enable_shared_from_this<Label>, 
-              public Systems::Referenceable<GlobalMemoryLocation, Systems::BaseComment> {
+              public Systems::Referenceable<MemoryObjectOperandReference, Systems::BaseComment> {
 public:
     Label(GlobalMemoryLocation const&, std::string const&);
     ~Label();

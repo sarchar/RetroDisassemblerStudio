@@ -76,6 +76,13 @@ void BaseWindow::SetTitle(std::string const& t)
     dockspace_id = idstr.str();
 }
 
+void BaseWindow::ClosePopup()
+{
+    assert(is_popup);
+    ImGui::CloseCurrentPopup();
+    CloseWindow();
+}
+
 void BaseWindow::CloseWindow()
 {
     if(!open) return;
@@ -212,7 +219,18 @@ void BaseWindow::InternalRender()
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         }
 
-        auto visible = ImGui::Begin(window_title.c_str(), &local_open, window_flags);
+        bool visible;
+        auto window_id = window_title.c_str();
+        if(is_popup) { 
+            if(!ImGui::IsPopupOpen(window_id)) {
+                ImGui::OpenPopup(window_id);
+                ImGui::SetNextWindowSize(ImVec2(0, 0));
+            }
+            visible = ImGui::BeginPopupModal(window_id, &local_open, window_flags);
+        } else {
+            visible = ImGui::Begin(window_id, &local_open, window_flags);
+        }
+
         if(is_dockspace) ImGui::PopStyleVar(3);
 
         if(print_id) {
@@ -242,8 +260,14 @@ void BaseWindow::InternalRender()
         // window are hidden, child windows can still be visible, and some of them may
         // have their own dockspaces, which also need to be kept alive
         for(auto &window : child_windows) window->InternalRender();
-    
-        ImGui::End(); // always call end regardless of Begin()'s return value
+
+        if(is_popup) {
+            // only call if BeginPopup returned true
+            if(visible) ImGui::EndPopup();
+        } else {
+            // always call end regardless of Begin()'s return value
+            ImGui::End();
+        }
 
         // close window if ImGui requested
         if(!local_open) {

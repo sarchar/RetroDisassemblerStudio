@@ -25,7 +25,9 @@ namespace Systems::NES {
 class Define;
 class EnumElement;
 
-using EnumReferenceable = Systems::Referenceable<GlobalMemoryLocation, Define, Systems::BaseComment>;
+using EnumReferenceable = 
+    Systems::Referenceable<MemoryObjectTypeReference, MemoryObjectOperandReference, 
+                           Define, Systems::BaseComment>;
 
 // An Enum is a collection of expressions under a named category. 
 //
@@ -35,6 +37,9 @@ class Enum : public std::enable_shared_from_this<Enum>, public EnumReferenceable
 public:
     Enum(std::string const&);
     ~Enum();
+
+    void SetSize(int _size)            { assert(size == 1 || size == 2); size = _size; }
+    int  GetSize()          const      { return size; }
 
     std::string const& GetName() const { return name; }
 
@@ -77,6 +82,7 @@ public:
 private:
     void InsertElement(std::shared_ptr<EnumElement> const&);
 
+    int         size = 1;
     std::string name;
 
     std::unordered_map<std::string, std::shared_ptr<EnumElement>> elements;

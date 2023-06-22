@@ -613,6 +613,60 @@ bool MemoryRegion::MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byt
     return true;
 }
 
+bool MemoryRegion::MarkMemoryAsEnum(GlobalMemoryLocation const& where, u32 byte_count, shared_ptr<Enum> const& enum_type)
+{
+    int enum_size = enum_type->GetSize();
+
+    // Check to see if all selected memory is undefined. other data cannot be converted
+    for(int loop = 0; loop < 2; loop++) {
+        for(u32 i = 0; i < byte_count; i += enum_size) {
+            auto memory_object = GetMemoryObject(where + i);
+
+            // skip over elements of this type of enum only
+            if(memory_object->type == MemoryObject::TYPE_ENUM
+               && memory_object->user_type.index() == 1
+               && get<shared_ptr<Enum>>(memory_object->user_type).get() == enum_type.get()) continue;
+
+            // all enum_size bytes need to be undefined
+            for(int j = 0; j < enum_size; j++) {
+                auto test_object = GetMemoryObject(where + i + j);
+                if(test_object->type != MemoryObject::TYPE_UNDEFINED) {
+                    cout << "[MemoryRegion::MarkMemoryAsEnum] address 0x" << (where.address + i + j) 
+                         << " cannot be converted to type enum " << enum_type->GetName()
+                         << " (currently type " 
+                         << magic_enum::enum_name(test_object->type) << ")" << endl;
+                    return false;
+                }
+            }
+
+            // first time through the loop we just verify TYPE_UNDEFINED
+            if(loop == 0) continue; 
+
+            // change the object to a byte
+            memory_object->type = MemoryObject::TYPE_ENUM;
+            memory_object->user_type = enum_type;
+
+            // remove enum_size-1 objects from the tree
+            for(int j = 1; j < enum_size; j++) {
+                auto next_object = GetMemoryObject(where + i + j);
+                RemoveMemoryObjectFromTree(next_object);
+
+                // set the object_refs to point to the first object
+                u32 x = ConvertToRegionOffset((where + i + j).address);
+                object_refs[x] = memory_object;
+            }
+
+            // listing items may have changed
+            _UpdateMemoryObject(memory_object, ConvertToRegionOffset(where.address));
+
+            // TYPE_UNDEFINED doesn't reference other objects, but we need to set references
+            // to the newly assigned enum
+            NoteReferences(where);
+        }
+    }
+    return true;
+}
+
 void MemoryRegion::SetOperandExpression(GlobalMemoryLocation const& where, std::shared_ptr<Expression> const& expr)
 {
     if(auto memory_object = GetMemoryObject(where)) {
@@ -741,21 +795,10 @@ int MemoryRegion::DeleteLabel(shared_ptr<Label> const& label)
     return ret;
 }
 
-void MemoryRegion::ClearReferencesToLabels(GlobalMemoryLocation const& where)
-{
-    if(auto memory_object = GetMemoryObject(where)) {
-        memory_object->RemoveReferences(where); // clear all references first
-        memory_object->ClearReferencesToLabels(where);
-        memory_object->NoteReferences(where);   // re-set all references (i.e., define)
-    }
-}
-
 void MemoryRegion::NextLabelReference(GlobalMemoryLocation const& where)
 {
     if(auto memory_object = GetMemoryObject(where)) {
-        memory_object->RemoveReferences(where); // clear all references first
         memory_object->NextLabelReference(where);
-        memory_object->NoteReferences(where);   // re-set all references (i.e., define)
     }
 }
 
@@ -920,23 +963,59 @@ struct MemoryObject::LabelCreatedData {
 
 void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
 {
+    // Create the specific memory object references
+    auto operand_ref = make_shared<MemoryObjectOperandReference>(where);
+
+    // Note references based on the object type
+    if(type == TYPE_ENUM) {
+        auto& enum_type = get<shared_ptr<Enum>>(user_type);
+        auto type_ref = make_shared<MemoryObjectTypeReference>(where);
+        enum_type->NoteReference(type_ref);
+
+        // determine the element value
+        s64 enum_element_value = data_ptr[0];
+        if(enum_type->GetSize() == 2) enum_element_value |= (s64)((u16)data_ptr[1] << 8);
+        else assert(enum_type->GetSize() == 1);
+
+        // for enum types, note the reference on the operand value
+        auto enum_elements = enum_type->GetElementsByValue(enum_element_value);
+        if(enum_elements.size()) {
+            enum_element = enum_elements[0];
+            enum_element->NoteReference(operand_ref);
+        } else {
+            // if there's no enum element for this value, watch for new elements to be added
+            // or changed
+            user_type_conn1 = enum_type->element_added->connect(
+                [this, operand_ref, enum_element_value](shared_ptr<EnumElement> const& ee) {
+                    if(!enum_element && ee->cached_value == enum_element_value) {
+                        enum_element = ee;
+                        enum_element->NoteReference(operand_ref);
+                    }
+                });
+            user_type_conn2 = enum_type->element_changed->connect(
+                [this, operand_ref, enum_element_value](shared_ptr<EnumElement> const& ee, string const&, s64) {
+                    if(!enum_element && ee->cached_value == enum_element_value) {
+                        enum_element = ee;
+                        enum_element->NoteReference(operand_ref);
+                    }
+                });
+        }
+    }
+
     // if there's no operand expresion, there are no references
     if(!operand_expression || !operand_expression->GetRoot()) return;
 
-    // Referencing always uses shared_ptr, so use where_ptr here
-    shared_ptr<GlobalMemoryLocation> where_ptr = make_shared<GlobalMemoryLocation>(where);
-
     // Explore operand_expression and mark each referenced define and label that we're referring to
-    auto cb = [this, &where_ptr](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+    auto cb = [this, &operand_ref](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
         if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
-            define_node->GetDefine()->NoteReference(where_ptr);
+            define_node->GetDefine()->NoteReference(operand_ref);
         } else if(auto ee_node = dynamic_pointer_cast<ExpressionNodes::EnumElement>(node)) {
-            ee_node->GetEnumElement()->NoteReference(where_ptr);
+            ee_node->GetEnumElement()->NoteReference(operand_ref);
         } else if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
             // tell the expression node to update the reference to the label
             label_node->Update();
             auto label = label_node->GetLabel();
-            if(label) label->NoteReference(where_ptr);
+            if(label) label->NoteReference(operand_ref);
 
             // and create a callback for any label created at the target address
             auto system = GetSystem();
@@ -945,16 +1024,16 @@ void MemoryObject::NoteReferences(GlobalMemoryLocation const& where)
             label_connections.push_back(make_shared<LabelCreatedData>(LabelCreatedData {
                 .target = target,
                 .created_connection = system->LabelCreatedAt(target)->connect(
-                        [this, where_ptr](shared_ptr<Label> const& label, bool was_user_created) {
+                        [this, operand_ref](shared_ptr<Label> const& label, bool was_user_created) {
                             // this will notify the new label that we're referring to it. if a different label is created
                             // at the same address, this won't reference that label since the current expression node already has
                             // a label
-                            label->NoteReference(where_ptr);
+                            label->NoteReference(operand_ref);
                         }),
                 .deleted_connection = system->LabelDeletedAt(target)->connect(
-                        [this, where_ptr, label_node](shared_ptr<Label> const& label, int nth) {
+                        [this, operand_ref, label_node](shared_ptr<Label> const& label, int nth) {
                             if(label_node->GetNth() == nth) { // only if the deleted label is the one we are referring to
-                                label->RemoveReference(where_ptr);
+                                label->RemoveReference(operand_ref);
                                 label_node->Reset();
                                 label_node->Update();
                             }
@@ -987,21 +1066,37 @@ void MemoryObject::RemoveReferences(GlobalMemoryLocation const& where)
 
     label_connections.clear();
 
+    // Refereceable needs shared_ptr
+    auto operand_ref = make_shared<MemoryObjectOperandReference>(where);
+
+    // Clear references based on the object type
+    if(type == TYPE_ENUM) {
+        auto& enum_type = get<shared_ptr<Enum>>(user_type);
+        auto type_ref = make_shared<MemoryObjectTypeReference>(where);
+        enum_type->RemoveReference(type_ref);
+
+        // for enum types, note the reference on the operand value
+        if(enum_element) {
+            enum_element->RemoveReference(operand_ref);
+            enum_element = nullptr;
+        } else {
+            user_type_conn1->disconnect();
+            user_type_conn2->disconnect();
+        }
+    }
+
     // if there's no operand expresion, there are no references
     if(!operand_expression || !operand_expression->GetRoot()) return;
 
-    // Refereceable needs shared_ptr
-    shared_ptr<GlobalMemoryLocation> where_ptr = make_shared<GlobalMemoryLocation>(where);
-
     // Explore operand_expression and tell each referenced object we no longer care about them
-    auto cb = [&where_ptr](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+    auto cb = [&operand_ref](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
         if(auto define_node = dynamic_pointer_cast<ExpressionNodes::Define>(node)) {
-            define_node->GetDefine()->RemoveReference(where_ptr);
+            define_node->GetDefine()->RemoveReference(operand_ref);
         } else if(auto ee_node = dynamic_pointer_cast<ExpressionNodes::EnumElement>(node)) {
-            ee_node->GetEnumElement()->RemoveReference(where_ptr);
+            ee_node->GetEnumElement()->RemoveReference(operand_ref);
         } else if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
             auto label = label_node->GetLabel();
-            if(label) label->RemoveReference(where_ptr);
+            if(label) label->RemoveReference(operand_ref);
         }
         return true;
     };
@@ -1022,49 +1117,24 @@ int MemoryObject::DeleteLabel(std::shared_ptr<Label> const& label)
     return nth;
 }
 
-void MemoryObject::ClearReferencesToLabels(GlobalMemoryLocation const& where)
-{
-    // if there's no operand expresion, there are no references
-    if(!operand_expression || !operand_expression->GetRoot()) return;
-
-    auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(operand_expression->GetNodeCreator());
-
-    // Refereceable needs shared_ptr
-    shared_ptr<GlobalMemoryLocation> where_ptr = make_shared<GlobalMemoryLocation>(where);
-
-    // Explore the expression, changing labels to constants
-    auto cb = [&where_ptr, &nc](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
-        if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
-            // evaluate the label to its address
-            s64 address;
-            string errmsg;
-            bool result = label_node->Evaluate(&address, errmsg);
-            assert(result);
-
-            // convert the label_node to a constant node
-            node = nc->CreateConstant(address, label_node->GetDisplay());
-
-            // remove any reference to that label here
-            auto label = label_node->GetLabel();
-            if(label) label->RemoveReference(where_ptr);
-        }
-        return true;
-    };
-
-    if(!operand_expression->Explore(cb, nullptr)) assert(false); // false return shouldn't happen
-}
-
 // Change to the next label at a given address
 void MemoryObject::NextLabelReference(GlobalMemoryLocation const& where)
 {
     // if there's no operand expresion, there are no labels
     if(!operand_expression || !operand_expression->GetRoot()) return;
 
+    // create the reference object
+    auto operand_ref = make_shared<MemoryObjectOperandReference>(where);
+
     // Explore the expression, calling Increment on the first and then bailing
-    auto cb = [&where](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
+    auto cb = [&operand_ref](shared_ptr<BaseExpressionNode>& node, shared_ptr<BaseExpressionNode> const&, int, void*)->bool {
         if(auto label_node = dynamic_pointer_cast<ExpressionNodes::Label>(node)) {
             // convert the label_node to a constant node
+            auto label = label_node->GetLabel();
+            label->RemoveReference(operand_ref);
             label_node->NextLabel();
+            label = label_node->GetLabel();
+            label->NoteReference(operand_ref);
         }
         return true;
     };
@@ -1089,6 +1159,11 @@ u32 MemoryObject::GetSize(shared_ptr<Disassembler> disassembler)
     case MemoryObject::TYPE_STRING:
         return string_length;
 
+    case MemoryObject::TYPE_ENUM: {
+        auto enum_type = get<shared_ptr<Enum>>(user_type);
+        return enum_type->GetSize();
+    }
+
     default:
         assert(false);
         return 0;
@@ -1104,6 +1179,7 @@ void MemoryObject::Read(u8* buf, int count)
     case MemoryObject::TYPE_WORD:
     case MemoryObject::TYPE_CODE:
     case MemoryObject::TYPE_STRING:
+    case MemoryObject::TYPE_ENUM:
         assert(count <= GetSize());
         memcpy(buf, (void*)data_ptr, count);
         break;
@@ -1142,6 +1218,12 @@ string MemoryObject::FormatInstructionField(shared_ptr<Disassembler> disassemble
         if(GetSize() == 3 && data_ptr[2] == 0) ss << ".W";
 
         break;
+
+    case MemoryObject::TYPE_ENUM: {
+        auto enum_type = get<shared_ptr<Enum>>(user_type);
+        ss << "enum " << enum_type->GetName();
+        break;
+    }
 
     default:
         assert(false);
@@ -1193,6 +1275,18 @@ string MemoryObject::FormatOperandField(u32 /* internal_offset */, shared_ptr<Di
                 ss << "<missing expression>";
                 break;
 
+            case MemoryObject::TYPE_ENUM: {
+                if(enum_element) {
+                    ss << enum_element->GetName();
+                } else {
+                    auto enum_type = get<shared_ptr<Enum>>(user_type);
+                    s64 enum_element_value = (s64)data_ptr[0];
+                    if(enum_type->GetSize() == 2) enum_element_value |= (s64)((u16)data_ptr[1] << 8);
+                    ss << "$" << setw(2*enum_type->GetSize()) << enum_element_value;
+                }
+                break;
+            }
+
             default:
                 assert(false);
                 break;
@@ -1212,6 +1306,12 @@ bool MemoryObject::Save(std::ostream& os, std::string& errmsg)
 
     // save string_length for string types
     if(type == MemoryObject::TYPE_STRING) WriteVarInt(os, string_length);
+
+    // save enum type name
+    if(type == MemoryObject::TYPE_ENUM) {
+        auto enum_type = get<shared_ptr<Enum>>(user_type);
+        WriteString(os, enum_type->GetName());
+    }
 
     if(!os.good()) {
         errmsg = "Error writing MemoryObject";
@@ -1276,6 +1376,18 @@ bool MemoryObject::Load(std::istream& is, std::string& errmsg)
     } else {
         // now we just read string_length for string types
         if(type == MemoryObject::TYPE_STRING) string_length = ReadVarInt<int>(is);
+    }
+
+    // TYPE_ENUM didn't exist beforehand so we don't need a special file version for them
+    if(type == MemoryObject::TYPE_ENUM) {
+        string enum_name;
+        ReadString(is, enum_name);
+        auto enum_type = system->GetEnum(enum_name);
+        if(!enum_type) {
+            errmsg = "Enum doesn't exist";
+            return false;
+        }
+        user_type = enum_type;
     }
 
     int nlabels = ReadVarInt<int>(is);

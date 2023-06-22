@@ -51,6 +51,7 @@ public:
     void SetShowMenuBar(bool enabled) { show_menubar = enabled; }
     void SetIsDockSpace(bool _v, bool _skip_builder = false) { is_dockspace = _v; skip_dockspace_builder = _skip_builder; }
     void SetDockable(bool _v) { is_dockable = _v; }
+    void SetPopup(bool _v) { is_popup = _v; }
     void SetMainWindow(bool _v) { is_mainwindow = _v; }
     void SetHideOnClose(bool _v) { hide_on_close = _v; }
     void SetHorizontalScroll(bool _v) { horizontal_scroll = _v; }
@@ -69,6 +70,9 @@ public:
 
     void Show() { hidden = false; }
 
+    void ClosePopup();  // must close call ClosePopup inside Render() if you called SetPopup(true)
+                        // in order to close the Window. ClosePopup calls CloseWindow,
+                        // so you do not need to call CloseWindow as well.
     void CloseWindow(); // emit window_closed and stop rendering
 
     bool IsFocused() const { return focused; }
@@ -179,6 +183,7 @@ private:
     bool is_dockspace = false;
     bool skip_dockspace_builder = false;
     bool is_dockable = true;
+    bool is_popup = false;
 
     bool show_statusbar = false;
     bool show_menubar = false;

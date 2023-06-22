@@ -127,6 +127,7 @@ public:
     void MarkMemoryAsBytes(GlobalMemoryLocation const&, u32 byte_count);
     void MarkMemoryAsWords(GlobalMemoryLocation const&, u32 byte_count);
     void MarkMemoryAsString(GlobalMemoryLocation const&, u32 byte_count);
+    void MarkMemoryAsEnum(GlobalMemoryLocation const&, u32 byte_count, std::shared_ptr<Enum> const&);
 
     // Convert units like Names into defines and labels 
     bool FixupExpression(std::shared_ptr<BaseExpression> const&, std::string&, FixupFlags, int* num_nodes = nullptr);

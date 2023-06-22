@@ -53,6 +53,8 @@ References::References(reference_type const& _reference_to)
         stringstream ss;
         ss << "References: ";
 
+        // TODO could make Referenceable<...> have a base type so that we can cast
+        // reference_to to the base type and avoid this if statement.
         if(auto label = get_if<shared_ptr<Label>>(&reference_to)) {
             ss << (*label)->GetString();
             changed_connection = (*label)->reverse_references_changed->connect([this]() {
@@ -68,6 +70,11 @@ References::References(reference_type const& _reference_to)
         } else if(auto define = get_if<shared_ptr<Define>>(&reference_to)) {
             ss << (*define)->GetName();
             changed_connection = (*define)->reverse_references_changed->connect([this]() {
+                need_repopulate = true;
+            });
+        } else if(auto enum_type_ptr = get_if<shared_ptr<Enum>>(&reference_to)) {
+            ss << (*enum_type_ptr)->GetName();
+            changed_connection = (*enum_type_ptr)->reverse_references_changed->connect([this]() {
                 need_repopulate = true;
             });
         } else if(auto ee = get_if<shared_ptr<EnumElement>>(&reference_to)) {
@@ -125,17 +132,21 @@ void References::Render()
                 bool diff = false; // result
 
                 // determine the types. Defines come before memory locations
-                auto a_memory = get_if<shared_ptr<GlobalMemoryLocation>>(&a);
-                auto a_define = get_if<shared_ptr<Define>>(&a);
-                auto a_ee     = get_if<shared_ptr<EnumElement>>(&a);
-                auto a_com    = get_if<shared_ptr<BaseComment>>(&a);
-                auto b_memory = get_if<shared_ptr<GlobalMemoryLocation>>(&b);
-                auto b_define = get_if<shared_ptr<Define>>(&b);
-                auto b_ee     = get_if<shared_ptr<EnumElement>>(&b);
-                auto b_com    = get_if<shared_ptr<BaseComment>>(&b);
+                auto a_type    = get_if<shared_ptr<MemoryObjectTypeReference>>(&a);
+                auto a_operand = get_if<shared_ptr<MemoryObjectOperandReference>>(&a);
+                auto a_define  = get_if<shared_ptr<Define>>(&a);
+                auto a_ee      = get_if<shared_ptr<EnumElement>>(&a);
+                auto a_com     = get_if<shared_ptr<BaseComment>>(&a);
+                auto b_type    = get_if<shared_ptr<MemoryObjectTypeReference>>(&b);
+                auto b_operand = get_if<shared_ptr<MemoryObjectOperandReference>>(&b);
+                auto b_define  = get_if<shared_ptr<Define>>(&b);
+                auto b_ee      = get_if<shared_ptr<EnumElement>>(&b);
+                auto b_com     = get_if<shared_ptr<BaseComment>>(&b);
 
-                if(a_memory && b_memory) {
-                    diff = system->GetSortableMemoryLocation(**a_memory) <= system->GetSortableMemoryLocation(**b_memory);
+                if(a_type && b_type) {
+                    diff = system->GetSortableMemoryLocation(**a_type) <= system->GetSortableMemoryLocation(**b_type);
+                } else if(a_operand && b_operand) {
+                    diff = system->GetSortableMemoryLocation(**a_operand) <= system->GetSortableMemoryLocation(**b_operand);
                 } else if(a_define && b_define) {
                     diff = (*a_define)->GetName() <= (*b_define)->GetName(); // standard string compare
                 } else if(a_ee && b_ee) {
@@ -158,9 +169,24 @@ void References::Render()
 
             stringstream ss;
             std::function<void()> go;
-            if(auto memory_ptr = get_if<shared_ptr<GlobalMemoryLocation>>(&location)) {
-                auto memory = *memory_ptr;
-                ss << "Operand: ";
+
+            // try the memory object types, which are just derived structs
+            // of GlobalMemoryLocation
+            shared_ptr<GlobalMemoryLocation> memory;
+            bool is_type = true;
+            if(auto memory_ptr = get_if<shared_ptr<MemoryObjectTypeReference>>(&location)) {
+                memory = *memory_ptr;
+            } else if(auto memory_ptr = get_if<shared_ptr<MemoryObjectOperandReference>>(&location)) {
+                is_type = false;
+                memory = *memory_ptr;
+            }
+
+            if(memory) {
+                if(is_type) {
+                    ss << "Type: ";
+                } else {
+                    ss << "Operand: ";
+                }
 
                 if(system->CanBank(*memory)) {
                     if(auto memory_region = system->GetMemoryRegion(*memory)) {

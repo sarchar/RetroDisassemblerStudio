@@ -33,10 +33,10 @@ enum FILE_VERSIONS {
     FILE_VERSION_COMMENTS    = 0x00000106,   // comments with expressions
     FILE_VERSION_BLANKLINES  = 0x00000107,   // custom blank lines
     FILE_VERSION_QUICKEXP    = 0x00000108,   // quick expressions
-
+    FILE_VERSION_ENUMSIZE    = 0x00000109,   // changeable enum sizes
 
     // update me every time a new file version is added
-    FILE_VERSION_LAST = FILE_VERSION_QUICKEXP
+    FILE_VERSION_LAST = FILE_VERSION_ENUMSIZE
 };
 
 class BaseSystem;

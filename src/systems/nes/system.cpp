@@ -240,6 +240,12 @@ void System::MarkMemoryAsString(GlobalMemoryLocation const& where, u32 byte_coun
     memory_region->MarkMemoryAsString(where, byte_count);
 }
 
+void System::MarkMemoryAsEnum(GlobalMemoryLocation const& where, u32 byte_count, shared_ptr<Enum> const& enum_type)
+{
+    auto memory_region = GetMemoryRegion(where);
+    memory_region->MarkMemoryAsEnum(where, byte_count, enum_type);
+}
+
 shared_ptr<ExpressionNodeCreator> System::GetNodeCreator()
 {
     return make_shared<ExpressionNodeCreator>();

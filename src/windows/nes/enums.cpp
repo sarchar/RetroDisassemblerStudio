@@ -23,14 +23,27 @@ REGISTER_WINDOW(Enums);
 
 std::shared_ptr<Enums> Enums::CreateWindow()
 {
-    return make_shared<Enums>();
+    return CreateWindow(false);
 }
 
-Enums::Enums()
-    : BaseWindow()
+std::shared_ptr<Enums> Enums::CreateWindow(bool select_enum)
 {
-    SetTitle("Enums");
+    return make_shared<Enums>(select_enum);
+}
+
+Enums::Enums(bool _select_enum)
+    : select_enum(_select_enum)
+{
     SetNav(false);
+
+    if(select_enum) {
+        SetDockable(false);
+        SetPopup(true);
+        SetNoScrollbar(true);
+        SetTitle("Select Enum");
+    } else {
+        SetTitle("Enums");
+    }
 
     // refresh enums if they change in the system
     auto system = GetSystem();
@@ -47,8 +60,14 @@ Enums::~Enums()
 
 void Enums::CheckInput()
 {
-    if(ImGui::IsKeyPressed(ImGuiKey_Delete)) {
-        DeleteSelectedItem();
+    if(select_enum) {
+        if(ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            ClosePopup();
+        }
+    } else {
+        if(ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+            DeleteSelectedItem();
+        }
     }
 }
 
@@ -125,6 +144,68 @@ void Enums::Resort()
 
 void Enums::Render()
 {
+    if(select_enum) RenderSelectEnum();
+    else            RenderEnumTable();
+}
+
+void Enums::RenderSelectEnum()
+{
+    ImGui::PushItemWidth(-FLT_MIN);
+    bool enter_pressed = ImGui::InputText("##edit_name", &edit_buffer, ImGuiInputTextFlags_EnterReturnsTrue);
+    ImGui::SetItemDefaultFocus();
+    if(select_enum_first_focus) {
+        ImGui::SetKeyboardFocusHere(-1);
+        if(ImGui::IsItemActive()) select_enum_first_focus = false;
+    }
+
+    ImGuiTableFlags table_flags = ImGuiTableFlags_BordersInnerV
+        | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable
+        | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchSame
+        | ImGuiTableFlags_Sortable | ImGuiTableFlags_NoHostExtendY;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
+
+    auto outer_size = ImVec2(-1, ImGui::GetTextLineHeight() * 14);
+    if(ImGui::BeginTable("select_enum_table", 1, table_flags, outer_size)) {
+        ImGui::TableSetupColumn("Name" , ImGuiTableColumnFlags_WidthStretch, 0.0f, 0);
+
+        // Sort our data (on the next frame) if sort specs have been changed!
+        if(ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs(); sort_specs && sort_specs->SpecsDirty) {
+            if(auto spec = &sort_specs->Specs[0]) {
+                sort_column = spec->ColumnUserID;
+                reverse_sort = (spec->SortDirection == ImGuiSortDirection_Descending);
+            } else { // no sort!
+                sort_column = -1;
+                reverse_sort = false;
+            }
+
+            need_resort = true;
+            sort_specs->SpecsDirty = false;
+        }
+
+        RenderEnumRows(&enter_pressed);
+
+        ImGui::EndTable();
+    }
+    
+    ImGui::PopStyleVar(2);
+
+    if(ImGui::Button("OK") || enter_pressed) {
+        if(selected_item.index() != 0) {
+            enum_selected->emit(get<shared_ptr<Enum>>(selected_item));
+            ClosePopup();
+        }
+    }
+
+    ImGui::SameLine();
+    if(ImGui::Button("Cancel")) {
+        ClosePopup();
+    }
+}
+
+void Enums::RenderEnumTable()
+{
     if(wait_dialog) {
         if(GetMainWindow()->OKPopup("Enum error", wait_dialog_message)) {
             wait_dialog = false;
@@ -157,8 +238,6 @@ void Enums::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(-1, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
 
-    // We use nested tables so that each row can have its own layout. This will be useful when we can render
-    // things like plate comments, labels, etc
     if(ImGui::BeginTable("enums_table", 3, table_flags)) {
         ImGui::TableSetupColumn("Name" , ImGuiTableColumnFlags_WidthStretch, 0.0f, 0);
         ImGui::TableSetupColumn(value_view ? "Value##Value" : "Expression##Value", 
@@ -197,10 +276,21 @@ void Enums::Render()
     RenderContextMenu();
 }
 
-void Enums::RenderEnumRows()
+void Enums::RenderEnumRows(bool* double_clicked)
 {
+    shared_ptr<Enum> to_select_enum;
+
     for(auto& e : enums) {
+        // filter the list based on edit_buffer
+        if(select_enum && edit_buffer.size()) {
+            if(e->GetName().find(edit_buffer) != 0) continue;
+        }
+
         ImGui::TableNextRow();
+        
+        // default to selecting the first visible enum for the select_enum popup
+        // but keep the currently selected enum
+        if(!to_select_enum || IsSelectedItem(e)) to_select_enum = e;
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////
         // render the selectable
@@ -210,31 +300,44 @@ void Enums::RenderEnumRows()
             ss << "##" << e.get();
             if(ImGui::Selectable(ss.str().c_str(), IsSelectedItem(e), ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap)) {
                 selected_item = e;
+                to_select_enum = e;
 	    	}
 
-            if(ImGui::IsItemHovered() && ImGui::IsMouseClicked(1)) {
-                selected_item = e;
-                ImGui::OpenPopup("enum_context_menu");
+            if(ImGui::IsItemHovered()) {
+                if(ImGui::IsMouseClicked(1)) {
+                    selected_item = e;
+                    to_select_enum = e;
+                    ImGui::OpenPopup("enum_context_menu");
+                } else if(double_clicked && ImGui::IsMouseDoubleClicked(0)) {
+                    *double_clicked = true;
+                }
             }
             ImGui::SameLine();
         }
 
         stringstream ss;
         ss << "enum " << e->GetName();
-        auto open = ImGui::TreeNodeEx(ss.str().c_str(), ImGuiTreeNodeFlags_SpanFullWidth);
-        ImGui::TableNextColumn();
-        ImGui::TextDisabled("%d elements", enum_elements[e].size());
+        if(select_enum) {
+            ImGui::Text(ss.str().c_str());
+        } else {
+            auto open = ImGui::TreeNodeEx(ss.str().c_str(), ImGuiTreeNodeFlags_SpanFullWidth);
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled("%d elements", enum_elements[e].size());
 
-        if(!open) continue;
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", e->GetNumReverseReferences());
+            if(!open) continue;
 
-        for(auto& ee : enum_elements[e]) {
-            RenderEnumElement(ee, false);
+            for(auto& ee : enum_elements[e]) RenderEnumElement(ee, false);
+
+            RenderCreateNewEnumElementRow(e);
+
+            ImGui::TreePop();
         }
-
-        RenderCreateNewEnumElementRow(e);
-
-        ImGui::TreePop();
     }
+
+    // automatically select an enum in the popup
+    if(select_enum) selected_item = to_select_enum;
 }
 
 void Enums::RenderEnumElement(std::shared_ptr<EnumElement> const& ee, bool show_formatted_name)
@@ -542,11 +645,42 @@ void Enums::RenderContextMenu()
 {
     if(!ImGui::BeginPopupContextItem("watch_context_menu")) return;
 
-    if(selected_item.index() == 2) {
+    if(selected_item.index() != 0) {
         if(ImGui::MenuItem("View References")) {
-            auto wnd = References::CreateWindow(get<shared_ptr<EnumElement>>(selected_item));
+            shared_ptr<BaseWindow> wnd;
+            if(auto enum_type_ptr = get_if<shared_ptr<Enum>>(&selected_item)) {
+                wnd = References::CreateWindow(*enum_type_ptr);
+            } else if(auto enum_element_ptr = get_if<shared_ptr<EnumElement>>(&selected_item)) {
+                wnd = References::CreateWindow(*enum_element_ptr);
+            }
+
             wnd->SetInitialDock(BaseWindow::DOCK_RIGHTTOP);
             GetMySystemInstance()->AddChildWindow(wnd);
+        }
+    }
+
+    if(selected_item.index() == 1) {
+        auto enum_type = get<shared_ptr<Enum>>(selected_item);
+
+        if(ImGui::BeginMenu("Set Data Size")) {
+            if(ImGui::MenuItem("Byte", nullptr, enum_type->GetSize() == 1)) {
+                if(enum_type->GetNumReverseReferences()) {
+                    wait_dialog = true;
+                    wait_dialog_message = "Cannot change enum size while enum is in use";
+                } else {
+                    enum_type->SetSize(1);
+                }
+            }
+
+            if(ImGui::MenuItem("Word", nullptr, enum_type->GetSize() == 2)) {
+                if(enum_type->GetNumReverseReferences()) {
+                    wait_dialog = true;
+                    wait_dialog_message = "Cannot change enum size while enum is in use";
+                } else {
+                    enum_type->SetSize(2);
+                }
+            }
+            ImGui::EndMenu();
         }
     }
 
