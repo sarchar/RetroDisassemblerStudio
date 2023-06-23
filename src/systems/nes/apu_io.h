@@ -36,8 +36,7 @@ public:
 
     std::shared_ptr<MemoryView> CreateMemoryView();
 
-    typedef signal<std::function<void(u8)>> oam_dma_callback_t;
-    std::shared_ptr<oam_dma_callback_t> oam_dma_callback;
+    make_signal(oam_dma_callback, void(u8));
 
     bool Save(std::ostream&, std::string&) const;
     bool Load(std::istream&, std::string&);

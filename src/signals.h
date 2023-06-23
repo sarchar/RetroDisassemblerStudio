@@ -10,10 +10,7 @@
 //
 // Usage (define a signal):
 //
-// typedef signal<std::function<void(int, char)>> my_signal_t;
-// std::shared_ptr<my_signal_t> my_signal;
-// ...
-// my_signal = make_shared<my_signal_t>();
+// make_signal(my_signal, void(int, char));
 //
 // Usage (connect and disconnect):
 //
@@ -29,6 +26,10 @@
 //
 // *object->my_signal += std::bind(&MyClass::Handler, this, std::placeholders::_1, std::placeholders::_2); // stays connected for the life of the object
 //
+// or better yet,
+//
+// *object->my_signal += quick_bind(&MyClass::Handler, this);
+//
 // Usage (emitting):
 //
 // my_signal->emit(1, 'a');
@@ -41,6 +42,10 @@
 #include <utility>
 
 #include "util.h"
+
+#define make_signal(name, proto) \
+    typedef signal<std::function<proto>> name##_t;                                              \
+    std::shared_ptr<name##_t> name {std::make_shared<name##_t>()}
 
 typedef unsigned int _signal_id_t;
 

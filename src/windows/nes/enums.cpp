@@ -151,7 +151,7 @@ void Enums::Render()
 void Enums::RenderSelectEnum()
 {
     ImGui::PushItemWidth(-FLT_MIN);
-    bool enter_pressed = ImGui::InputText("##edit_name", &edit_buffer, ImGuiInputTextFlags_EnterReturnsTrue);
+    bool enter_pressed = ImGui::InputText("##select_enum_name", &edit_buffer, ImGuiInputTextFlags_EnterReturnsTrue);
     ImGui::SetItemDefaultFocus();
     if(select_enum_first_focus) {
         ImGui::SetKeyboardFocusHere(-1);

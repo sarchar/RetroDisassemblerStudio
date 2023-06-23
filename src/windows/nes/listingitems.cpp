@@ -337,8 +337,12 @@ void ListingItemPrimary::Render(shared_ptr<Windows::NES::SystemInstance> const& 
             stringstream ss;
             ss << hex << setfill('0') << uppercase;
             for(int i = 0; i < objsize; i++) {
-                int bval = (int)memory_object->data_ptr[i];
-                ss << setw(2) << bval;
+                if(memory_object->backed) {
+                    int bval = (int)memory_object->data_ptr[i];
+                    ss << setw(2) << bval;
+                } else {
+                    ss << "??";
+                }
                 if(i != (objsize - 1)) ss << " ";
             }
 
@@ -640,7 +644,10 @@ bool ListingItemPrimary::ParseOperandExpression(shared_ptr<System>& system, Glob
 
 void ListingItemPrimary::ResetOperandExpression(shared_ptr<System>& system, GlobalMemoryLocation const& where)
 {
-    system->CreateDefaultOperandExpression(where, false);
+    auto det_func = [](u32, System::finish_default_operand_expression_func finish_expression) { 
+        finish_expression(nullopt); // specifically don't set a label
+    };
+    system->CreateDefaultOperandExpression(where, false, det_func);
 }
 
 void ListingItemPrimary::NextLabelReference(shared_ptr<System>& system, GlobalMemoryLocation const& where)

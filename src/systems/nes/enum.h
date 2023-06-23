@@ -69,12 +69,9 @@ public:
     }
 
     // signals
-    typedef signal<std::function<void(std::shared_ptr<EnumElement> const&)>> enum_added_t;
-    typedef signal<std::function<void(std::shared_ptr<EnumElement> const&, std::string const&, s64)>> enum_changed_t;
-
-    std::shared_ptr<enum_added_t>   element_added;
-    std::shared_ptr<enum_changed_t> element_changed;
-    std::shared_ptr<enum_added_t>   element_deleted;
+    make_signal(element_added  , void(std::shared_ptr<EnumElement> const&));
+    make_signal(element_changed, void(std::shared_ptr<EnumElement> const&, std::string const&, s64));
+    make_signal(element_deleted, void(std::shared_ptr<EnumElement> const&));
 
     bool Save(std::ostream&, std::string&) const;
     static std::shared_ptr<Enum> Load(std::istream&, std::string&);

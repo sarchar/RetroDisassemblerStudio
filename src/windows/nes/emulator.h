@@ -208,8 +208,7 @@ public:
     // signals
     // be careful using breakpoint_hit signal, as it's emitted from the emulation thread and not the main
     // render thread. you should only set a flag and check the state of that flag in the main render thread
-    typedef signal<std::function<void(std::shared_ptr<BreakpointInfo> const&)>> breakpoint_hit_t;
-    std::shared_ptr<breakpoint_hit_t> breakpoint_hit;
+    make_signal(breakpoint_hit, void(std::shared_ptr<BreakpointInfo> const&));
 
 protected:
     void RenderMenuBar() override;

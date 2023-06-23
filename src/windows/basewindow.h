@@ -107,26 +107,13 @@ public:
     bool LoadWorkspace(std::istream&, std::string&);
 
     // signals available in all windows
-    typedef signal<std::function<void(std::shared_ptr<BaseWindow>&, std::string const&, void*)>> command_signal_t;
-    std::shared_ptr<command_signal_t> command_signal;
-
-    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> window_activated_t;
-    std::shared_ptr<window_activated_t> window_activated;
-
-    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> window_closed_t;
-    std::shared_ptr<window_closed_t> window_closed;
-
-    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> child_window_added_t;
-    std::shared_ptr<child_window_added_t> child_window_added;
-
-    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> child_window_removed_t;
-    std::shared_ptr<child_window_removed_t> child_window_removed;
-
-    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> window_parented_t;
-    std::shared_ptr<window_parented_t> window_parented;
-
-    typedef signal<std::function<void(std::shared_ptr<BaseWindow> const&)>> window_hidden_t;
-    std::shared_ptr<window_hidden_t> window_hidden;
+    make_signal(command_signal      , void(std::shared_ptr<BaseWindow>&, std::string const&, void*));
+    make_signal(window_activated    , void(std::shared_ptr<BaseWindow> const&));
+    make_signal(window_closed       , void(std::shared_ptr<BaseWindow> const&));
+    make_signal(child_window_added  , void(std::shared_ptr<BaseWindow> const&));
+    make_signal(child_window_removed, void(std::shared_ptr<BaseWindow> const&));
+    make_signal(window_parented     , void(std::shared_ptr<BaseWindow> const&));
+    make_signal(window_hidden       , void(std::shared_ptr<BaseWindow> const&));
 
 protected:
     // Implemented by derived class

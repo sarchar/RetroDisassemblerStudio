@@ -39,15 +39,6 @@ string BaseWindow::GetRandomID()
 BaseWindow::BaseWindow()
     : open(true), focused(false), docked(false), hidden(false), initial_dock_position(DOCK_NONE)
 {
-    // create the signals
-    command_signal = make_shared<command_signal_t>();
-    window_activated = make_shared<window_activated_t>();
-    window_closed = make_shared<window_closed_t>();
-    child_window_added = make_shared<child_window_added_t>();
-    child_window_removed = make_shared<child_window_removed_t>();
-    window_parented = make_shared<window_parented_t>();
-    window_hidden = make_shared<window_hidden_t>();
-
     window_id = GetRandomID();
 
     SetTitle("<untitled>");

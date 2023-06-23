@@ -34,18 +34,6 @@ System::System()
     : ::BaseSystem(), disassembling(false)
 {
     disassembler = make_shared<Disassembler>();
-
-    define_created = make_shared<define_created_t>();
-    define_deleted = make_shared<define_created_t>();
-    label_created = make_shared<label_created_t>();
-    label_deleted = make_shared<label_deleted_t>();
-    enum_created = make_shared<enum_created_t>();
-    enum_deleted = make_shared<enum_created_t>();
-    enum_element_added = make_shared<enum_element_added_t>();
-    enum_element_changed = make_shared<enum_element_changed_t>();
-    enum_element_deleted = make_shared<enum_element_added_t>();
-    new_quick_expression = make_shared<new_quick_expression_t>();
-    disassembly_stopped = make_shared<disassembly_stopped_t>();
 }
 
 System::~System()
@@ -957,7 +945,10 @@ int System::DisassemblyThread()
             memory_object = memory_region->GetMemoryObject(current_loc);
 
             // create the expressions as necessary
-            CreateDefaultOperandExpression(current_loc, true);
+            auto det_func = [](u32, finish_default_operand_expression_func finish_expression) { 
+                finish_expression(nullopt); // during automated disassembly, we can't ask the user for bank selection
+            };
+            CreateDefaultOperandExpression(current_loc, true, det_func);
 
             // certain instructions must stop disassembly and others cause branches
             switch(op) {
@@ -1021,7 +1012,8 @@ int System::DisassemblyThread()
     return 0;
 }
 
-void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, bool with_labels)
+void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, bool with_labels,
+                                            determine_memory_region_func det_func)
 {
     auto code_region = GetMemoryRegion(where);
     auto code_object = GetMemoryObject(where);
@@ -1049,74 +1041,82 @@ void System::CreateDefaultOperandExpression(GlobalMemoryLocation const& where, b
                            : (is16 ? ((u16)code_object->data_ptr[1] | ((u16)code_object->data_ptr[2] << 8))
                                    : (u16)code_object->data_ptr[1]);
 
+        auto finish_expression = [=](std::optional<GlobalMemoryLocation> const& target_location)->void {
+            // only for valid destination addresses do we create a label
+            // can't call GetDefaultLabelForTarget if is_valid is false because target_location might still be
+            // set up to point to something in the wrong bank
+            int target_offset = 0;
+            bool wide = !(target < 0x100);
+            string prefix = isrel ? "." : (wide ? "L_" : "zp_");
+            shared_ptr<Label> label = (with_labels && target_location) ? GetDefaultLabelForTarget(*target_location, false, &target_offset, wide, prefix) : nullptr;
+
+            // now create an expression for the operands
+            auto expr = make_shared<Expression>();
+            auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
+
+            // format the operand label display string
+            char buf[6];
+            if(is16 || isrel) {
+                snprintf(buf, sizeof(buf), "$%04X", target);
+            } else {
+                snprintf(buf, sizeof(buf), "$%02X", target);
+            }
+
+            // use a label node if we know the label exist
+            auto root = label ? nc->CreateLabel(*target_location, 0, buf)
+                              : nc->CreateConstant(target, buf);
+
+            // wrap the address/label with whatever is necessary to format this instruction
+            if(am == AM_ABSOLUTE_X || am == AM_ZEROPAGE_X) {
+                root = nc->CreateIndexedX(root, ",X");
+            } else if(am == AM_ABSOLUTE_Y || am == AM_ZEROPAGE_Y) {
+                root = nc->CreateIndexedY(root, ",Y");
+            } else if(am == AM_INDIRECT) {
+                // (v)
+                root = nc->CreateParens("(", root, ")");
+            } else if(am == AM_INDIRECT_X) {
+                // (v,X)
+                root = nc->CreateIndexedX(root, ",X");
+                root = nc->CreateParens("(", root, ")");
+            } else if(am == AM_INDIRECT_Y) {
+                // (v),Y
+                root = nc->CreateParens("(", root, ")");
+                root = nc->CreateIndexedY(root, ",Y");
+            }
+
+            // set the expression root
+            expr->Set(root);
+
+            // call SetOperandExpression directly on the region bypassing the System::SetOperandExpression checks, which configure
+            // the addressing modes and labels, etc., which we've already done
+            code_region->SetOperandExpression(where, expr);
+        };
+
         GlobalMemoryLocation target_location;
         target_location.address = target;
-        bool is_valid = true;
 
-        // if the target is in the current bank, copy over that bank number
+        // if the target is not in a bankable region, use the address directly
+        // if the target is in the same bank, copy over that bank number
         // if the target is in a banked region, try to determine the bank
-        // otherwise, leave it at 0 for other memory regions
         if(target >= code_region->GetBaseAddress() && target < code_region->GetEndAddress()) {
             target_location.prg_rom_bank = where.prg_rom_bank;
+            finish_expression(target_location);
         } else if(CanBank(target_location)) {
             vector<u16> banks;
             GetBanksForAddress(target_location, banks);
             if(banks.size() == 1) {
                 target_location.prg_rom_bank = banks[0];
+                finish_expression(target_location);
             } else {
                 // here we can't always ask the user for which bank, since we could be disassembling
-                is_valid = false;
+                det_func(target, finish_expression);
             }
+        } else { // !CanBank
+            // the label is only applied if the target location is valid
+            if(GetMemoryObject(target_location)) finish_expression(target_location);
+            else                                 finish_expression(nullopt);
         }
 
-        // only for valid destination addresses do we create a label
-        // can't call GetDefaultLabelForTarget if is_valid is false because target_location might still be
-        // set up to point to something in the wrong bank
-        int target_offset = 0;
-        bool wide = !(target < 0x100);
-        string prefix = isrel ? "." : (wide ? "L_" : "zp_");
-        shared_ptr<Label> label = (is_valid && with_labels) ? GetDefaultLabelForTarget(target_location, false, &target_offset, wide, prefix) : nullptr;
-
-        // now create an expression for the operands
-        auto expr = make_shared<Expression>();
-        auto nc = dynamic_pointer_cast<ExpressionNodeCreator>(expr->GetNodeCreator());
-
-        // format the operand label display string
-        char buf[6];
-        if(is16 || isrel) {
-            snprintf(buf, sizeof(buf), "$%04X", target_location.address);
-        } else {
-            snprintf(buf, sizeof(buf), "$%02X", target_location.address);
-        }
-
-        // use a label node if we know the label exist
-        auto root = label ? nc->CreateLabel(target_location, 0, buf)
-                          : nc->CreateConstant(target_location.address, buf);
-
-        // wrap the address/label with whatever is necessary to format this instruction
-        if(am == AM_ABSOLUTE_X || am == AM_ZEROPAGE_X) {
-            root = nc->CreateIndexedX(root, ",X");
-        } else if(am == AM_ABSOLUTE_Y || am == AM_ZEROPAGE_Y) {
-            root = nc->CreateIndexedY(root, ",Y");
-        } else if(am == AM_INDIRECT) {
-            // (v)
-            root = nc->CreateParens("(", root, ")");
-        } else if(am == AM_INDIRECT_X) {
-            // (v,X)
-            root = nc->CreateIndexedX(root, ",X");
-            root = nc->CreateParens("(", root, ")");
-        } else if(am == AM_INDIRECT_Y) {
-            // (v),Y
-            root = nc->CreateParens("(", root, ")");
-            root = nc->CreateIndexedY(root, ",Y");
-        }
-
-        // set the expression root
-        expr->Set(root);
-
-        // call SetOperandExpression directly on the region bypassing the System::SetOperandExpression checks, which configure
-        // the addressing modes and labels, etc., which we've already done
-        code_region->SetOperandExpression(where, expr);
         break;
     }
 

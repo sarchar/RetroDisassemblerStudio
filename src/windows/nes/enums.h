@@ -35,8 +35,7 @@ public:
     static std::shared_ptr<Enums> CreateWindow(bool select_enum);
 
     // select enum signals
-    typedef signal<std::function<void(std::shared_ptr<Enum>)>> enum_selected_t;
-    std::shared_ptr<enum_selected_t> enum_selected{std::make_shared<enum_selected_t>()};
+    make_signal(enum_selected, void(std::shared_ptr<Enum>));
 
 protected:
     void CheckInput() override;

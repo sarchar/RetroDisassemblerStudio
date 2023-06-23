@@ -5,6 +5,7 @@
 // LICENSE file in the root directory of this source tree. 
 #pragma once
 
+#include <optional>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -52,40 +53,32 @@ public:
     virtual ~System();
 
     // Signals
-    typedef signal<std::function<void(std::shared_ptr<Define> const&)>> define_created_t;
-    std::shared_ptr<define_created_t> define_created;
-    std::shared_ptr<define_created_t> define_deleted;
+    make_signal(define_created, void(std::shared_ptr<Define> const&));
+    make_signal(define_deleted, void(std::shared_ptr<Define> const&));
 
-    typedef signal<std::function<void(std::shared_ptr<Label> const&, bool)>> label_created_t;
-    std::shared_ptr<label_created_t> label_created;
+    make_signal(label_created, void(std::shared_ptr<Label> const&, bool));
+    make_signal(label_deleted, void(std::shared_ptr<Label> const&, int));
 
-    typedef signal<std::function<void(std::shared_ptr<Label> const&, int)>> label_deleted_t;
-    std::shared_ptr<label_deleted_t> label_deleted;
+    make_signal(enum_created, void(std::shared_ptr<Enum> const&));
+    make_signal(enum_deleted, void(std::shared_ptr<Enum> const&));
 
-    typedef signal<std::function<void(std::shared_ptr<Enum> const&)>> enum_created_t;
-    std::shared_ptr<enum_created_t> enum_created;
-    std::shared_ptr<enum_created_t> enum_deleted;
+    make_signal(enum_element_added  , void(std::shared_ptr<EnumElement> const&));
+    make_signal(enum_element_changed, void(std::shared_ptr<EnumElement> const&, s64));
+    make_signal(enum_element_deleted, void(std::shared_ptr<EnumElement> const&));
 
-    typedef signal<std::function<void(std::shared_ptr<EnumElement> const&)>> enum_element_added_t;
-    typedef signal<std::function<void(std::shared_ptr<EnumElement> const&, s64)>> enum_element_changed_t;
-    std::shared_ptr<enum_element_added_t>   enum_element_added;
-    std::shared_ptr<enum_element_changed_t> enum_element_changed;
-    std::shared_ptr<enum_element_added_t>   enum_element_deleted;
-
-    typedef signal<std::function<void(s64, std::string const&)>> new_quick_expression_t;
-    std::shared_ptr<new_quick_expression_t> new_quick_expression;
+    make_signal(new_quick_expression, void(s64, std::string const&));
 
     // On-demand new signal handlers for specific addresses
     std::shared_ptr<label_created_t> LabelCreatedAt(GlobalMemoryLocation const& where) {
         if(!label_created_at.contains(where)) {
-            label_created_at[where] = std::make_shared<label_created_t>();
+            label_created_at[where] = std::make_shared<decltype(label_created)::element_type>();
         }
         return label_created_at[where];
     }
 
     std::shared_ptr<label_deleted_t> LabelDeletedAt(GlobalMemoryLocation const& where) {
         if(!label_deleted_at.contains(where)) {
-            label_deleted_at[where] = std::make_shared<label_deleted_t>();
+            label_deleted_at[where] = std::make_shared<decltype(label_deleted)::element_type>();
         }
         return label_deleted_at[where];
     }
@@ -107,8 +100,7 @@ public:
         }
     }
 
-    typedef signal<std::function<void(GlobalMemoryLocation const&)>> disassembly_stopped_t;
-    std::shared_ptr<disassembly_stopped_t> disassembly_stopped;
+    make_signal(disassembly_stopped, void(GlobalMemoryLocation const&));
 
     // Cartridge
     std::shared_ptr<NES::Cartridge>& GetCartridge() { return cartridge; }
@@ -121,7 +113,7 @@ public:
     int GetNumMemoryRegions() const;
     std::shared_ptr<MemoryRegion> GetMemoryRegion(GlobalMemoryLocation const&);
     std::shared_ptr<MemoryRegion> GetMemoryRegionByIndex(int);
-    std::shared_ptr<MemoryObject> GetMemoryObject(GlobalMemoryLocation const&, int* offset = NULL);
+    std::shared_ptr<MemoryObject> GetMemoryObject(GlobalMemoryLocation const&, int* offset = nullptr);
 
     void MarkMemoryAsUndefined(GlobalMemoryLocation const&, u32 byte_count);
     void MarkMemoryAsBytes(GlobalMemoryLocation const&, u32 byte_count);
@@ -280,7 +272,10 @@ public:
     bool IsDisassembling() const { return disassembling; }
     void InitDisassembly(GlobalMemoryLocation const&);
     int  DisassemblyThread();
-    void CreateDefaultOperandExpression(GlobalMemoryLocation const&, bool with_labels);
+
+    typedef std::function<void(std::optional<GlobalMemoryLocation> const&)> finish_default_operand_expression_func;
+    typedef std::function<void(u32, finish_default_operand_expression_func)> determine_memory_region_func;
+    void CreateDefaultOperandExpression(GlobalMemoryLocation const&, bool with_labels, determine_memory_region_func);
 
     //!std::shared_ptr<LabelList> GetLabels(GlobalMemoryLocation const& where) {
     //!    if(!label_database.contains(where)) return nullptr;

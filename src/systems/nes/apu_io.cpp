@@ -16,7 +16,6 @@ namespace Systems::NES {
 
 APU_IO::APU_IO()
 {
-    oam_dma_callback = make_shared<oam_dma_callback_t>();
 }
 
 APU_IO::~APU_IO()

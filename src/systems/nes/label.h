@@ -27,8 +27,7 @@ public:
     ~Label();
 
     // signals
-    typedef signal<std::function<void(std::shared_ptr<Label>, int)>> index_changed_t;
-    std::shared_ptr<index_changed_t> index_changed;
+    make_signal(index_changed, void(std::shared_ptr<Label>, int));
 
     void SetString(std::string const& s) { label = s; }
 

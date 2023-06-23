@@ -75,8 +75,7 @@ public:
     }
 
     // signals
-    typedef signal<std::function<void()>> reverse_references_changed_t;
-    std::shared_ptr<reverse_references_changed_t> reverse_references_changed;
+    make_signal(reverse_references_changed, void());
 
 private:
     template<class T>

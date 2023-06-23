@@ -104,7 +104,7 @@ SystemInstance::SystemInstance()
 
     SetHideOnClose(true);
 
-    breakpoint_hit = make_shared<breakpoint_hit_t>();
+    // watch for new child windows
     *child_window_added += std::bind(&SystemInstance::ChildWindowAdded, this, placeholders::_1);
     
     // allocate cpu_quick_breakpoints

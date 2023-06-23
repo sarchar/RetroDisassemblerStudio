@@ -77,9 +77,8 @@ public:
     static std::shared_ptr<BaseProject> StartLoadProject(std::istream&, std::string&, int, int);
 
     // signals
-    typedef signal<std::function<void(std::shared_ptr<BaseProject>, bool error, 
-            u64 max_progress, u64 current_progress, std::string const& msg)>> create_new_project_progress_t;
-    std::shared_ptr<create_new_project_progress_t> create_new_project_progress;
+    make_signal(create_new_project_progress, void(std::shared_ptr<BaseProject>, bool error, 
+            u64 max_progress, u64 current_progress, std::string const& msg));
 
 protected:
     virtual void ChildWindowAdded(std::shared_ptr<BaseWindow> const&) {}

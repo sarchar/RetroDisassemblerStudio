@@ -26,8 +26,7 @@ public:
     static std::shared_ptr<ProjectCreatorWindow> CreateWindow(std::string const& _file_path_name);
 
     // signals
-    typedef signal<std::function<void(std::shared_ptr<BaseWindow>, std::shared_ptr<BaseProject>)>> project_created_t;
-    std::shared_ptr<project_created_t> project_created;
+    make_signal(project_created, void(std::shared_ptr<BaseWindow>, std::shared_ptr<BaseProject>));
 
 protected:
     void Update(double deltaTime) override;

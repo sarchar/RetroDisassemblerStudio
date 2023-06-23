@@ -19,9 +19,6 @@ namespace Systems::NES {
 Enum::Enum(string const& _name)
     : name(_name)
 {
-    element_added   = make_shared<enum_added_t>();
-    element_changed = make_shared<enum_changed_t>();
-    element_deleted = make_shared<enum_added_t>();
 }
 
 Enum::~Enum()

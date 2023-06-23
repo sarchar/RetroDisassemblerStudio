@@ -28,6 +28,7 @@
 #include "windows/nes/listing.h"
 #include "windows/nes/listingitems.h"
 #include "windows/nes/project.h"
+#include "windows/nes/regions.h"
 
 // Was 3, which was working nicely but increased by 1 because I added an extra frame to check
 // if the selection is visible
@@ -89,8 +90,6 @@ Listing::~Listing()
 }
 
 // Try following the operand parameter to its destination
-// TODO this should be way more complicated, parsing operand expression and all
-// TODO actually, can't we just evaluate the operand expression?
 void Listing::Follow()
 {
     if(auto memory_object = current_system->GetMemoryObject(current_selection)) {
@@ -188,7 +187,14 @@ void Listing::GoToAddress(u32 address, bool save)
                     GoToAddress(guessed_address, save);
                 }
             } else {
-                assert(false); // popup dialog and wait for selection of which bank to go to
+                auto wnd = MemoryRegions::CreateWindow(true, address);
+                AddChildWindow(wnd);
+                *wnd->region_selected += [this, address, save](shared_ptr<Systems::NES::MemoryRegion> const& memory_region) {
+                    assert(address >= memory_region->GetBaseAddress() && address < memory_region->GetEndAddress());
+                    GlobalMemoryLocation target;
+                    memory_region->GetGlobalMemoryLocation(address - memory_region->GetBaseAddress(), &target);
+                    GoToAddress(target, save);
+                };
             }
         } else {
             // not a banked address, go to it if it's valid
@@ -400,54 +406,99 @@ void Listing::CreateDestinationLabel()
     auto memory_object = memory_region->GetMemoryObject(current_selection);
     if(!memory_object) return;
 
-    // only create pointers from word data
-    if(memory_object->type != MemoryObject::TYPE_WORD) return;
+    // call CreateDefaultOperandExpression on CODE types
+    if(memory_object->type == MemoryObject::TYPE_CODE) {
+        auto det_func = [this](u32 address, System::finish_default_operand_expression_func finish_expression) { 
+            auto wnd = MemoryRegions::CreateWindow(true, address);
+            bool did_select = false;
+
+            *wnd->region_selected += [address, finish_expression, &did_select](shared_ptr<Systems::NES::MemoryRegion> const& memory_region) {
+                GlobalMemoryLocation target_location;
+                memory_region->GetGlobalMemoryLocation(address - memory_region->GetBaseAddress(), &target_location);
+                finish_expression(target_location);
+                did_select = true;
+            };
+
+            *wnd->window_closed += [finish_expression, &did_select](shared_ptr<BaseWindow> const&) {
+                // if window was closed without selecting a region, apply the expression without a label
+                if(!did_select) finish_expression(nullopt);
+            };
+
+            AddChildWindow(wnd);
+        };
+
+        current_system->CreateDefaultOperandExpression(current_selection, true, det_func);
+        return;
+    }
+
+    // otherwise, only create pointers from byte or word data
+    if(memory_object->type != MemoryObject::TYPE_BYTE 
+       && memory_object->type != MemoryObject::TYPE_WORD) return;
+
+    auto apply_label = [this, memory_region, memory_object](GlobalMemoryLocation const& label_address) {
+        // get the target location and create a label if none exists
+        int offset = 0;
+
+        // create a label at the target address. counterintuitively, this is not a "user created label"
+        auto label = current_system->GetDefaultLabelForTarget(label_address, false, &offset, true, "L_");
+        
+        // now apply a OperandAddressOrLabel to the data on this memory object
+        auto default_operand_format = memory_object->FormatOperandField(); // format the data as $xxxx
+        auto expr = make_shared<Systems::NES::Expression>();
+        auto nc = dynamic_pointer_cast<Systems::NES::ExpressionNodeCreator>(expr->GetNodeCreator());
+        auto root = nc->CreateLabel(label_address, label->GetIndex(), default_operand_format);
+        
+        // if offset is nonzero, create an add offset expression
+        if(offset != 0) {
+            stringstream ss;
+            ss << offset;
+            auto offset_node = nc->CreateConstant(offset, ss.str());
+            root = nc->CreateAddOp(root, "+", offset_node);
+        }
+        
+        // set the root node in the expression
+        expr->Set(root);
+        
+        // set the expression for memory object at current_selection. it'll show up immediately
+        memory_region->SetOperandExpression(current_selection, expr);
+    };
 
     // use the word data as a pointer to memory
-    u16 target = (u16)memory_object->data_ptr[0] | ((u16)memory_object->data_ptr[1] << 8);
+    u16 address = (u16)memory_object->data_ptr[0];
+    if(memory_object->type == MemoryObject::TYPE_WORD) {
+        address |= ((u16)memory_object->data_ptr[1] << 8);
+    }
 
     // set up a default address using the current bank/address
     GlobalMemoryLocation label_address(current_selection);
-    label_address.address = target;
+    label_address.address = address;
 
-    if(!(target >= memory_region->GetBaseAddress() && target < memory_region->GetEndAddress())) {
-        // destination is not in this memory region, see if we can find it
+    if((address >= memory_region->GetBaseAddress() && address < memory_region->GetEndAddress())) {
+        // target address is in the current bank
+        apply_label(label_address);
+    } else if(!current_system->CanBank(label_address)) {
+        // not a banked address, apply label only if destination is valid
+        if(current_system->GetMemoryObject(label_address)) apply_label(label_address);
+    } else {
+        // destination is bankable and not in this current memory region, 
+        // try finding it or asking the user
         vector<u16> possible_banks;
         current_system->GetBanksForAddress(label_address, possible_banks); // only uses the address field
 
         if(possible_banks.size() == 1) {
             label_address.prg_rom_bank = possible_banks[0];
+            apply_label(label_address);
         } else {
-            cout << "[Listing::CheckInput] TODO: popup dialog asking for which bank this should point to" << endl;
-            return;
+            auto wnd = MemoryRegions::CreateWindow(true, address);
+            AddChildWindow(wnd);
+            *wnd->region_selected += [address, apply_label](shared_ptr<Systems::NES::MemoryRegion> const& memory_region) {
+                assert(address >= memory_region->GetBaseAddress() && address < memory_region->GetEndAddress());
+                GlobalMemoryLocation label_address;
+                memory_region->GetGlobalMemoryLocation(address - memory_region->GetBaseAddress(), &label_address);
+                apply_label(label_address);
+            };
         }
     }
-
-    // get the target location and create a label if none exists
-    int offset = 0;
-
-    // create a label at the target address. counterintuitively, this is not a "user created label"
-    auto label = current_system->GetDefaultLabelForTarget(label_address, false, &offset, true, "L_");
-    
-    // now apply a OperandAddressOrLabel to the data on this memory object
-    auto default_operand_format = memory_object->FormatOperandField(); // will format the data $xxxx
-    auto expr = make_shared<Systems::NES::Expression>();
-    auto nc = dynamic_pointer_cast<Systems::NES::ExpressionNodeCreator>(expr->GetNodeCreator());
-    auto root = nc->CreateLabel(label_address, label->GetIndex(), default_operand_format);
-    
-    // if offset is nonzero, create an add offset expression
-    if(offset != 0) {
-        stringstream ss;
-        ss << offset;
-        auto offset_node = nc->CreateConstant(offset, ss.str());
-        root = nc->CreateAddOp(root, "+", offset_node);
-    }
-    
-    // set the root node in the expression
-    expr->Set(root);
-    
-    // set the expression for memory object at current_selection. it'll show up immediately
-    memory_region->SetOperandExpression(current_selection, expr);
 }
 
 void Listing::Render() 

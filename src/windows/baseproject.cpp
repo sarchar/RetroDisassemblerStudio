@@ -44,9 +44,6 @@ BaseProject::BaseProject(std::string const& title, int _save_file_version, int _
     SetWindowless(true);
     SetTitle(title);
 
-    // local signals
-    create_new_project_progress = make_shared<create_new_project_progress_t>();
-
     // connect signals
     auto main_window = GetMainWindow();
     *child_window_added += [this](shared_ptr<BaseWindow> const& window) {
