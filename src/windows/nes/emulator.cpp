@@ -5,7 +5,9 @@
 // LICENSE file in the root directory of this source tree. 
 #include <bitset>
 #include <chrono>
+#include <cinttypes>
 #include <cmath>
+#include <cstdio>
 #include <functional>
 #include <memory>
 #include <thread>
@@ -427,6 +429,7 @@ void SystemInstance::RenderMenuBar()
         current_state = State::RUNNING;
     } else if(current_state == State::RUNNING && ImGui::Button("Stop")) {
         current_state = State::PAUSED;
+        if(auto listing = GetMostRecentListingWindow()) listing->GoToCurrentInstruction();
     }
 
     auto last_state = current_state;
@@ -1151,22 +1154,169 @@ void CPUState::Render()
 
     ImGui::Separator();
 
-    ImGui::Text("PC:$%04X", cpu->GetPC()); ImGui::SameLine();
-    ImGui::Text("S:$%04X", cpu->GetS()); ImGui::SameLine();
-    ImGui::Text("A:$%02X", cpu->GetA()); ImGui::SameLine();
-    ImGui::Text("X:$%02X", cpu->GetX()); ImGui::SameLine();
-    ImGui::Text("Y:$%02X", cpu->GetY());
+    auto s = cpu->GetS();
 
-    u8 p = cpu->GetP();
-    char flags[] = "P:nv-bdizc";
-    if(p & CPU_FLAG_N) flags[2] = 'N';
-    if(p & CPU_FLAG_V) flags[3] = 'V';
-    if(p & CPU_FLAG_B) flags[5] = 'B';
-    if(p & CPU_FLAG_D) flags[6] = 'D';
-    if(p & CPU_FLAG_I) flags[7] = 'I';
-    if(p & CPU_FLAG_Z) flags[8] = 'Z';
-    if(p & CPU_FLAG_C) flags[9] = 'C';
-    ImGui::Text("%s", flags);
+    auto size = ImGui::GetWindowSize();
+    size.x *= 0.5;
+    size.y = 1;
+    ImGui::BeginGroup(); 
+    {
+        {
+            ImGui::Text("PC:");
+            ImGui::SameLine();
+            auto size = ImGui::CalcTextSize(pc_buf);
+            ImGui::SetNextItemWidth(size.x * 1.25);
+            if(ImGui::InputText("##pc", pc_buf, sizeof(pc_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                u16 value;
+                sscanf(pc_buf, "$%04" SCNx16, &value);
+                cpu->SetPC(value);
+            }
+
+            // update buffer only when the input field isn't active
+            if(!ImGui::IsItemActive()) snprintf(pc_buf, sizeof(pc_buf), "$%04X", cpu->GetPC());
+        }
+
+        {
+            ImGui::Text(" S:");
+            ImGui::SameLine();
+            auto size = ImGui::CalcTextSize(s_buf);
+            ImGui::SetNextItemWidth(size.x * 1.33);
+            if(ImGui::InputText("##s", s_buf, sizeof(s_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                u8 value;
+                sscanf(s_buf, "$%04" SCNx8, &value);
+                cpu->SetS(value);
+            }
+
+            // update buffer only when the input field isn't active
+            if(!ImGui::IsItemActive()) snprintf(s_buf, sizeof(s_buf), "$%02X", s);
+        }
+
+        {
+            ImGui::Text(" A:");
+            ImGui::SameLine();
+            auto size = ImGui::CalcTextSize(a_buf);
+            ImGui::SetNextItemWidth(size.x * 1.33);
+            if(ImGui::InputText("##a", a_buf, sizeof(a_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                u8 value;
+                sscanf(a_buf, "$%04" SCNx8, &value);
+                cpu->SetA(value);
+            }
+
+            // update buffer only when the input field isn't active
+            if(!ImGui::IsItemActive()) snprintf(a_buf, sizeof(a_buf), "$%02X", cpu->GetA());
+        }
+
+        {
+            ImGui::Text(" X:");
+            ImGui::SameLine();
+            auto size = ImGui::CalcTextSize(x_buf);
+            ImGui::SetNextItemWidth(size.x * 1.33);
+            if(ImGui::InputText("##x", x_buf, sizeof(x_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                u8 value;
+                sscanf(x_buf, "$%04" SCNx8, &value);
+                cpu->SetX(value);
+            }
+
+            // update buffer only when the input field isn't active
+            if(!ImGui::IsItemActive()) snprintf(x_buf, sizeof(x_buf), "$%02X", cpu->GetX());
+        }
+
+        {
+            ImGui::Text(" Y:");
+            ImGui::SameLine();
+            auto size = ImGui::CalcTextSize(y_buf);
+            ImGui::SetNextItemWidth(size.x * 1.33);
+            if(ImGui::InputText("##y", y_buf, sizeof(y_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                u8 value;
+                sscanf(y_buf, "$%04" SCNx8, &value);
+                cpu->SetY(value);
+            }
+
+            // update buffer only when the input field isn't active
+            if(!ImGui::IsItemActive()) snprintf(y_buf, sizeof(y_buf), "$%02X", cpu->GetY());
+        }
+
+        // force this group to have a width equal to half the window width
+        ImGui::Dummy(size);
+    }
+    ImGui::EndGroup();
+
+    ImGui::SameLine();
+    ImGui::BeginGroup(); 
+    {
+        auto p = cpu->GetP();
+        {
+            ImGui::Text(" P:");
+            char buf[4];
+            snprintf(buf, sizeof(buf), "$%02X", p);
+            ImGui::SameLine();
+            auto size = ImGui::CalcTextSize(buf);
+            ImGui::SetNextItemWidth(size.x * 1.33);
+            ImGui::InputText("##p", buf, sizeof(buf));
+        }
+
+        bool n_flag = p & CPU_FLAG_N;
+        if(ImGui::Checkbox("Negative", &n_flag)) {
+            cpu->SetP(p ^ CPU_FLAG_N);
+        }
+
+        bool v_flag = p & CPU_FLAG_V;
+        if(ImGui::Checkbox("Overflow", &v_flag)) {
+            cpu->SetP(p ^ CPU_FLAG_V);
+        }
+
+        bool b_flag = p & CPU_FLAG_B;
+        if(ImGui::Checkbox("Break", &b_flag)) {
+            cpu->SetP(p ^ CPU_FLAG_B);
+        }
+
+        bool d_flag = p & CPU_FLAG_D;
+        if(ImGui::Checkbox("Decimal", &d_flag)) {
+            cpu->SetP(p ^ CPU_FLAG_D);
+        }
+
+        bool i_flag = p & CPU_FLAG_I;
+        if(ImGui::Checkbox("IRQ Enable", &i_flag)) {
+            cpu->SetP(p ^ CPU_FLAG_I);
+        }
+
+        bool z_flag = p & CPU_FLAG_Z;
+        if(ImGui::Checkbox("Zero", &z_flag)) {
+            cpu->SetP(p ^ CPU_FLAG_Z);
+        }
+
+        bool c_flag = p & CPU_FLAG_C;
+        if(ImGui::Checkbox("Carry", &c_flag)) {
+            cpu->SetP(p ^ CPU_FLAG_C);
+        }
+    }
+    ImGui::EndGroup();
+
+    ImGui::Separator();
+
+    ImGuiTableFlags table_flags = ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoBordersInBodyUntilResize
+        | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable
+        | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchSame;
+
+    if(ImGui::BeginTable("stack_data", 2, table_flags)) {
+        ImGui::TableSetupScrollFreeze(0, 1);
+        ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Value"  , ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableHeadersRow();
+
+        for(u16 cs = 0x1FF; cs >= (0x100 + s); cs -= 2) {
+            ImGui::TableNextRow();
+
+            ImGui::TableNextColumn();
+            ImGui::Text("$%04X", cs);
+
+            ImGui::TableNextColumn();
+            auto v = (u16)memory_view->Peek(cs - 1) | ((u16)memory_view->Peek(cs) << 8);
+            ImGui::Text("$%04X", v);
+        }
+
+        ImGui::EndTable();
+    }
 }
 
 std::shared_ptr<PPUState> PPUState::CreateWindow()

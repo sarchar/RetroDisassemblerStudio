@@ -32,17 +32,25 @@ public:
     inline void DmaStep() { cycle_count++; }
     inline void Nmi(int high) { state.nmi = high; }
 
-    inline s64 GetNextUC()     const { auto ptr = state.ops; if(!ptr) return (u64)-1; else return *ptr; }
-    inline u16 GetOpcode()     const { return state.opcode; }
-    inline u16 GetOpcodePC()   const { return state.inst_pc; }
-    inline int GetIStep()      const { return state.istep; }
-    inline u16 GetPC()         const { return regs.PC; }
-    inline u8  GetP()          const { return regs.P; }
-    inline u8  GetA()          const { return regs.A; }
-    inline u8  GetX()          const { return regs.X; }
-    inline u8  GetY()          const { return regs.Y; }
-    inline u16 GetS()          const { return regs.S + 0x100; }
-    inline u64 GetCycleCount() const { return cycle_count; }
+    inline s64  GetNextUC()     const { auto ptr = state.ops; if(!ptr) return (u64)-1; else return *ptr; }
+    inline u16  GetOpcode()     const { return state.opcode; }
+    inline u16  GetOpcodePC()   const { return state.inst_pc; }
+    inline int  GetIStep()      const { return state.istep; }
+    inline u16  GetPC()         const { return regs.PC; }
+    inline u8   GetP()          const { return regs.P; }
+    inline u8   GetA()          const { return regs.A; }
+    inline u8   GetX()          const { return regs.X; }
+    inline u8   GetY()          const { return regs.Y; }
+    inline u16  GetS()          const { return regs.S; }
+    inline u64  GetCycleCount() const { return cycle_count; }
+
+    inline void SetPC(u16 v)          { regs.PC = v; }
+    inline void SetP (u8  v)          { regs.P  = v; }
+    inline void SetA (u8  v)          { regs.A  = v; }
+    inline void SetX (u8  v)          { regs.X  = v; }
+    inline void SetY (u8  v)          { regs.Y  = v; }
+    inline void SetS (u16 v)          { regs.S  = v; }
+
     // the definition for CPU_READ is in nes_cpu_tables.h, but this inline optimization is worth it
     inline bool IsReadCycle()  const { return state.ops && ((*state.ops & 0x04) == 0); }
 

@@ -345,6 +345,13 @@ protected:
 
 private:
     void* framebuffer_texture;
+
+    // buffers for editing CPU registers
+    char pc_buf[6];
+    char  s_buf[4];
+    char  a_buf[4];
+    char  x_buf[4];
+    char  y_buf[4];
 };
 
 class PPUState : public BaseWindow {
